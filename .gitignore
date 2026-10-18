@@ -4,3 +4,4 @@ coverage
 internal/
 *.tsbuildinfo
 .DS_Store
+.superpowers/

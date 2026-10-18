@@ -1,0 +1,33 @@
+{
+  "name": "@scope/server",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p .",
+    "lint:pkg": "publint && attw --pack . --profile esm-only",
+    "smoke:dist": "node smoke-dist.mjs"
+  },
+  "dependencies": {
+    "@scope/core": "workspace:*",
+    "fflate": "^0.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}
