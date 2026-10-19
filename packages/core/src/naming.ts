@@ -1,52 +1,107 @@
 import { isSameOrDescendant, parentPath } from './path';
 
+/**
+ * Why `validateName` rejects a name.
+ *
+ * @example
+ * ```ts
+ * const message = problem === 'duplicate' ? 'That name is taken' : 'Pick another name';
+ * ```
+ */
 export type NameProblem = 'empty' | 'invalid_chars' | 'reserved' | 'too_long' | 'duplicate';
 
-/** `ext` includes the dot; leading-dot names (`.env`) and extensionless names have `ext: ''`. */
+/**
+ * `ext` includes the dot; leading-dot names (`.env`) and extensionless names have `ext: ''`.
+ *
+ * @example
+ * ```ts
+ * splitName('archive.tar.gz'); // { stem: 'archive.tar', ext: '.gz' }
+ * ```
+ */
 export function splitName(name: string): { stem: string; ext: string } {
   const i = name.lastIndexOf('.');
   return i <= 0 ? { stem: name, ext: '' } : { stem: name.slice(0, i), ext: name.slice(i) };
 }
 
-// Duplicates are NFC-normalized, joiner-folded and case-insensitive (safe on macOS/Windows).
-const key = (n: string): string => n.normalize('NFC').replace(/[\u200C\u200D]/g, '').toLowerCase();
+const JOINERS = /[\u200C\u200D]/g;
 
+const caseAndJoinerInsensitiveKey = (name: string): string =>
+  name.normalize('NFC').replace(JOINERS, '').toLowerCase();
+
+/**
+ * `name` if it is free among `taken`, else the first free `name copy`, `name copy 2`, … keeping the
+ * extension. Names are compared like `validateName` compares duplicates.
+ *
+ * @example
+ * ```ts
+ * uniqueName('a.txt', new Set(['a.txt'])); // 'a copy.txt'
+ * ```
+ */
 export function uniqueName(name: string, taken: ReadonlySet<string>): string {
-  const keys = new Set([...taken].map(key));
-  if (!keys.has(key(name))) return name;
+  const takenKeys = new Set([...taken].map(caseAndJoinerInsensitiveKey));
+  if (!takenKeys.has(caseAndJoinerInsensitiveKey(name))) return name;
   const { stem, ext } = splitName(name);
-  for (let n = 1; ; n++) {
-    const candidate = `${stem} copy${n === 1 ? '' : ` ${n}`}${ext}`;
-    if (!keys.has(key(candidate))) return candidate;
+  for (let copyNumber = 1; ; copyNumber++) {
+    const candidate = `${stem} copy${copyNumber === 1 ? '' : ` ${copyNumber}`}${ext}`;
+    if (!takenKeys.has(caseAndJoinerInsensitiveKey(candidate))) return candidate;
   }
 }
 
-// Separators, control chars, and every format (Cf) or line/paragraph separator, plus Hangul/braille/CGJ fillers that Cf misses.
-// ZWJ and ZWNJ (U+200D, U+200C) are stripped before this test: emoji sequences and Persian/Indic words need them,
-// but only between two non-ASCII code points (see hasStrayJoiner), so they can't disguise ASCII names.
-// Tag characters (U+E0000-U+E007F) are rejected on purpose: they can smuggle invisible text into names shown to agents.
-const INVALID_CHARS = /[\/\\\p{Cc}\p{Cf}\p{Zl}\p{Zp}\u115F\u1160\u3164\uFFA0\u2800\u034F\u{E0000}-\u{E007F}]/u;
-const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+const SEPARATORS_CONTROLS_FORMATS_AND_FILLERS =
+  // eslint-disable-next-line no-misleading-character-class -- U+034F is listed on purpose: alone it is an invisible filler
+  /[/\\\p{Cc}\p{Cf}\p{Zl}\p{Zp}\u115F\u1160\u3164\uFFA0\u2800\u034F\u{E0000}-\u{E007F}]/u;
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+const MAX_NAME_BYTES = 255;
+const LAST_ASCII_CODE_POINT = 0x7f;
 
-/** True if a ZWNJ/ZWJ has a missing or ASCII neighbour. Iterates code points so astral emoji count as one. */
-function hasStrayJoiner(name: string): boolean {
-  const cps = Array.from(name, (c) => c.codePointAt(0)!);
-  return cps.some((c, i) => (c === 0x200c || c === 0x200d) && ((cps[i - 1] ?? 0) <= 0x7f || (cps[i + 1] ?? 0) <= 0x7f));
+const isJoiner = (codePoint: number): boolean => codePoint === 0x200c || codePoint === 0x200d;
+
+function hasJoinerNextToAsciiOrEdge(name: string): boolean {
+  const codePoints = Array.from(name, (char) => char.codePointAt(0)!);
+  const isAsciiOrEdge = (at: number): boolean => (codePoints[at] ?? 0) <= LAST_ASCII_CODE_POINT;
+  return codePoints.some(
+    (codePoint, at) => isJoiner(codePoint) && (isAsciiOrEdge(at - 1) || isAsciiOrEdge(at + 1)),
+  );
 }
 
+/**
+ * Checks a new entry name against `siblings`. Rejects separators, control and format characters, invisible
+ * fillers and Unicode tag characters (they can smuggle invisible text into names shown to agents). ZWJ and
+ * ZWNJ are allowed only between two non-ASCII characters, as emoji sequences and Persian or Indic words need
+ * them, so they cannot disguise an ASCII name. Duplicates are compared NFC-normalized, joiner-free and
+ * case-insensitively, which is safe on macOS and Windows.
+ *
+ * @returns The problem, or `null` when the name is valid.
+ *
+ * @example
+ * ```ts
+ * validateName('notes.md', new Set(['Notes.md'])); // 'duplicate'
+ * ```
+ */
 export function validateName(rawName: string, siblings: ReadonlySet<string>): NameProblem | null {
   const name = rawName.normalize('NFC');
-  const visible = name.replace(/[\u200C\u200D]/g, '');
-  if (visible.trim() === '') return 'empty';
-  if (hasStrayJoiner(name) || INVALID_CHARS.test(visible)) return 'invalid_chars';
-  if (name === '.' || name === '..' || /[. ]$/.test(name) || RESERVED.test(name)) return 'reserved';
-  if (new TextEncoder().encode(name).length > 255) return 'too_long';
-  const k = key(name);
-  for (const s of siblings) if (key(s) === k) return 'duplicate';
+  const withoutJoiners = name.replace(JOINERS, '');
+  if (withoutJoiners.trim() === '') return 'empty';
+  if (hasJoinerNextToAsciiOrEdge(name) || SEPARATORS_CONTROLS_FORMATS_AND_FILLERS.test(withoutJoiners)) {
+    return 'invalid_chars';
+  }
+  if (name === '.' || name === '..' || /[. ]$/.test(name) || WINDOWS_RESERVED_NAME.test(name)) {
+    return 'reserved';
+  }
+  if (new TextEncoder().encode(name).length > MAX_NAME_BYTES) return 'too_long';
+  const nameKey = caseAndJoinerInsensitiveKey(name);
+  for (const sibling of siblings) if (caseAndJoinerInsensitiveKey(sibling) === nameKey) return 'duplicate';
   return null;
 }
 
-/** `from` and `toDir` must be normalized paths. */
+/**
+ * `from` and `toDir` must be normalized paths.
+ *
+ * @example
+ * ```ts
+ * validateTransfer('move', 'src', 'src/app'); // 'into_self'
+ * ```
+ */
 export function validateTransfer(
   op: 'move' | 'copy',
   from: string,

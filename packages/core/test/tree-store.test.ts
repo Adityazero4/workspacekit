@@ -1,18 +1,24 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { FsError } from '../src/errors';
+import { basename } from '../src/path';
 import { createMemoryAdapter, type MemoryAdapter } from '../src/memory';
 import { entryAt, statusOf, type TreeData } from '../src/tree/model';
 import { createTreeStore, type TreeStore } from '../src/tree/store';
 import type { ChangeEvent, Entry, FileSystemAdapter } from '../src/types';
 
 const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
-const allPaths = (t: TreeData): string[] => [...t.folders.values()].flatMap((n) => [...n.children.values()].map((e) => e.path));
+const allPaths = (t: TreeData): string[] =>
+  [...t.folders.values()].flatMap((n) => [...n.children.values()].map((e) => e.path));
 const names = (s: TreeStore): string[] => allPaths(s.getSnapshot().tree).sort();
 const tree = (s: TreeStore): TreeData => s.getSnapshot().tree;
-const kids = (s: TreeStore, p: string): string[] => [...(tree(s).folders.get(p)?.children.values() ?? [])].map((e) => e.path);
+const childPaths = (s: TreeStore, p: string): string[] =>
+  [...(tree(s).folders.get(p)?.children.values() ?? [])].map((e) => e.path);
 
 /** Wraps an adapter: records `list` calls, drops `watch` (so tests control events), allows per-method overrides. */
-function wrap(inner: FileSystemAdapter, over: Partial<FileSystemAdapter> = {}): FileSystemAdapter & { lists: string[] } {
+function wrap(
+  inner: FileSystemAdapter,
+  over: Partial<FileSystemAdapter> = {},
+): FileSystemAdapter & { lists: string[] } {
   const lists: string[] = [];
   const a: FileSystemAdapter & { lists: string[] } = {
     ...inner,
@@ -33,7 +39,9 @@ function gated(inner: FileSystemAdapter): FileSystemAdapter & { held: { path: st
   const a = wrap(inner, {
     list: (p, o) => {
       const real = inner.list(p, o);
-      return new Promise<Entry[]>((res, rej) => held.push({ path: p, release: () => void real.then(res, rej) }));
+      return new Promise<Entry[]>((res, rej) =>
+        held.push({ path: p, release: () => void real.then(res, rej) }),
+      );
     },
   });
   return Object.assign(a, { held });
@@ -107,7 +115,9 @@ test('optimistic create shows immediately, confirms, and rolls back on failure',
   const mem = seed();
   const d = deferred<Entry>();
   let mode: 'ok' | 'fail' = 'ok';
-  const a = wrap(mem, { create: (p, k) => (mode === 'ok' ? mem.create!(p, k).then((e) => d.promise.then(() => e)) : d.promise) });
+  const a = wrap(mem, {
+    create: (p, k) => (mode === 'ok' ? mem.create!(p, k).then((e) => d.promise.then(() => e)) : d.promise),
+  });
   const s = createTreeStore(a);
   await s.loadFolder('');
   const p = s.create('', 'new.txt', 'file');
@@ -161,7 +171,9 @@ test('create rejects duplicates without calling the adapter, and unsupported ops
   const s = createTreeStore(a);
   await expect(s.create('', 'D.TXT', 'file')).rejects.toMatchObject({ kind: 'conflict' });
   expect(calls).toEqual([]);
-  const ro = createTreeStore(wrap(mem, { create: undefined, move: undefined, copy: undefined, delete: undefined }));
+  const ro = createTreeStore(
+    wrap(mem, { create: undefined, move: undefined, copy: undefined, delete: undefined }),
+  );
   await ro.loadFolder('');
   for (const op of [
     () => ro.create('', 'q', 'file'),
@@ -254,7 +266,7 @@ test('move into an unloaded folder loads it first and moves a directory with its
   const e = await s.move('a', 'dir');
   expect(e.path).toBe('dir/a');
   expect(tree(s).folders.get('')?.children.has('a')).toBe(false);
-  expect(new Set(kids(s, 'dir'))).toEqual(new Set(['dir/one.txt', 'dir/a']));
+  expect(new Set(childPaths(s, 'dir'))).toEqual(new Set(['dir/one.txt', 'dir/a']));
 });
 
 test('copy into same folder creates "x copy" and never raises a conflict', async () => {
@@ -270,6 +282,57 @@ test('copy into same folder creates "x copy" and never raises a conflict', async
   const c = await s.copy('d.txt', 'a/b');
   expect(c.path).toBe('a/b/d copy.txt');
   expect((await s.copy('a/x.txt', 'dir')).path).toBe('dir/x.txt');
+});
+
+test('move with a name moves under that name in one adapter call; an invalid name rejects first', async () => {
+  const mem = createMemoryAdapter({ files: { 'x.txt': 'src', 'dir/x.txt': 'dst' } });
+  const moves: Array<[string, string, unknown]> = [];
+  const s = createTreeStore(wrap(mem, { move: (f, t, o) => (moves.push([f, t, o]), mem.move!(f, t, o)) }));
+  await s.loadFolder('');
+  await expect(s.move('x.txt', 'dir', { name: 'a/b' })).rejects.toMatchObject({ kind: 'invalid' });
+  await expect(s.move('x.txt', 'dir', { name: 'X.txt' })).rejects.toMatchObject({ kind: 'conflict' });
+  expect(moves).toEqual([]);
+  const moved = await s.move('x.txt', 'dir', { name: 'x copy.txt' });
+  expect(moved.path).toBe('dir/x copy.txt');
+  expect(moves).toEqual([['x.txt', 'dir/x copy.txt', undefined]]);
+  expect(names(s)).toEqual(['dir', 'dir/x copy.txt', 'dir/x.txt']);
+  expect(await mem.read('dir/x copy.txt', 'text')).toBe('src');
+});
+
+test('move with a name into its own folder renames instead of being a no-op', async () => {
+  const s = createTreeStore(wrap(seed()));
+  await s.loadFolder('');
+  expect((await s.move('d.txt', '', { name: 'e.txt' })).path).toBe('e.txt');
+  expect(names(s)).toContain('e.txt');
+  expect(names(s)).not.toContain('d.txt');
+});
+
+test('copy with a name copies under it; overwrite replaces the same-named entry; a taken name is a conflict', async () => {
+  const mem = createMemoryAdapter({ files: { 'x.txt': 'src', 'dir/x.txt': 'dst' } });
+  const s = createTreeStore(wrap(mem));
+  await s.loadFolder('');
+  expect((await s.copy('x.txt', 'dir', { name: 'y.txt' })).path).toBe('dir/y.txt');
+  await expect(s.copy('x.txt', 'dir', { name: 'x.txt' })).rejects.toMatchObject({ kind: 'conflict' });
+  await expect(s.copy('x.txt', 'dir', { name: '' })).rejects.toMatchObject({ kind: 'invalid' });
+  expect(await mem.read('dir/x.txt', 'text')).toBe('dst');
+  expect((await s.copy('x.txt', 'dir', { overwrite: true })).path).toBe('dir/x.txt');
+  expect(await mem.read('dir/x.txt', 'text')).toBe('src');
+  expect(names(s)).toEqual(['dir', 'dir/x.txt', 'dir/y.txt', 'x.txt']);
+});
+
+test('overwrite with a name exempts only the entry it replaces; another sibling of that name still conflicts', async () => {
+  const mem = createMemoryAdapter({ files: { 'x.txt': 'src', 'dir/a.txt': 'lower', 'dir/A.txt': 'upper' } });
+  const moves: string[] = [];
+  const s = createTreeStore(wrap(mem, { move: (f, t, o) => (moves.push(t), mem.move!(f, t, o)) }));
+  await s.loadFolder('');
+  await expect(s.move('x.txt', 'dir', { name: 'a.txt', overwrite: true })).rejects.toMatchObject({
+    kind: 'conflict',
+  });
+  await expect(s.copy('x.txt', 'dir', { name: 'A.txt', overwrite: true })).rejects.toMatchObject({
+    kind: 'conflict',
+  });
+  expect(moves).toEqual([]);
+  expect(await mem.read('dir/a.txt', 'text')).toBe('lower');
 });
 
 test('copy rejects copying a folder into itself', async () => {
@@ -302,7 +365,7 @@ test('applyChanges: deleted removes, moved remaps, actors other than user go to 
   await s.loadFolder('');
   s.applyChanges([{ type: 'deleted', path: 'd.txt', actor: 'external' }]);
   expect(names(s)).not.toContain('d.txt');
-  s.getSnapshot().changed.has('d.txt') && expect.fail('deleted must not be changed');
+  if (s.getSnapshot().changed.has('d.txt')) expect.fail('deleted must not be changed');
   s.applyChanges([{ type: 'moved', path: 'dir/b', oldPath: 'a/b', actor: 'external' }]);
   expect(names(s)).toEqual(expect.arrayContaining(['dir/b']));
   expect(s.getSnapshot().changed.has('dir/b')).toBe(true);
@@ -364,6 +427,27 @@ test('applyChanges: moved into an unloaded folder removes the entry from view', 
   expect(names(s)).toEqual(['a', 'dir']);
 });
 
+test('latestExternalChange: bumped for every external mark, never by remaps, local moves or markSeen', async () => {
+  const s = createTreeStore(wrap(seed()));
+  await s.loadFolder('');
+  expect(s.getSnapshot().latestExternalChange).toBeNull();
+  s.applyChanges([{ type: 'updated', path: 'd.txt', actor: 'external' }]);
+  expect(s.getSnapshot().latestExternalChange).toEqual({ path: 'd.txt', sequence: 1 });
+  s.applyChanges([{ type: 'updated', path: 'd.txt', actor: 'agent' }]);
+  expect(s.getSnapshot().latestExternalChange, 'again although already marked').toEqual({
+    path: 'd.txt',
+    sequence: 2,
+  });
+  s.applyChanges([{ type: 'moved', path: 'dir/d.txt', oldPath: 'd.txt', actor: 'user' }]);
+  expect(s.getSnapshot().changed.has('dir/d.txt'), 'the mark moved').toBe(true);
+  expect(s.getSnapshot().latestExternalChange?.sequence, 'a local move does not count').toBe(2);
+  s.markSeen('dir/d.txt');
+  s.applyChanges([{ type: 'updated', path: 'a/b', actor: 'user' }]);
+  expect(s.getSnapshot().latestExternalChange).toEqual({ path: 'd.txt', sequence: 2 });
+  s.applyChanges([{ type: 'moved', path: 'a/z', oldPath: 'dir/d.txt', actor: 'agent' }]);
+  expect(s.getSnapshot().latestExternalChange).toEqual({ path: 'a/z', sequence: 3 });
+});
+
 test('markSeen removes path from changed', async () => {
   const s = createTreeStore(wrap(seed()));
   await s.loadFolder('');
@@ -400,9 +484,26 @@ test('subscribe notifies once per state change; getSnapshot is referentially sta
   expect(n).toBe(during + 1);
 });
 
+test('creating a store has no side effects: the first subscribe arms adapter.watch, dispose releases it', () => {
+  const off = vi.fn();
+  const watch = vi.fn(() => off);
+  const s = createTreeStore({ ...seed(), watch });
+  expect(watch).not.toHaveBeenCalled();
+  const unsub = s.subscribe(() => {});
+  s.subscribe(() => {});
+  unsub();
+  expect(watch).toHaveBeenCalledTimes(1);
+  expect(off).not.toHaveBeenCalled();
+  s.dispose();
+  expect(off).toHaveBeenCalledTimes(1);
+  s.subscribe(() => {}); // a disposed store never re-arms
+  expect(watch).toHaveBeenCalledTimes(1);
+});
+
 test('subscribes to adapter.watch and dispose stops everything', async () => {
   const mem = seed();
   const s = createTreeStore(mem);
+  s.subscribe(() => {});
   await s.loadFolder('');
   await mem.create!('fresh.txt', 'file');
   await settle();
@@ -417,13 +518,18 @@ test('subscribes to adapter.watch and dispose stops everything', async () => {
 });
 
 /** `list(heldPath)` is computed immediately but delivered only on release. Records every `list` call. */
-function holdPath(inner: FileSystemAdapter, heldPath: string): FileSystemAdapter & { lists: string[]; release(): void } {
+function holdPath(
+  inner: FileSystemAdapter,
+  heldPath: string,
+): FileSystemAdapter & { lists: string[]; release(): void } {
   const held: (() => void)[] = [];
   const a = wrap(inner, {
     list: (p, o) => {
       a.lists.push(p);
       const real = inner.list(p, o);
-      return p === heldPath ? new Promise<Entry[]>((res, rej) => held.push(() => void real.then(res, rej))) : real;
+      return p === heldPath
+        ? new Promise<Entry[]>((res, rej) => held.push(() => void real.then(res, rej)))
+        : real;
     },
   });
   return Object.assign(a, { release: () => held.splice(0).forEach((r) => r()) });
@@ -483,7 +589,7 @@ test('a folder removed and recreated with the same name does not show deleted co
   await s.create('', 'a', 'directory');
   h.release();
   await load;
-  expect(kids(s, 'a')).toEqual([]);
+  expect(childPaths(s, 'a')).toEqual([]);
 });
 
 test('overwrite-move rollback after a destination listing landed restores source and destination', async () => {
@@ -524,10 +630,16 @@ test('applyChanges: resync reloads every loaded folder once, even when repeated'
   const p = s.loadFolder('');
   g.held.shift()!.release();
   await p;
-  const loaded = [...tree(s).folders.values()].filter((n) => n.status === 'loaded').map((n) => n.path).sort();
+  const loaded = [...tree(s).folders.values()]
+    .filter((n) => n.status === 'loaded')
+    .map((n) => n.path)
+    .sort();
   expect(loaded.length).toBeGreaterThan(1);
   g.held.length = 0;
-  s.applyChanges([{ type: 'resync', path: '' }, { type: 'resync', path: '' }]);
+  s.applyChanges([
+    { type: 'resync', path: '' },
+    { type: 'resync', path: '' },
+  ]);
   await settle();
   expect(g.held.map((h) => h.path).sort()).toEqual(loaded);
   g.held.forEach((h) => h.release());
@@ -593,7 +705,10 @@ test('applyChanges: resyncs coalesce into one pass in flight plus one pending pa
   expect(g.held.map((h) => h.path).sort()).toEqual(all);
   const first = g.held.splice(0);
   s.applyChanges([{ type: 'resync', path: '' }]);
-  s.applyChanges([{ type: 'resync', path: '' }, { type: 'created', path: 'dir/n.txt' }]);
+  s.applyChanges([
+    { type: 'resync', path: '' },
+    { type: 'created', path: 'dir/n.txt' },
+  ]);
   await settle();
   expect(g.held).toEqual([]); // a pass is in flight: later resyncs only set the pending flag
   first.forEach((h) => h.release());
@@ -678,7 +793,9 @@ for (const mode of ['raced', 'not_found'] as const) {
       list: (p, o) => {
         if (p !== 'a/b') return mem.list(p, o);
         const real = mode === 'raced' ? mem.list(p, o) : undefined; // raced: answered before the delete
-        return new Promise<Entry[]>((res, rej) => held.push(() => void (real ?? mem.list(p, o)).then(res, rej)));
+        return new Promise<Entry[]>((res, rej) =>
+          held.push(() => void (real ?? mem.list(p, o)).then(res, rej)),
+        );
       },
     });
     const s = createTreeStore(a, { fetchDepth: 1, onError: (e) => seen.push(e) });
@@ -747,7 +864,10 @@ test('a root reload that no longer lists a folder drops loaded folders opened fr
   const held: (() => void)[] = [];
   const seen: FsError[] = [];
   const a = wrap(mem, {
-    list: (p, o) => (p !== 'a/b/c/d' ? mem.list(p, o) : new Promise<Entry[]>((res, rej) => held.push(() => void mem.list(p, o).then(res, rej)))),
+    list: (p, o) =>
+      p !== 'a/b/c/d'
+        ? mem.list(p, o)
+        : new Promise<Entry[]>((res, rej) => held.push(() => void mem.list(p, o).then(res, rej))),
   });
   const s = createTreeStore(a, { fetchDepth: 1, onError: (e) => seen.push(e) });
   await s.loadFolder('');
@@ -804,7 +924,10 @@ for (const mode of ['move-self', 'move-ancestor', 'delete'] as const) {
     held.forEach((r) => r());
     await settle();
     check();
-    expect(rootCalls).toBe(2);
+    expect(
+      rootCalls,
+      'the root reload in flight is re-issued only when the change is within fetchDepth (1) of the root',
+    ).toBe(mode === 'move-self' ? 2 : 3);
     expect(s.getSnapshot().errors.size).toBe(0);
     expect(seen).toEqual([]);
   });
@@ -818,7 +941,9 @@ test('a folder the server did not walk stays idle after the parent listing and l
       const out = await inner.list(p, o);
       if (p !== '') return out;
       // what a server returns for a symlinked dir: listed, but its contents were not walked
-      return out.filter((e) => !e.path.startsWith('link/')).map((e) => (e.path === 'link' ? { ...e, meta: { incomplete: true } } : e));
+      return out
+        .filter((e) => !e.path.startsWith('link/'))
+        .map((e) => (e.path === 'link' ? { ...e, meta: { incomplete: true } } : e));
     },
   });
   const s = createTreeStore(a);
@@ -828,7 +953,7 @@ test('a folder the server did not walk stays idle after the parent listing and l
   await s.loadFolder('link');
   expect(a.lists).toEqual(['', 'link']);
   expect(statusOf(tree(s), 'link')).toBe('loaded');
-  expect(kids(s, 'link')).toEqual(['link/f.txt']);
+  expect(childPaths(s, 'link')).toEqual(['link/f.txt']);
 });
 
 test('concurrent explicit loads under one stale ancestor share a single reload of it', async () => {
@@ -855,12 +980,16 @@ test('an explicit load outside the store root rejects with invalid before any re
 });
 
 /** Every `list` waits in `q` and is computed when released, so it answers with the adapter's state at that moment. */
-function queued(mem: FileSystemAdapter): FileSystemAdapter & { lists: string[]; q: { path: string; run(): void }[] } {
+function queued(
+  mem: FileSystemAdapter,
+): FileSystemAdapter & { lists: string[]; q: { path: string; run(): void }[] } {
   const q: { path: string; run(): void }[] = [];
   const a = wrap(mem, {
     list: (p, o) => {
       a.lists.push(p);
-      return new Promise<Entry[]>((res, rej) => q.push({ path: p, run: () => void mem.list(p, o).then(res, rej) }));
+      return new Promise<Entry[]>((res, rej) =>
+        q.push({ path: p, run: () => void mem.list(p, o).then(res, rej) }),
+      );
     },
   });
   return Object.assign(a, { q });
@@ -910,8 +1039,10 @@ const whileLoading: Record<string, (s: TreeStore, mem: MemoryAdapter, q: Queue) 
     releaseFirst(q, '');
     await settle();
   },
-  "a 'created' event for its ancestor while its listing is in flight": async (s) => s.applyChanges([{ type: 'created', path: 'x', actor: 'external' }]),
-  "a 'created' event for itself while its listing is in flight": async (s) => s.applyChanges([{ type: 'created', path: 'x/b/c', actor: 'external' }]),
+  "a 'created' event for its ancestor while its listing is in flight": async (s) =>
+    s.applyChanges([{ type: 'created', path: 'x', actor: 'external' }]),
+  "a 'created' event for itself while its listing is in flight": async (s) =>
+    s.applyChanges([{ type: 'created', path: 'x/b/c', actor: 'external' }]),
   "a 'created' event for its ancestor after it landed": async (s, _m, q) => {
     releaseFirst(q, 'x/b/c');
     await settle();
@@ -984,4 +1115,527 @@ test('a background listing never resurrects a folder that a newer ancestor listi
   expect([...tree(s).folders.keys()]).toEqual(['']);
   expect(statusOf(tree(s), 'a/b')).toBe('idle');
   expect(s.getSnapshot().errors.size).toBe(0);
+});
+
+test('onMove fires once with the final path after a store move commits, before subscribers are notified', async () => {
+  const s = createTreeStore(wrap(seed()));
+  await s.loadFolder('');
+  const order: string[] = [];
+  s.subscribe(() =>
+    order.push(`notified (${s.getSnapshot().pending.has('dir/a') ? 'pending' : 'confirmed'})`),
+  );
+  s.onMove((from, to) => order.push(`${from} -> ${to} (${entryAt(tree(s), to) ? 'committed' : 'not yet'})`));
+  const moving = s.move('a', 'dir');
+  expect(order).toEqual([]);
+  await moving;
+  expect(order).toEqual([
+    'notified (pending)',
+    'a -> dir/a (committed)',
+    'notified (confirmed)',
+    'notified (confirmed)',
+  ]);
+  const before = order.length;
+  await expect(s.move('d.txt', 'missing')).rejects.toBeInstanceOf(FsError);
+  expect(order.slice(before).filter((step) => !step.startsWith('notified'))).toEqual([]);
+});
+
+test('onMove fires once per store move on a watching adapter: the watch echo of the same move is ignored', async () => {
+  const adapter = createMemoryAdapter({ files: { 'a/1.txt': '' } });
+  const s = createTreeStore(adapter);
+  s.subscribe(() => undefined);
+  await s.loadFolder('');
+  const moves: string[] = [];
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  await s.rename('a', 'b');
+  for (let i = 0; i < 20; i++) await settle();
+  expect(moves).toEqual(['a->b']);
+  adapter.emit([{ type: 'moved', oldPath: 'b', path: 'c', actor: 'agent' }]);
+  expect(moves, 'a move the store did not make is announced').toEqual(['a->b', 'b->c']);
+});
+
+test('an external moved event is announced even when the tree already shows its result', async () => {
+  const inner = seed();
+  const s = createTreeStore(wrap(inner));
+  await s.loadFolder('');
+  await inner.move!('d.txt', 'e.txt');
+  await s.loadFolder('', { force: true });
+  expect(entryAt(tree(s), 'e.txt')).toBeDefined();
+  const moves: string[] = [];
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  s.applyChanges([{ type: 'moved', oldPath: 'd.txt', path: 'e.txt', actor: 'agent' }]);
+  expect(moves).toEqual(['d.txt->e.txt']);
+});
+
+test('a store move whose echo never arrives stops suppressing that move 10 s after it settles', async () => {
+  vi.useFakeTimers();
+  try {
+    const s = createTreeStore(wrap(seed()));
+    await s.loadFolder('');
+    const moves: string[] = [];
+    s.onMove((from, to) => moves.push(`${from}->${to}`));
+    await s.rename('d.txt', 'e.txt');
+    expect(moves).toEqual(['d.txt->e.txt']);
+    vi.advanceTimersByTime(10_001);
+    s.applyChanges([{ type: 'moved', oldPath: 'd.txt', path: 'e.txt', actor: 'agent' }]);
+    expect(moves, 'a later identical external move is announced').toEqual(['d.txt->e.txt', 'd.txt->e.txt']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('a store move whose adapter answers with a path outside the root is announced where the store placed it; the error is reported', async () => {
+  const errors: FsError[] = [];
+  const escaping: Entry = { path: '../escape', name: 'escape', kind: 'directory' };
+  const s = createTreeStore(wrap(seed(), { move: () => Promise.resolve(escaping) }), {
+    onError: (error) => errors.push(error),
+  });
+  await s.loadFolder('');
+  const moves: string[][] = [];
+  s.onMove((from, to) => moves.push([from, to]));
+  const moved = await s.rename('a', 'b');
+  expect(moved.path, 'the caller gets the path the store placed it at').toBe('b');
+  expect(moves).toEqual([['a', 'b']]);
+  expect(errors).toEqual([expect.objectContaining({ kind: 'invalid' })]);
+  expect(entryAt(tree(s), '../escape')).toBeUndefined();
+});
+
+test('a throwing onMove listener does not stop the other listeners, the store call or the follow-up loads', async () => {
+  const errors: FsError[] = [];
+  const a = wrap(seed());
+  const s = createTreeStore(a, { onError: (error) => errors.push(error) });
+  await s.loadFolder('');
+  const moves: string[] = [];
+  s.onMove(() => {
+    throw new Error('listener bug');
+  });
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  await expect(s.rename('d.txt', 'e.txt')).resolves.toMatchObject({ path: 'e.txt' });
+  a.lists.length = 0;
+  s.applyChanges([
+    { type: 'moved', oldPath: 'dir/one.txt', path: 'dir/two.txt', actor: 'agent' },
+    { type: 'created', path: 'a/new.txt', actor: 'agent' },
+  ]);
+  await settle();
+  expect(moves).toEqual(['d.txt->e.txt', 'dir/one.txt->dir/two.txt']);
+  expect(a.lists, 'the follow-up reload still ran').toContain('a');
+  expect(errors.map((error) => error.message)).toEqual([
+    expect.stringContaining('listener bug'),
+    expect.stringContaining('listener bug'),
+  ]);
+});
+
+test('onMove fires once for a store rename of a folder, not per descendant; unsubscribing stops it', async () => {
+  const s = createTreeStore(wrap(seed()));
+  await s.loadFolder('');
+  const moves: string[][] = [];
+  const stop = s.onMove((from, to) => moves.push([from, to]));
+  await s.rename('a', 'renamed');
+  expect(moves).toEqual([['a', 'renamed']]);
+  stop();
+  await s.rename('renamed', 'again');
+  expect(moves).toHaveLength(1);
+});
+
+test('onMove fires for each normalized watch moved event, even outside loaded folders, and not for other changes', async () => {
+  const s = createTreeStore(wrap(seed()), { fetchDepth: 1 });
+  await s.loadFolder('');
+  const moves: string[][] = [];
+  s.onMove((from, to) => moves.push([from, to]));
+  s.applyChanges([
+    { type: 'moved', oldPath: 'a', path: 'b', actor: 'agent' },
+    { type: 'moved', oldPath: 'unloaded/x.txt', path: 'unloaded/y.txt' },
+    { type: 'moved', oldPath: 'b', path: 'b/inside' },
+    { type: 'deleted', path: 'd.txt' },
+    { type: 'created', path: 'new.txt' },
+  ]);
+  expect(moves).toEqual([
+    ['a', 'b'],
+    ['unloaded/x.txt', 'unloaded/y.txt'],
+  ]);
+});
+
+test('repeated store moves of one pair each expect their own echo: a->b, b->a, a->b with late echoes announce once each', async () => {
+  const s = createTreeStore(wrap(createMemoryAdapter({ files: { 'a/1.txt': '' } })));
+  await s.loadFolder('');
+  const moves: string[] = [];
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  await s.rename('a', 'b');
+  await s.rename('b', 'a');
+  await s.rename('a', 'b');
+  const echo = (oldPath: string, path: string): ChangeEvent => ({
+    type: 'moved',
+    oldPath,
+    path,
+    actor: 'user',
+  });
+  s.applyChanges([echo('a', 'b'), echo('b', 'a'), echo('a', 'b')]);
+  expect(moves).toEqual(['a->b', 'b->a', 'a->b']);
+  s.applyChanges([echo('a', 'b')]);
+  expect(moves, 'a fourth a->b has no expectation left').toEqual(['a->b', 'b->a', 'a->b', 'a->b']);
+});
+
+test('a moved event from the source of a store move in flight is its echo, even to a path the server picked', async () => {
+  const inner = createMemoryAdapter({ files: { 'a.txt': '' } });
+  let deliver: ((events: ChangeEvent[]) => void) | undefined;
+  const adapter: FileSystemAdapter = {
+    ...inner,
+    watch: (listener) => {
+      deliver = listener;
+      return () => undefined;
+    },
+    move: async (from) => {
+      await inner.move!(from, 'b (1).txt');
+      deliver!([{ type: 'moved', oldPath: from, path: 'b (1).txt', actor: 'user' }]);
+      return { path: 'b (1).txt', name: 'b (1).txt', kind: 'file' };
+    },
+  };
+  const s = createTreeStore(adapter);
+  s.subscribe(() => undefined);
+  await s.loadFolder('');
+  const moves: string[] = [];
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  await s.rename('a.txt', 'b.txt');
+  await settle();
+  expect(moves).toEqual(['a.txt->b (1).txt']);
+  deliver!([{ type: 'moved', oldPath: 'a.txt', path: 'b (1).txt', actor: 'agent' }]);
+  expect(moves, 'the echo was consumed while in flight, so a later one is announced').toHaveLength(2);
+});
+
+test('a deleted event while a parent reload is in flight re-issues the reload, so the stale listing cannot bring the entry back', async () => {
+  const adapter = createMemoryAdapter({ files: { 'a.txt': 'a', 'b.txt': 'b' } });
+  const s = createTreeStore(adapter);
+  s.subscribe(() => undefined);
+  await s.loadFolder('');
+  adapter.emit([{ type: 'updated', path: 'b.txt', actor: 'agent' }]);
+  await adapter.delete!('a.txt');
+  await settle();
+  expect(entryAt(tree(s), 'a.txt')).toBeUndefined();
+  expect(entryAt(tree(s), 'b.txt')).toBeDefined();
+});
+
+test('a temp file created and deleted while the parent listing is held never shows up', async () => {
+  const inner = createMemoryAdapter({ files: { 'keep.txt': '' } });
+  let releaseLatestList: (() => void) | undefined;
+  const s = createTreeStore(
+    wrap(inner, {
+      list: (path, options) => {
+        const answer = inner.list(path, options);
+        return new Promise<Entry[]>((resolve) => (releaseLatestList = () => void answer.then(resolve)));
+      },
+    }),
+  );
+  const first = s.loadFolder('');
+  releaseLatestList!();
+  await first;
+  await inner.create!('tmp.txt', 'file');
+  s.applyChanges([{ type: 'created', path: 'tmp.txt', actor: 'agent' }]);
+  await inner.delete!('tmp.txt');
+  s.applyChanges([{ type: 'deleted', path: 'tmp.txt', actor: 'agent' }]);
+  releaseLatestList!();
+  await settle();
+  expect(entryAt(tree(s), 'tmp.txt')).toBeUndefined();
+  expect(entryAt(tree(s), 'keep.txt')).toBeDefined();
+});
+
+test('a moved event while an ancestor listing is in flight re-issues it, so the moved-away entry does not come back', async () => {
+  const inner = createMemoryAdapter({ files: { 'dir/a.txt': '', 'other/keep.txt': '' } });
+  const held: Array<{ path: string; release: () => void }> = [];
+  const s = createTreeStore(
+    wrap(inner, {
+      list: (path, options) => {
+        const answer = inner.list(path, options);
+        return new Promise<Entry[]>((resolve) =>
+          held.push({ path, release: () => void answer.then(resolve) }),
+        );
+      },
+    }),
+  );
+  const first = s.loadFolder('');
+  held.shift()!.release();
+  await first;
+  s.applyChanges([{ type: 'updated', path: 'dir/a.txt', actor: 'agent' }]);
+  expect(held.map((request) => request.path)).toEqual(['dir']);
+  await inner.move!('dir/a.txt', 'other/a.txt');
+  s.applyChanges([{ type: 'moved', oldPath: 'dir/a.txt', path: 'other/a.txt', actor: 'agent' }]);
+  for (const request of held.splice(0)) request.release();
+  await settle();
+  for (const request of held.splice(0)) request.release();
+  await settle();
+  expect(entryAt(tree(s), 'dir/a.txt')).toBeUndefined();
+  expect(entryAt(tree(s), 'other/a.txt')).toBeDefined();
+});
+
+function heldListings(files: Record<string, string>): {
+  inner: MemoryAdapter;
+  adapter: FileSystemAdapter & { lists: string[] };
+  held: Array<{ path: string; release: () => void }>;
+  hold: (on: boolean) => void;
+} {
+  const inner = createMemoryAdapter({ files });
+  const held: Array<{ path: string; release: () => void }> = [];
+  let holding = false;
+  const adapter = wrap(inner, {
+    list: (path, options) => {
+      adapter.lists.push(path);
+      const answer = inner.list(path, options);
+      if (!holding) return answer;
+      return new Promise<Entry[]>((resolve) => held.push({ path, release: () => void answer.then(resolve) }));
+    },
+  });
+  return { inner, adapter, held, hold: (on) => void (holding = on) };
+}
+
+test('create waits for the re-issued listing of its never-loaded folder instead of failing on the dropped one', async () => {
+  const h = heldListings({ 'd/a.txt': '', 'd/b.txt': '' });
+  const s = createTreeStore(h.adapter, { fetchDepth: 1 });
+  await s.loadFolder('');
+  h.hold(true);
+  const creating = s.create('d', 'new.txt', 'file').then(
+    (entry) => entry.path,
+    (error: FsError) => `rejected: ${error.message}`,
+  );
+  await settle();
+  await h.inner.delete!('d/a.txt');
+  s.applyChanges([{ type: 'deleted', path: 'd/a.txt', actor: 'agent' }]);
+  expect(h.held.map((request) => request.path)).toEqual(['d', 'd']);
+  h.held.shift()!.release();
+  await settle();
+  expect(statusOf(tree(s), 'd'), 'the stale answer was dropped').toBe('loading');
+  h.hold(false);
+  for (const request of h.held.splice(0)) request.release();
+  expect(await creating).toBe('d/new.txt');
+  expect(entryAt(tree(s), 'd/a.txt')).toBeUndefined();
+});
+
+test('a moved event while the destination listing is in flight re-issues it, so the stale answer cannot drop the entry', async () => {
+  const h = heldListings({ 'src/a.txt': '', 'dst/keep.txt': '' });
+  const s = createTreeStore(h.adapter);
+  await s.loadFolder('');
+  h.hold(true);
+  s.applyChanges([{ type: 'updated', path: 'dst/keep.txt', actor: 'agent' }]);
+  await h.inner.move!('src/a.txt', 'dst/a.txt');
+  s.applyChanges([{ type: 'moved', oldPath: 'src/a.txt', path: 'dst/a.txt', actor: 'agent' }]);
+  h.hold(false);
+  for (const request of h.held.splice(0)) request.release();
+  await settle();
+  await settle();
+  expect(entryAt(tree(s), 'dst/a.txt')).toBeDefined();
+  expect(entryAt(tree(s), 'src/a.txt')).toBeUndefined();
+});
+
+test('deep churn below fetchDepth does not re-issue the root listing: a root change lands during the burst', async () => {
+  const files: Record<string, string> = { 'top.txt': '' };
+  for (let i = 0; i < 200; i++) files[`deep/a/b/${i}.txt`] = '';
+  const inner = createMemoryAdapter({ files });
+  const lists: string[] = [];
+  const adapter = wrap(inner, {
+    list: async (path, options) => {
+      lists.push(path);
+      const answer = await inner.list(path, options);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return answer;
+    },
+  });
+  const s = createTreeStore(adapter);
+  await s.loadFolder('');
+  await s.loadFolder('deep/a/b');
+  const rootListsBefore = lists.filter((path) => path === '').length;
+  await inner.create!('new.txt', 'file');
+  s.applyChanges([{ type: 'created', path: 'new.txt', actor: 'agent' }]);
+  let seenDuringBurst = false;
+  const end = performance.now() + 150;
+  for (let i = 0; performance.now() < end; i++) {
+    await inner.delete!(`deep/a/b/${i}.txt`);
+    s.applyChanges([{ type: 'deleted', path: `deep/a/b/${i}.txt`, actor: 'agent' }]);
+    seenDuringBurst ||= entryAt(tree(s), 'new.txt') !== undefined;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  expect(seenDuringBurst).toBe(true);
+  expect(lists.filter((path) => path === '').length - rootListsBefore).toBe(1);
+});
+
+const listingsOf = (adapter: { lists: string[] }, path: string): number =>
+  adapter.lists.filter((listed) => listed === path).length;
+
+test('churn below a loading folder settles the load on its re-issue and then lists once per landing', async () => {
+  const files: Record<string, string> = {};
+  for (let i = 0; i < 60; i++) files[`p/${i}.txt`] = '';
+  const h = heldListings(files);
+  const s = createTreeStore(h.adapter);
+  let nextDeleted = 0;
+  const deleteBelowP = async (count: number): Promise<void> => {
+    for (let k = 0; k < count; k++) {
+      const path = `p/${nextDeleted++}.txt`;
+      await h.inner.delete!(path);
+      s.applyChanges([{ type: 'deleted', path, actor: 'agent' }]);
+    }
+  };
+  h.hold(true);
+  let settled = false;
+  const loading = s.loadFolder('p').then(() => void (settled = true));
+  await deleteBelowP(10);
+  expect(listingsOf(h.adapter, 'p'), 'the original and one re-issue').toBe(2);
+  h.held.shift()!.release();
+  await settle();
+  expect(settled, 'the discarded original does not settle the caller').toBe(false);
+  await deleteBelowP(10);
+  h.held.shift()!.release();
+  await settle();
+  expect(settled, 'settles when the re-issue lands, while the churn goes on').toBe(true);
+  expect(
+    h.held.map((request) => request.path),
+    'exactly one trailing reload',
+  ).toEqual(['p']);
+  for (let round = 1; round <= 3; round++) {
+    await deleteBelowP(10);
+    expect(listingsOf(h.adapter, 'p'), 'no listing while the trailing reload is in flight').toBe(2 + round);
+    h.held.shift()!.release();
+    await settle();
+    expect(h.held.map((request) => request.path)).toEqual(['p']);
+  }
+  h.held.shift()!.release();
+  await settle();
+  expect(h.held).toEqual([]);
+  expect(listingsOf(h.adapter, 'p')).toBe(6);
+  expect(childPaths(s, 'p').filter((path) => Number(basename(path).split('.')[0]) < nextDeleted)).toEqual([]);
+  await loading;
+});
+
+test('created churn inside a loaded folder settles a forced load on its one replacement listing', async () => {
+  const h = heldListings({ 'p/x.txt': '' });
+  const s = createTreeStore(h.adapter);
+  await s.loadFolder('p');
+  let nextCreated = 0;
+  const createInP = async (count: number): Promise<void> => {
+    for (let k = 0; k < count; k++) {
+      const path = `p/n${nextCreated++}.txt`;
+      await h.inner.create!(path, 'file');
+      s.applyChanges([{ type: 'created', path, actor: 'agent' }]);
+    }
+  };
+  const listingsBefore = listingsOf(h.adapter, 'p');
+  h.hold(true);
+  let settled = false;
+  const loading = s.loadFolder('p', { force: true }).then(() => void (settled = true));
+  await createInP(10);
+  expect(listingsOf(h.adapter, 'p') - listingsBefore, 'the forced listing and one replacement').toBe(2);
+  h.held.shift()!.release();
+  await settle();
+  expect(settled, 'the replaced listing does not settle the caller').toBe(false);
+  await createInP(10);
+  expect(listingsOf(h.adapter, 'p') - listingsBefore, 'later creates queue a trailing reload').toBe(2);
+  h.held.shift()!.release();
+  await settle();
+  expect(settled, 'settles when the replacement lands, while the churn goes on').toBe(true);
+  expect(
+    h.held.map((request) => request.path),
+    'exactly one trailing reload',
+  ).toEqual(['p']);
+  h.held.shift()!.release();
+  await settle();
+  expect(h.held).toEqual([]);
+  expect(listingsOf(h.adapter, 'p') - listingsBefore).toBe(3);
+  expect(childPaths(s, 'p')).toHaveLength(21);
+  await loading;
+});
+
+test('a delete during the re-issued listing waits for one trailing reload, which removes the ghost', async () => {
+  const h = heldListings({ 'p/a.txt': '', 'p/b.txt': '', 'p/c.txt': '' });
+  const s = createTreeStore(h.adapter);
+  h.hold(true);
+  const loading = s.loadFolder('p');
+  await h.inner.delete!('p/a.txt');
+  s.applyChanges([{ type: 'deleted', path: 'p/a.txt', actor: 'agent' }]);
+  await h.inner.delete!('p/b.txt');
+  s.applyChanges([{ type: 'deleted', path: 'p/b.txt', actor: 'agent' }]);
+  expect(
+    h.held.map((request) => request.path),
+    'the second delete does not discard the re-issue',
+  ).toEqual(['p', 'p']);
+  for (const request of h.held.splice(0)) request.release();
+  await loading;
+  expect(childPaths(s, 'p').sort(), 'the re-issued answer predates the second delete').toEqual([
+    'p/b.txt',
+    'p/c.txt',
+  ]);
+  expect(
+    h.held.map((request) => request.path),
+    'one trailing reload',
+  ).toEqual(['p']);
+  h.held.shift()!.release();
+  await settle();
+  expect(childPaths(s, 'p')).toEqual(['p/c.txt']);
+  expect(h.held).toEqual([]);
+});
+
+test('an updated event while an ancestor listing is in flight re-issues it, so the stale answer cannot undo the child reload', async () => {
+  const h = heldListings({ 'dir/x.txt': '1' });
+  const s = createTreeStore(h.adapter, { fetchDepth: 2 });
+  await s.loadFolder('');
+  h.hold(true);
+  void s.loadFolder('', { force: true });
+  const staleRootListing = h.held.shift()!;
+  await h.inner.write!('dir/x.txt', 'fresh content', undefined);
+  s.applyChanges([{ type: 'updated', path: 'dir/x.txt', actor: 'agent' }]);
+  h.held.find((request) => request.path === 'dir')!.release();
+  await settle();
+  expect(entryAt(tree(s), 'dir/x.txt')?.size).toBe(13);
+  staleRootListing.release();
+  await settle();
+  h.hold(false);
+  for (const request of h.held.splice(0)) request.release();
+  await settle();
+  expect(entryAt(tree(s), 'dir/x.txt')?.size).toBe(13);
+  expect(h.held).toEqual([]);
+});
+
+function watchedAdapterWithHeldMove(files: Record<string, string>): {
+  adapter: FileSystemAdapter;
+  deliver: (events: ChangeEvent[]) => void;
+  rejectMove: (error: unknown) => void;
+} {
+  const inner = createMemoryAdapter({ files });
+  let listener: ((events: ChangeEvent[]) => void) | undefined;
+  const move = deferred<Entry>();
+  return {
+    adapter: {
+      ...inner,
+      watch: (watcher) => {
+        listener = watcher;
+        return () => undefined;
+      },
+      move: () => move.promise,
+    },
+    deliver: (events) => listener!(events),
+    rejectMove: move.reject,
+  };
+}
+
+test('a store move that fails announces the external move it had taken for its echo', async () => {
+  const { adapter, deliver, rejectMove } = watchedAdapterWithHeldMove({ 'a.txt': 'x' });
+  const s = createTreeStore(adapter);
+  s.subscribe(() => undefined);
+  await s.loadFolder('');
+  const moves: string[] = [];
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  const renaming = s.rename('a.txt', 'b.txt').catch((error: FsError) => error.kind);
+  deliver([{ type: 'moved', oldPath: 'a.txt', path: 'c.txt', actor: 'agent' }]);
+  expect(moves, 'taken for the echo while the move runs').toEqual([]);
+  rejectMove(new FsError('not_found', 'gone'));
+  expect(await renaming).toBe('not_found');
+  expect(moves).toEqual(['a.txt->c.txt']);
+});
+
+test('a store move that fails stops expecting its echo at once: the same move by someone else is announced', async () => {
+  const { adapter, deliver, rejectMove } = watchedAdapterWithHeldMove({ 'a.txt': 'x' });
+  const s = createTreeStore(adapter);
+  s.subscribe(() => undefined);
+  await s.loadFolder('');
+  const moves: string[] = [];
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  const renaming = s.rename('a.txt', 'b.txt').catch(() => undefined);
+  rejectMove(new FsError('forbidden', 'nope'));
+  await renaming;
+  deliver([{ type: 'moved', oldPath: 'a.txt', path: 'b.txt', actor: 'agent' }]);
+  expect(moves).toEqual(['a.txt->b.txt']);
 });

@@ -1,6 +1,14 @@
 import { FsError } from '../errors';
 
-/** Runs `fn` over `items`, at most `limit` at a time. Never rejects; once `signal` aborts, unstarted items are rejected as cancelled and in-flight ones are awaited. */
+/**
+ * Runs `fn` over `items`, at most `limit` at a time. Never rejects; once `signal` aborts, unstarted items are
+ * rejected as cancelled and in-flight ones are awaited.
+ *
+ * @example
+ * ```ts
+ * const results = await mapWithConcurrency(paths, 4, (path) => adapter.stat!(path));
+ * ```
+ */
 export async function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,
@@ -8,18 +16,18 @@ export async function mapWithConcurrency<T, R>(
   signal?: AbortSignal,
 ): Promise<PromiseSettledResult<R>[]> {
   const results: PromiseSettledResult<R>[] = [];
-  let next = 0;
+  let nextIndex = 0;
   const worker = async (): Promise<void> => {
-    while (next < items.length) {
-      const i = next++;
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
       if (signal?.aborted) {
-        results[i] = { status: 'rejected', reason: new FsError('cancelled') };
+        results[index] = { status: 'rejected', reason: new FsError('cancelled') };
         continue;
       }
       try {
-        results[i] = { status: 'fulfilled', value: await fn(items[i] as T, i) };
+        results[index] = { status: 'fulfilled', value: await fn(items[index] as T, index) };
       } catch (reason) {
-        results[i] = { status: 'rejected', reason };
+        results[index] = { status: 'rejected', reason };
       }
     }
   };
@@ -27,7 +35,16 @@ export async function mapWithConcurrency<T, R>(
   return results;
 }
 
-/** Shares `limit` slots between everything that runs through the returned function. */
+/**
+ * Shares `limit` slots between everything that runs through the returned function. A finished task hands its
+ * slot straight to the next waiter, so no newcomer can slip in between.
+ *
+ * @example
+ * ```ts
+ * const gate = createGate(6);
+ * await Promise.all(chunks.map((chunk) => gate(() => send(chunk))));
+ * ```
+ */
 export function createGate(limit: number): <T>(fn: () => Promise<T>) => Promise<T> {
   let active = 0;
   const waiting: (() => void)[] = [];
@@ -37,9 +54,8 @@ export function createGate(limit: number): <T>(fn: () => Promise<T>) => Promise<
     try {
       return await fn();
     } finally {
-      // Hand the slot straight to the next waiter so no newcomer can slip in between.
-      const next = waiting.shift();
-      if (next) next();
+      const nextWaiter = waiting.shift();
+      if (nextWaiter) nextWaiter();
       else active--;
     }
   };

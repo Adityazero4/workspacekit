@@ -1,10 +1,18 @@
 import { FsError, toFsError } from '../errors';
 
-export function isTransient(e: FsError): boolean {
-  return e.kind === 'network' || e.kind === 'timeout' || e.status === 502 || e.status === 503 || e.status === 504;
+/**
+ * Whether retrying may fix `error`: network failures, timeouts and 502/503/504 responses.
+ *
+ * @example
+ * ```ts
+ * if (isTransient(error)) scheduleRetry();
+ * ```
+ */
+export function isTransient(error: FsError): boolean {
+  const { kind, status } = error;
+  return kind === 'network' || kind === 'timeout' || status === 502 || status === 503 || status === 504;
 }
 
-/** Resolves after `ms`; rejects at once with `cancelled` if `signal` aborts first. */
 function backoff(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.reject(new FsError('cancelled'));
   if (ms <= 0) return Promise.resolve();
@@ -21,7 +29,15 @@ function backoff(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-/** Runs `fn`, retrying retryable errors after each delay in `delaysMs` (so at most `delaysMs.length + 1` attempts). */
+/**
+ * Runs `fn`, retrying retryable errors after each delay in `delaysMs` (so at most `delaysMs.length + 1`
+ * attempts).
+ *
+ * @example
+ * ```ts
+ * const entry = await withRetry(() => transport.complete(uploadId), [1000, 2000, 4000], signal);
+ * ```
+ */
 export async function withRetry<T>(
   fn: () => Promise<T>,
   delaysMs: number[],
@@ -32,10 +48,10 @@ export async function withRetry<T>(
     if (signal?.aborted) throw new FsError('cancelled');
     try {
       return await fn();
-    } catch (e) {
-      const err = toFsError(e);
+    } catch (thrown) {
+      const error = toFsError(thrown);
       const delay = delaysMs[attempt];
-      if (delay === undefined || err.kind === 'cancelled' || !isRetryable(err)) throw err;
+      if (delay === undefined || error.kind === 'cancelled' || !isRetryable(error)) throw error;
       await backoff(delay, signal);
     }
   }

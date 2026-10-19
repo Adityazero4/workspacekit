@@ -8,7 +8,8 @@ import { mapWithConcurrency } from '../src/upload/pool';
 import { withRetry } from '../src/upload/retry';
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
-const file = (name: string, content: string): UploadItem['file'] => Object.assign(new Blob([content]), { name });
+const file = (name: string, content: string): UploadItem['file'] =>
+  Object.assign(new Blob([content]), { name });
 const item = (relativePath: string, content: string): UploadItem => ({
   file: file(relativePath.split('/').pop()!, content),
   relativePath,
@@ -48,7 +49,10 @@ async function drive<T>(p: Promise<T>, g: { release(): void }): Promise<T> {
   return wrapped;
 }
 
-function setup(files: Record<string, string> = {}, wrapTransport: (t: UploadTransport) => UploadTransport = (t) => t) {
+function setup(
+  files: Record<string, string> = {},
+  wrapTransport: (t: UploadTransport) => UploadTransport = (t) => t,
+) {
   const fs: MemoryAdapter = createMemoryAdapter({ files, chunkSize: 4 });
   const transport = wrapTransport(fs.upload!);
   const uploader = createUploader({
@@ -71,7 +75,10 @@ describe('routing', () => {
       direct: (...a) => (calls.push('direct'), t.direct(...a)),
       chunked: { ...t.chunked!, init: (...a) => (calls.push('init'), t.chunked!.init(...a)) },
     }));
-    const r = await uploader.upload([item('empty', ''), item('small', '1234567'), item('big', '12345678')], 'd');
+    const r = await uploader.upload(
+      [item('empty', ''), item('small', '1234567'), item('big', '12345678')],
+      'd',
+    );
     expect(r.failed).toEqual([]);
     expect(calls.sort()).toEqual(['direct', 'direct', 'init']);
     expect(await text(fs, 'd/big')).toBe('12345678');
@@ -128,13 +135,19 @@ describe('retry', () => {
   it('withRetry: retries 502/503/504 and timeouts, gives up after the delays run out, never retries cancelled', async () => {
     let n = 0;
     const flaky = (): Promise<string> =>
-      ++n < 3 ? Promise.reject(new FsError('unknown', 'x', { status: n === 1 ? 503 : 504 })) : Promise.resolve('ok');
+      ++n < 3
+        ? Promise.reject(new FsError('unknown', 'x', { status: n === 1 ? 503 : 504 }))
+        : Promise.resolve('ok');
     expect(await withRetry(flaky, [0, 0])).toBe('ok');
     n = 0;
-    await expect(withRetry(() => (n++, Promise.reject(new FsError('timeout'))), [0, 0])).rejects.toMatchObject({ kind: 'timeout' });
+    await expect(
+      withRetry(() => (n++, Promise.reject(new FsError('timeout'))), [0, 0]),
+    ).rejects.toMatchObject({ kind: 'timeout' });
     expect(n).toBe(3);
     n = 0;
-    await expect(withRetry(() => (n++, Promise.reject(new FsError('cancelled'))), [0, 0])).rejects.toMatchObject({ kind: 'cancelled' });
+    await expect(
+      withRetry(() => (n++, Promise.reject(new FsError('cancelled'))), [0, 0]),
+    ).rejects.toMatchObject({ kind: 'cancelled' });
     expect(n).toBe(1);
   });
 
@@ -163,7 +176,12 @@ describe('pool', () => {
     expect(r.map((s) => s.status)).toEqual(['fulfilled', 'rejected', 'fulfilled']);
     const ctl = new AbortController();
     const started: number[] = [];
-    const r2 = await mapWithConcurrency([1, 2, 3], 1, async (x) => (started.push(x), ctl.abort(), x), ctl.signal);
+    const r2 = await mapWithConcurrency(
+      [1, 2, 3],
+      1,
+      async (x) => (started.push(x), ctl.abort(), x),
+      ctl.signal,
+    );
     expect(started).toEqual([1]);
     expect(r2.map((s) => s.status)).toEqual(['fulfilled', 'rejected', 'rejected']);
   });
@@ -175,7 +193,10 @@ describe('best effort and untrusted paths', () => {
       ...t,
       direct: (p, ...a) => (p.endsWith('bad') ? Promise.reject(new FsError('forbidden')) : t.direct(p, ...a)),
     }));
-    const r = await uploader.upload(['a', 'b', 'bad', 'c', 'd'].map((n) => item(n, 'x')), '');
+    const r = await uploader.upload(
+      ['a', 'b', 'bad', 'c', 'd'].map((n) => item(n, 'x')),
+      '',
+    );
     expect(r.uploaded).toHaveLength(4);
     expect(r.failed).toHaveLength(1);
     expect(r.failed[0]!.path).toBe('bad');
@@ -185,13 +206,28 @@ describe('best effort and untrusted paths', () => {
 
   it('invalid or escaping relative paths fail without uploading; the run continues', async () => {
     const { fs, uploader } = setup({ 'secret.txt': 's' });
-    const bad = ['../evil.txt', 'a/../../evil.txt', 'a/./b', '/abs.txt', 'a//b', 'con.txt', 'trail.', 'x\\y', ''];
+    const bad = [
+      '../evil.txt',
+      'a/../../evil.txt',
+      'a/./b',
+      '/abs.txt',
+      'a//b',
+      'con.txt',
+      'trail.',
+      'x\\y',
+      '',
+    ];
     const r = await uploader.upload([...bad.map((p) => item(p, 'x')), item('ok/fine.txt', 'x')], 'sub');
     expect(r.failed.map((f) => f.path)).toEqual(bad);
     expect(r.failed.every((f) => isFsError(f.error) && f.error.kind === 'invalid')).toBe(true);
     expect(r.uploaded.map((e) => e.path)).toEqual(['sub/ok/fine.txt']);
     expect(await has(fs, 'evil.txt')).toBe(false);
-    expect((await fs.list!('', { depth: 9 })).map((e) => e.path).sort()).toEqual(['secret.txt', 'sub', 'sub/ok', 'sub/ok/fine.txt']);
+    expect((await fs.list!('', { depth: 9 })).map((e) => e.path).sort()).toEqual([
+      'secret.txt',
+      'sub',
+      'sub/ok',
+      'sub/ok/fine.txt',
+    ]);
   });
 });
 
@@ -213,7 +249,9 @@ describe('conflicts', () => {
   });
   it('replace overwrites, for direct and chunked uploads', async () => {
     const { fs, uploader } = setup({ ...files, 'd/big.txt': 'old' });
-    await uploader.upload([item('x.txt', 'new'), item('big.txt', '123456789')], 'd', { onConflict: 'replace' });
+    await uploader.upload([item('x.txt', 'new'), item('big.txt', '123456789')], 'd', {
+      onConflict: 'replace',
+    });
     expect(await text(fs, 'd/x.txt')).toBe('new');
     expect(await text(fs, 'd/big.txt')).toBe('123456789');
   });
@@ -228,7 +266,9 @@ describe('conflicts', () => {
   it('accepts an async chooser called with the conflicting path', async () => {
     const { uploader } = setup(files);
     const asked: string[] = [];
-    const r = await uploader.upload([item('x.txt', 'n')], 'd', { onConflict: async (p) => (asked.push(p), 'skip') });
+    const r = await uploader.upload([item('x.txt', 'n')], 'd', {
+      onConflict: async (p) => (asked.push(p), 'skip'),
+    });
     expect(asked).toEqual(['d/x.txt']);
     expect(r.skipped).toEqual(['d/x.txt']);
   });
@@ -412,7 +452,9 @@ describe('cancel', () => {
       },
     }));
     let settled = false;
-    const p = uploader.upload([item('late.txt', 'x')], '', { signal: ctl.signal }).finally(() => (settled = true));
+    const p = uploader
+      .upload([item('late.txt', 'x')], '', { signal: ctl.signal })
+      .finally(() => (settled = true));
     while (late.held.length === 0) await flush();
     ctl.abort();
     await flush();
@@ -439,4 +481,3 @@ describe('progress', () => {
     expect(seen.every((p) => p.totalBytes === 51)).toBe(true);
   });
 });
-

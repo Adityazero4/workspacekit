@@ -1,4 +1,26 @@
+/**
+ * Whether an entry is a file or a directory.
+ *
+ * @example
+ * ```ts
+ * const kind: EntryKind = entry.kind;
+ * ```
+ */
 export type EntryKind = 'file' | 'directory';
+/**
+ * One file or directory, addressed by its normalized path (`/`-separated, no leading slash, root `''`).
+ *
+ * @example
+ * ```ts
+ * const entry: Entry = {
+ *   path: 'src/main.ts',
+ *   name: 'main.ts',
+ *   kind: 'file',
+ *   size: 120,
+ *   mtimeMs: Date.now(),
+ * };
+ * ```
+ */
 export interface Entry {
   path: string;
   name: string;
@@ -7,6 +29,14 @@ export interface Entry {
   mtimeMs?: number;
   meta?: Record<string, unknown>;
 }
+/**
+ * One change reported by `FileSystemAdapter.watch`. `actor` is `'user'` for changes made through this client.
+ *
+ * @example
+ * ```ts
+ * adapter.watch?.((events) => events.filter((event) => event.type === 'deleted').forEach(forget));
+ * ```
+ */
 export interface ChangeEvent {
   /** `resync` (with `path` `''`): changes were missed; the client must reload every loaded folder. */
   type: 'created' | 'updated' | 'deleted' | 'moved' | 'resync';
@@ -15,12 +45,41 @@ export interface ChangeEvent {
   mtimeMs?: number;
   actor?: string;
 }
+/**
+ * Options every read accepts: an `AbortSignal` that cancels the request.
+ *
+ * @example
+ * ```ts
+ * await adapter.list('src', { depth: 1, signal: controller.signal });
+ * ```
+ */
 export interface CallOptions {
   signal?: AbortSignal;
 }
+/**
+ * Options for `move` and `copy`: `overwrite` replaces an existing destination instead of failing with
+ * `conflict`.
+ *
+ * @example
+ * ```ts
+ * await adapter.move?.('a.txt', 'b.txt', { overwrite: true });
+ * ```
+ */
 export interface TransferOptions {
   overwrite?: boolean;
 }
+/**
+ * How an adapter sends file bytes: always `direct`, and `chunked` for large files when the server supports
+ * it.
+ *
+ * @example
+ * ```ts
+ * const entry = await adapter.upload!.direct('notes.md', file, {
+ *   signal,
+ *   onProgress: (loaded) => show(loaded),
+ * });
+ * ```
+ */
 export interface UploadTransport {
   direct(
     targetPath: string,
@@ -38,6 +97,16 @@ export interface UploadTransport {
     abort(uploadId: string): Promise<void>;
   };
 }
+/**
+ * The storage behind the explorer. Only `list` and `read` are required; every other capability is optional
+ * and the UI hides what an adapter cannot do.
+ *
+ * @example
+ * ```ts
+ * const adapter: FileSystemAdapter = httpAdapter('/api/files');
+ * const entries = await adapter.list('', { depth: 2 });
+ * ```
+ */
 export interface FileSystemAdapter {
   list(path: string, opts: { depth: number } & CallOptions): Promise<Entry[]>;
   read(path: string, as: 'text', opts?: CallOptions): Promise<string>;

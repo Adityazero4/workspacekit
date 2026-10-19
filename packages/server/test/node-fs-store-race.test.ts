@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nodeFsStore, type FileStore } from '../src';
+import type * as FsPromises from 'node:fs/promises';
 
 // Lets a test run code at the moment the store is about to read a given directory.
 const hook: { onReaddir?: (dir: string) => Promise<void> } = {};
 vi.mock('node:fs/promises', async (orig) => {
-  const real = await orig<typeof import('node:fs/promises')>();
+  const real = await orig<typeof FsPromises>();
   return {
     ...real,
     readdir: (async (p: string, ...rest: unknown[]) => {

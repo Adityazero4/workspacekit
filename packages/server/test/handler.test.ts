@@ -16,18 +16,18 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 let base: string;
 let root: string;
-let tmp: string;
+let uploadTempDir: string;
 let oldTmp: string | undefined;
 let store: FileStore;
 
 beforeEach(async () => {
   base = await realpath(await mkdtemp(path.join(tmpdir(), 'handler-')));
   root = path.join(base, 'root');
-  tmp = path.join(base, 'tmp');
+  uploadTempDir = path.join(base, 'tmp');
   await mkdir(root);
-  await mkdir(tmp);
+  await mkdir(uploadTempDir);
   oldTmp = process.env.TMPDIR;
-  process.env.TMPDIR = tmp; // os.tmpdir() reads it on every call, so upload temp files land in `tmp`
+  process.env.TMPDIR = uploadTempDir; // os.tmpdir() reads it on every call, so upload temp files land in `uploadTempDir`
   store = nodeFsStore(root, { exclude: ['.git'] });
 });
 afterEach(async () => {
@@ -45,11 +45,17 @@ const url = (route: string, q: Record<string, string | number> = {}, prefix = '/
   return `http://t${prefix}/${route}${qs ? `?${qs}` : ''}`;
 };
 const post = (route: string, body: unknown, method = 'POST'): Request =>
-  new Request(url(route), { method, headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  new Request(url(route), {
+    method,
+    headers: { ...H, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 const errBody = async (res: Response): Promise<ErrorBody['error']> => ((await res.json()) as ErrorBody).error;
 const tempFiles = async (): Promise<string[]> => {
   const out: string[] = [];
-  for (const d of await readdir(tmp)) for (const s of await readdir(path.join(tmp, d))) out.push(`${d}/${s}`);
+  for (const d of await readdir(uploadTempDir)) {
+    for (const s of await readdir(path.join(uploadTempDir, d))) out.push(`${d}/${s}`);
+  }
   return out;
 };
 /** Wraps a store and records which methods ran. */
@@ -58,7 +64,9 @@ function spy(real: FileStore): { store: FileStore; calls: string[] } {
   const s = new Proxy(real, {
     get(t, k) {
       const v = (t as unknown as Record<string | symbol, unknown>)[k];
-      return typeof v === 'function' ? (...a: unknown[]) => (calls.push(String(k)), (v as (...x: unknown[]) => unknown)(...a)) : v;
+      return typeof v === 'function'
+        ? (...a: unknown[]) => (calls.push(String(k)), (v as (...x: unknown[]) => unknown)(...a))
+        : v;
     },
   });
   return { store: s, calls };
@@ -95,8 +103,17 @@ describe('construction, routing and authorization', () => {
     }
     expect(s.calls).toEqual([]);
     expect(seen).toEqual([
-      ['list', 'a/b'], ['stat', 'a.txt'], ['read', 'a.txt'], ['search', ''], ['create', 'n.txt'], ['write', 'w.txt'],
-      ['move', 'a.txt'], ['copy', 'a.txt'], ['delete', 'a.txt'], ['uploadDirect', 'u.bin'], ['uploadInit', 'u.bin'],
+      ['list', 'a/b'],
+      ['stat', 'a.txt'],
+      ['read', 'a.txt'],
+      ['search', ''],
+      ['create', 'n.txt'],
+      ['write', 'w.txt'],
+      ['move', 'a.txt'],
+      ['copy', 'a.txt'],
+      ['delete', 'a.txt'],
+      ['uploadDirect', 'u.bin'],
+      ['uploadInit', 'u.bin'],
       ['download', 'a.txt'],
     ]);
   });
@@ -109,7 +126,12 @@ describe('construction, routing and authorization', () => {
     expect((await h(post('copy', { from: 'a.txt', to: 'locked' }))).status).toBe(403);
     expect((await h(post('download', { paths: ['a.txt', 'locked'] }))).status).toBe(403);
     expect(seen).toEqual([
-      ['move', 'a.txt'], ['move', 'locked'], ['copy', 'a.txt'], ['copy', 'locked'], ['download', 'a.txt'], ['download', 'locked'],
+      ['move', 'a.txt'],
+      ['move', 'locked'],
+      ['copy', 'a.txt'],
+      ['copy', 'locked'],
+      ['download', 'a.txt'],
+      ['download', 'locked'],
     ]);
     expect(await disk('a.txt')).toBe('a');
   });
@@ -118,15 +140,29 @@ describe('construction, routing and authorization', () => {
     const seen: [string, string][] = [];
     let deny = false;
     const h = make({ authorize: (_r, op, p) => (seen.push([op, p]), !deny) });
-    const { uploadId } = (await (await h(post('upload/init', { path: 'dir/u.bin', totalBytes: 3 }))).json()) as UploadInitResponse;
+    const { uploadId } = (await (
+      await h(post('upload/init', { path: 'dir/u.bin', totalBytes: 3 }))
+    ).json()) as UploadInitResponse;
     deny = true;
-    const chunk = new Request(url('upload/chunk', { id: uploadId, index: 0, offset: 0 }), { method: 'PUT', headers: H, body: 'abc' });
+    const chunk = new Request(url('upload/chunk', { id: uploadId, index: 0, offset: 0 }), {
+      method: 'PUT',
+      headers: H,
+      body: 'abc',
+    });
     expect((await h(chunk)).status).toBe(403);
     expect((await h(post('upload/complete', { uploadId }))).status).toBe(403);
-    expect((await h(new Request(url('upload', { id: uploadId }), { method: 'DELETE', headers: H }))).status).toBe(403);
-    expect(seen.slice(1)).toEqual([['uploadChunk', 'dir/u.bin'], ['uploadComplete', 'dir/u.bin'], ['uploadAbort', 'dir/u.bin']]);
+    expect(
+      (await h(new Request(url('upload', { id: uploadId }), { method: 'DELETE', headers: H }))).status,
+    ).toBe(403);
+    expect(seen.slice(1)).toEqual([
+      ['uploadChunk', 'dir/u.bin'],
+      ['uploadComplete', 'dir/u.bin'],
+      ['uploadAbort', 'dir/u.bin'],
+    ]);
     deny = false;
-    expect((await h(new Request(url('upload', { id: uploadId }), { method: 'DELETE', headers: H }))).status).toBe(204);
+    expect(
+      (await h(new Request(url('upload', { id: uploadId }), { method: 'DELETE', headers: H }))).status,
+    ).toBe(204);
   });
 
   it('routes by pathname suffix regardless of base path; unknown route 404; wrong method 405', async () => {
@@ -156,7 +192,11 @@ describe('construction, routing and authorization', () => {
       new Request(url('delete', { path: 'a.txt' }), { method: 'DELETE', headers: H }),
       new Request(url('upload', { path: 'u' }), { method: 'POST', headers: H, body: 'x' }),
       post('upload/init', { path: 'u', totalBytes: 1 }),
-      new Request(url('upload/chunk', { id: 'x', index: 0, offset: 0 }), { method: 'PUT', headers: H, body: 'x' }),
+      new Request(url('upload/chunk', { id: 'x', index: 0, offset: 0 }), {
+        method: 'PUT',
+        headers: H,
+        body: 'x',
+      }),
       post('upload/complete', { uploadId: 'x' }),
       new Request(url('upload', { id: 'x' }), { method: 'DELETE', headers: H }),
     ];
@@ -175,14 +215,24 @@ describe('metadata and mutation routes', () => {
     const created = await json<EntryResponse>(post('create', { path: 'd/e', kind: 'directory' }));
     expect(created.entry).toMatchObject({ path: 'd/e', kind: 'directory' });
     expect((await h(post('create', { path: 'd/e', kind: 'directory' }))).status).toBe(409);
-    const w = await h(new Request(url('write', { path: 'd/e/f.txt' }), { method: 'PUT', headers: H, body: 'héllo' }));
+    const w = await h(
+      new Request(url('write', { path: 'd/e/f.txt' }), { method: 'PUT', headers: H, body: 'héllo' }),
+    );
     expect(w.status).toBe(200);
     expect(await disk('d/e/f.txt')).toBe('héllo');
     const st = await json<{ entry: Entry | null }>(new Request(url('stat', { path: 'd/e/f.txt' })));
     expect(st.entry).toMatchObject({ path: 'd/e/f.txt', size: 6 });
-    expect((await json<{ entry: Entry | null }>(new Request(url('stat', { path: 'nope' })))).entry).toBeNull();
-    expect((await json<EntriesResponse>(new Request(url('list', { path: 'd', depth: 2 })))).entries.map((e) => e.path).sort()).toEqual(['d/e', 'd/e/f.txt']);
-    expect((await json<EntriesResponse>(new Request(url('search', { q: 'F.TX' })))).entries.map((e) => e.path)).toEqual(['d/e/f.txt']);
+    expect(
+      (await json<{ entry: Entry | null }>(new Request(url('stat', { path: 'nope' })))).entry,
+    ).toBeNull();
+    expect(
+      (await json<EntriesResponse>(new Request(url('list', { path: 'd', depth: 2 })))).entries
+        .map((e) => e.path)
+        .sort(),
+    ).toEqual(['d/e', 'd/e/f.txt']);
+    expect(
+      (await json<EntriesResponse>(new Request(url('search', { q: 'F.TX' })))).entries.map((e) => e.path),
+    ).toEqual(['d/e/f.txt']);
     expect((await h(new Request(url('list', { path: 'missing' })))).status).toBe(404);
     expect((await h(new Request(url('list', { depth: 'x' })))).status).toBe(400);
     expect((await h(post('copy', { from: 'd/e/f.txt', to: 'g.txt' }))).status).toBe(200);
@@ -190,10 +240,14 @@ describe('metadata and mutation routes', () => {
     expect((await h(post('copy', { from: 'd/e/f.txt', to: 'g.txt', overwrite: true }))).status).toBe(200);
     expect((await h(post('move', { from: 'g.txt', to: 'h.txt' }))).status).toBe(200);
     expect(await disk('h.txt')).toBe('héllo');
-    expect((await h(new Request(url('delete', { path: 'h.txt' }), { method: 'DELETE', headers: H }))).status).toBe(204);
+    expect(
+      (await h(new Request(url('delete', { path: 'h.txt' }), { method: 'DELETE', headers: H }))).status,
+    ).toBe(204);
     expect(await stat(path.join(root, 'h.txt')).catch(() => null)).toBeNull();
     expect((await h(post('create', { path: 'x', kind: 'bogus' }))).status).toBe(400);
-    expect((await h(new Request(url('create'), { method: 'POST', headers: H, body: '{nope' }))).status).toBe(400);
+    expect((await h(new Request(url('create'), { method: 'POST', headers: H, body: '{nope' }))).status).toBe(
+      400,
+    );
     expect((await h(post('move', { from: 'a' }))).status).toBe(400);
   });
 
@@ -201,12 +255,19 @@ describe('metadata and mutation routes', () => {
     const e = await put('a.txt', 'one');
     const h = make();
     const mk = (hdr?: string): Request =>
-      new Request(url('write', { path: 'a.txt' }), { method: 'PUT', body: 'two', headers: { ...H, ...(hdr ? { 'If-Mtime-Ms': hdr } : {}) } });
+      new Request(url('write', { path: 'a.txt' }), {
+        method: 'PUT',
+        body: 'two',
+        headers: { ...H, ...(hdr ? { 'If-Mtime-Ms': hdr } : {}) },
+      });
     expect((await h(mk())).status).toBe(200);
     expect(await disk('a.txt')).toBe('two');
     expect((await h(mk(String(e.mtimeMs! + 12345)))).status).toBe(409);
     expect((await h(mk('abc'))).status).toBe(400);
-    expect((await h(new Request(url('write', { path: 'p/q/r.txt' }), { method: 'PUT', headers: H, body: 'x' }))).status).toBe(200);
+    expect(
+      (await h(new Request(url('write', { path: 'p/q/r.txt' }), { method: 'PUT', headers: H, body: 'x' })))
+        .status,
+    ).toBe(200);
     expect(await disk('p/q/r.txt')).toBe('x');
   });
 });
@@ -238,7 +299,11 @@ describe('read', () => {
     const c = await get('bytes=-3');
     expect([c.status, c.headers.get('Content-Range'), await c.text()]).toEqual([206, 'bytes 7-9/10', '789']);
     const d = await get('bytes=5-999');
-    expect([d.status, d.headers.get('Content-Range'), await d.text()]).toEqual([206, 'bytes 5-9/10', '56789']);
+    expect([d.status, d.headers.get('Content-Range'), await d.text()]).toEqual([
+      206,
+      'bytes 5-9/10',
+      '56789',
+    ]);
     const big = await get('bytes=-99');
     expect([big.status, big.headers.get('Content-Range')]).toEqual([206, 'bytes 0-9/10']);
     const bad = await get('bytes=10-12');
@@ -254,15 +319,41 @@ describe('read', () => {
   it('serves Content-Type from the extension allowlist; html and unknown are octet-stream', async () => {
     const h = make();
     const types: Record<string, string> = {
-      'a.png': 'image/png', 'a.JPG': 'image/jpeg', 'a.jpeg': 'image/jpeg', 'a.gif': 'image/gif', 'a.webp': 'image/webp',
-      'a.avif': 'image/avif', 'a.bmp': 'image/bmp', 'a.ico': 'image/x-icon', 'a.svg': 'image/svg+xml', 'a.tif': 'image/tiff',
-      'a.tiff': 'image/tiff', 'a.mp4': 'video/mp4', 'a.m4v': 'video/mp4', 'a.webm': 'video/webm', 'a.mov': 'video/quicktime',
-      'a.mp3': 'audio/mpeg', 'a.wav': 'audio/wav', 'a.ogg': 'audio/ogg', 'a.oga': 'audio/ogg', 'a.flac': 'audio/flac',
-      'a.aac': 'audio/aac', 'a.m4a': 'audio/mp4', 'a.pdf': 'application/pdf',
-      'a.txt': 'text/plain; charset=utf-8', 'a.md': 'text/plain; charset=utf-8', 'a.json': 'text/plain; charset=utf-8',
-      'a.ts': 'text/plain; charset=utf-8', 'a.css': 'text/plain; charset=utf-8', 'a.sh': 'text/plain; charset=utf-8',
-      'a.html': 'application/octet-stream', 'a.htm': 'application/octet-stream', 'a.xhtml': 'application/octet-stream',
-      'a.js.map': 'application/octet-stream', 'a.exe': 'application/octet-stream', Makefile: 'application/octet-stream',
+      'a.png': 'image/png',
+      'a.JPG': 'image/jpeg',
+      'a.jpeg': 'image/jpeg',
+      'a.gif': 'image/gif',
+      'a.webp': 'image/webp',
+      'a.avif': 'image/avif',
+      'a.bmp': 'image/bmp',
+      'a.ico': 'image/x-icon',
+      'a.svg': 'image/svg+xml',
+      'a.tif': 'image/tiff',
+      'a.tiff': 'image/tiff',
+      'a.mp4': 'video/mp4',
+      'a.m4v': 'video/mp4',
+      'a.webm': 'video/webm',
+      'a.mov': 'video/quicktime',
+      'a.mp3': 'audio/mpeg',
+      'a.wav': 'audio/wav',
+      'a.ogg': 'audio/ogg',
+      'a.oga': 'audio/ogg',
+      'a.flac': 'audio/flac',
+      'a.aac': 'audio/aac',
+      'a.m4a': 'audio/mp4',
+      'a.pdf': 'application/pdf',
+      'a.txt': 'text/plain; charset=utf-8',
+      'a.md': 'text/plain; charset=utf-8',
+      'a.json': 'text/plain; charset=utf-8',
+      'a.ts': 'text/plain; charset=utf-8',
+      'a.css': 'text/plain; charset=utf-8',
+      'a.sh': 'text/plain; charset=utf-8',
+      'a.html': 'application/octet-stream',
+      'a.htm': 'application/octet-stream',
+      'a.xhtml': 'application/octet-stream',
+      'a.js.map': 'application/octet-stream',
+      'a.exe': 'application/octet-stream',
+      Makefile: 'application/octet-stream',
     };
     for (const name of Object.keys(types)) await put(name, 'x');
     for (const [name, type] of Object.entries(types)) {
@@ -279,7 +370,9 @@ describe('read', () => {
     const h = make();
     expect((await h(new Request(url('read', { path: 'nope.txt' })))).status).toBe(404);
     expect((await h(new Request(url('read', { path: 'd' })))).status).toBe(400);
-    expect((await h(new Request(url('read', { path: 'd' }), { headers: { Range: 'bytes=0-1' } }))).status).toBe(400);
+    expect(
+      (await h(new Request(url('read', { path: 'd' }), { headers: { Range: 'bytes=0-1' } }))).status,
+    ).toBe(400);
   });
 
   it('cancels the store body when the request aborts or the response body is cancelled', async () => {
@@ -300,8 +393,8 @@ describe('read', () => {
     await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
     await res.body?.cancel().catch(() => {});
 
-    const res2 = await h(new Request(url('read', { path: 'x.txt' })));
-    await res2.body?.cancel();
+    const secondResponse = await h(new Request(url('read', { path: 'x.txt' })));
+    await secondResponse.body?.cancel();
     await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(2));
   });
 });
@@ -310,7 +403,9 @@ describe('limits', () => {
   it('write over maxWriteBytes -> 413 and file unchanged (declared and streamed)', async () => {
     await put('a.txt', 'keep');
     const h = make({ maxWriteBytes: 8 });
-    const declared = await h(new Request(url('write', { path: 'a.txt' }), { method: 'PUT', headers: H, body: '123456789' }));
+    const declared = await h(
+      new Request(url('write', { path: 'a.txt' }), { method: 'PUT', headers: H, body: '123456789' }),
+    );
     expect(declared.status).toBe(413);
     expect((await errBody(declared)).kind).toBe('too_large');
     const streamed = new ReadableStream<Uint8Array>({
@@ -318,11 +413,21 @@ describe('limits', () => {
         c.enqueue(enc.encode('12345'));
       },
     });
-    const res = await h(new Request(url('write', { path: 'a.txt' }), { method: 'PUT', headers: H, body: streamed, duplex: 'half' } as RequestInit));
+    const res = await h(
+      new Request(url('write', { path: 'a.txt' }), {
+        method: 'PUT',
+        headers: H,
+        body: streamed,
+        duplex: 'half',
+      } as RequestInit),
+    );
     expect(res.status).toBe(413);
     expect(await disk('a.txt')).toBe('keep');
     expect((await readdir(root)).sort()).toEqual(['a.txt']);
-    expect((await h(new Request(url('write', { path: 'a.txt' }), { method: 'PUT', headers: H, body: '12345678' }))).status).toBe(200);
+    expect(
+      (await h(new Request(url('write', { path: 'a.txt' }), { method: 'PUT', headers: H, body: '12345678' })))
+        .status,
+    ).toBe(200);
   });
 
   it('JSON request bodies over 1 MiB -> 413', async () => {
@@ -335,19 +440,35 @@ describe('limits', () => {
         c.enqueue(new Uint8Array(100_000));
       },
     });
-    const res2 = await h(new Request(url('create'), { method: 'POST', headers: H, body: streamed, duplex: 'half' } as RequestInit));
-    expect(res2.status).toBe(413);
+    const secondResponse = await h(
+      new Request(url('create'), {
+        method: 'POST',
+        headers: H,
+        body: streamed,
+        duplex: 'half',
+      } as RequestInit),
+    );
+    expect(secondResponse.status).toBe(413);
   });
 });
 
 describe('uploads', () => {
-  const init = async (h: (r: Request) => Promise<Response>, p: string, total: number, extra = {}): Promise<UploadInitResponse> => {
+  const init = async (
+    h: (r: Request) => Promise<Response>,
+    p: string,
+    total: number,
+    extra = {},
+  ): Promise<UploadInitResponse> => {
     const res = await h(post('upload/init', { path: p, totalBytes: total, ...extra }));
     expect(res.status).toBe(200);
     return (await res.json()) as UploadInitResponse;
   };
   const chunk = (id: string, index: number, offset: number, data: string | Uint8Array): Request =>
-    new Request(url('upload/chunk', { id, index, offset }), { method: 'PUT', headers: H, body: data as BodyInit });
+    new Request(url('upload/chunk', { id, index, offset }), {
+      method: 'PUT',
+      headers: H,
+      body: data as BodyInit,
+    });
 
   it('chunked upload: init, out-of-order chunks, idempotent re-put, complete assembles exact bytes; temp is outside the root', async () => {
     const h = make({ chunkSize: 4 });
@@ -376,7 +497,17 @@ describe('uploads', () => {
     expect((await h(chunk(uploadId, 1, 3, 'ef'))).status).toBe(400); // wrong offset
     expect((await h(chunk(uploadId, 0, 0, 'abc'))).status).toBe(400); // short non-final chunk
     expect((await h(chunk(uploadId, 1, 4, 'efg'))).status).toBe(400); // final chunk too long
-    expect((await h(new Request(url('upload/chunk', { id: uploadId, index: 'x', offset: 0 }), { method: 'PUT', headers: H, body: 'a' }))).status).toBe(400);
+    expect(
+      (
+        await h(
+          new Request(url('upload/chunk', { id: uploadId, index: 'x', offset: 0 }), {
+            method: 'PUT',
+            headers: H,
+            body: 'a',
+          }),
+        )
+      ).status,
+    ).toBe(400);
     expect((await h(chunk(uploadId, 0, 0, 'abcd'))).status).toBe(204);
     expect((await h(chunk(uploadId, 1, 4, 'ef'))).status).toBe(204);
     expect((await h(post('upload/complete', { uploadId }))).status).toBe(200);
@@ -388,9 +519,13 @@ describe('uploads', () => {
     const a = await init(h, 'a.bin', 8);
     await h(chunk(a.uploadId, 0, 0, 'abcd'));
     expect(await tempFiles()).toHaveLength(1); // one session dir
-    expect((await h(new Request(url('upload', { id: a.uploadId }), { method: 'DELETE', headers: H }))).status).toBe(204);
+    expect(
+      (await h(new Request(url('upload', { id: a.uploadId }), { method: 'DELETE', headers: H }))).status,
+    ).toBe(204);
     expect(await tempFiles()).toEqual([]);
-    expect((await h(new Request(url('upload', { id: a.uploadId }), { method: 'DELETE', headers: H }))).status).toBe(404);
+    expect(
+      (await h(new Request(url('upload', { id: a.uploadId }), { method: 'DELETE', headers: H }))).status,
+    ).toBe(404);
     expect((await h(chunk('nope', 0, 0, 'abcd'))).status).toBe(404);
     expect((await h(post('upload/complete', { uploadId: 'nope' }))).status).toBe(404);
 
@@ -446,7 +581,13 @@ describe('uploads', () => {
   it('direct upload: 409 without overwrite, 200 with overwrite=1, 413 over maxUploadBytes, creates parents', async () => {
     const h = make({ maxUploadBytes: 5 });
     const up = (q: Record<string, string>, body: string): Promise<Response> =>
-      h(new Request(url('upload', q), { method: 'POST', body, headers: { ...H, 'Content-Type': 'application/octet-stream' } }));
+      h(
+        new Request(url('upload', q), {
+          method: 'POST',
+          body,
+          headers: { ...H, 'Content-Type': 'application/octet-stream' },
+        }),
+      );
     expect((await up({ path: 'a/b/c.bin' }, 'one')).status).toBe(200);
     expect(await disk('a/b/c.bin')).toBe('one');
     expect((await up({ path: 'a/b/c.bin' }, 'two')).status).toBe(409);
@@ -483,13 +624,23 @@ describe('download', () => {
     const files = unzipSync(new Uint8Array(await zip.arrayBuffer()));
     const text = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, dec.decode(v)]));
     expect(text).toEqual({
-      'a.txt': 'AAA', 'dir/': '', 'dir/b.txt': 'BBB', 'dir/sub/': '', 'dir/sub/c.txt': 'CCC', 'dir/empty/': '', 'd.txt': 'DDD', 'b.txt': 'BBB', // dir/b.txt asked for on its own: named relative to its parent
+      'a.txt': 'AAA',
+      'dir/': '',
+      'dir/b.txt': 'BBB',
+      'dir/sub/': '',
+      'dir/sub/c.txt': 'CCC',
+      'dir/empty/': '',
+      'd.txt': 'DDD',
+      'b.txt': 'BBB', // dir/b.txt asked for on its own: named relative to its parent
     });
 
     const dirOnly = await h(post('download', { paths: ['dir/sub'] }));
     expect(dirOnly.headers.get('Content-Type')).toBe('application/zip');
     expect(dirOnly.headers.get('Content-Disposition')).toBe("attachment; filename*=UTF-8''sub.zip");
-    expect(Object.keys(unzipSync(new Uint8Array(await dirOnly.arrayBuffer()))).sort()).toEqual(['sub/', 'sub/c.txt']);
+    expect(Object.keys(unzipSync(new Uint8Array(await dirOnly.arrayBuffer()))).sort()).toEqual([
+      'sub/',
+      'sub/c.txt',
+    ]);
   });
 
   it('excluded names stay hidden, missing paths 404, empty or invalid body 400', async () => {
@@ -497,7 +648,9 @@ describe('download', () => {
     await mkdir(path.join(root, 'd/.git'));
     await writeFile(path.join(root, 'd/.git/config'), 'secret');
     const h = make();
-    const files = unzipSync(new Uint8Array(await (await h(post('download', { paths: ['d'] }))).arrayBuffer()));
+    const files = unzipSync(
+      new Uint8Array(await (await h(post('download', { paths: ['d'] }))).arrayBuffer()),
+    );
     expect(Object.keys(files).sort()).toEqual(['d/', 'd/ok.txt']);
     expect((await h(post('download', { paths: ['d/.git/config'] }))).status).toBe(404);
     expect((await h(post('download', { paths: ['d/ok.txt', 'nope'] }))).status).toBe(404);
@@ -515,9 +668,16 @@ describe('CSRF header', () => {
     const bare = (route: string, method: string, q: Record<string, string> = {}): Request =>
       new Request(url(route, q), { method, body: method === 'DELETE' ? null : '{}' });
     const cases: [string, string, Record<string, string>?][] = [
-      ['create', 'POST'], ['write', 'PUT', { path: 'a.txt' }], ['move', 'POST'], ['copy', 'POST'],
-      ['delete', 'DELETE', { path: 'a.txt' }], ['upload', 'POST', { path: 'u' }], ['upload/init', 'POST'],
-      ['upload/chunk', 'PUT', { id: 'x', index: '0', offset: '0' }], ['upload/complete', 'POST'], ['upload', 'DELETE', { id: 'x' }],
+      ['create', 'POST'],
+      ['write', 'PUT', { path: 'a.txt' }],
+      ['move', 'POST'],
+      ['copy', 'POST'],
+      ['delete', 'DELETE', { path: 'a.txt' }],
+      ['upload', 'POST', { path: 'u' }],
+      ['upload/init', 'POST'],
+      ['upload/chunk', 'PUT', { id: 'x', index: '0', offset: '0' }],
+      ['upload/complete', 'POST'],
+      ['upload', 'DELETE', { id: 'x' }],
       ['download', 'POST'],
     ];
     for (const [route, method, q] of cases) {
@@ -527,7 +687,10 @@ describe('CSRF header', () => {
       expect(e.kind).toBe('forbidden');
       expect(e.message).toContain(CSRF_HEADER);
     }
-    const wrong = new Request(url('delete', { path: 'a.txt' }), { method: 'DELETE', headers: { [CSRF_HEADER]: '0' } });
+    const wrong = new Request(url('delete', { path: 'a.txt' }), {
+      method: 'DELETE',
+      headers: { [CSRF_HEADER]: '0' },
+    });
     expect((await h(wrong)).status).toBe(403);
     expect(authorize).not.toHaveBeenCalled();
     expect(await disk('a.txt')).toBe('a');
@@ -540,16 +703,28 @@ describe('CSRF header', () => {
 
 describe('zip limits', () => {
   const dirEntry: Entry = { path: 'big', name: 'big', kind: 'directory', size: null, mtimeMs: 1 };
-  const file = (i: number, size: number): Entry => ({ path: `big/f${i}`, name: `f${i}`, kind: 'file', size, mtimeMs: 1 });
+  const file = (i: number, size: number): Entry => ({
+    path: `big/f${i}`,
+    name: `f${i}`,
+    kind: 'file',
+    size,
+    mtimeMs: 1,
+  });
   const fake = (children: Entry[]): FileStore => ({
     ...store,
     stat: async (p) => (p === 'big' ? dirEntry : null),
     list: async () => children,
-    read: async (p) => ({ body: new Blob([]).stream() as ReadableStream<Uint8Array>, size: 0, entry: file(0, 0), ...{ p } }),
+    read: async (p) => ({
+      body: new Blob([]).stream() as ReadableStream<Uint8Array>,
+      size: 0,
+      entry: file(0, 0),
+      ...{ p },
+    }),
   });
 
   it('413 before streaming when the archive would need zip64 (>= 4 GiB or more than 65535 entries)', async () => {
-    const big = async (children: Entry[]): Promise<Response> => make({ store: fake(children) })(post('download', { paths: ['big'] }));
+    const big = async (children: Entry[]): Promise<Response> =>
+      make({ store: fake(children) })(post('download', { paths: ['big'] }));
     for (const children of [
       [file(0, 0xffffffff)],
       [file(0, 0x80000000), file(1, 0x80000000)],
@@ -565,7 +740,11 @@ describe('zip limits', () => {
     expect((await big([file(0, room - 1)])).status).toBe(200);
     const ok = await big([file(0, 0), file(1, 0)]);
     expect(ok.status).toBe(200);
-    expect(Object.keys(unzipSync(new Uint8Array(await ok.arrayBuffer()))).sort()).toEqual(['big/', 'big/f0', 'big/f1']);
+    expect(Object.keys(unzipSync(new Uint8Array(await ok.arrayBuffer()))).sort()).toEqual([
+      'big/',
+      'big/f0',
+      'big/f1',
+    ]);
   });
 });
 
@@ -578,7 +757,12 @@ describe('per-entry authorization of directory operations', () => {
     const h = make({ authorize: (_r, op, p) => (seen.push(`${op}:${p}`), p !== 'd/secret.txt') });
     const res = await h(post('download', { paths: ['d'] }));
     expect(res.status).toBe(200);
-    expect(Object.keys(unzipSync(new Uint8Array(await res.arrayBuffer()))).sort()).toEqual(['d/', 'd/ok.txt', 'd/sub/', 'd/sub/in.txt']);
+    expect(Object.keys(unzipSync(new Uint8Array(await res.arrayBuffer()))).sort()).toEqual([
+      'd/',
+      'd/ok.txt',
+      'd/sub/',
+      'd/sub/in.txt',
+    ]);
     expect(seen).toContain('download:d/secret.txt');
     expect(seen).toContain('download:d/ok.txt');
     expect(seen).toContain('download:d/sub/in.txt');
@@ -596,7 +780,11 @@ describe('per-entry authorization of directory operations', () => {
     const h = make({ authorize: (_r, op, p) => (seen.push(`${op}:${p}`), p !== 'd/private') });
     const res = await h(post('download', { paths: ['d'] }));
     expect(res.status).toBe(200);
-    expect(Object.keys(unzipSync(new Uint8Array(await res.arrayBuffer()))).sort()).toEqual(['d/', 'd/ok.txt', 'd/privately.txt']);
+    expect(Object.keys(unzipSync(new Uint8Array(await res.arrayBuffer()))).sort()).toEqual([
+      'd/',
+      'd/ok.txt',
+      'd/privately.txt',
+    ]);
     expect(seen).toContain('download:d/private');
     expect(seen).not.toContain('download:d/private/a.txt'); // the subtree is never even asked about
   });
@@ -639,7 +827,9 @@ describe('per-entry authorization of directory operations', () => {
         expect(res.status, `${op} over dir, delete denied on ${denied}`).toBe(403);
         await intact();
       }
-      const onFile = await denyDelete('file.txt')(post(op, { from: 'a.txt', to: 'file.txt', overwrite: true }));
+      const onFile = await denyDelete('file.txt')(
+        post(op, { from: 'a.txt', to: 'file.txt', overwrite: true }),
+      );
       expect(onFile.status, `${op} over file`).toBe(403);
       await intact();
     }
@@ -652,7 +842,14 @@ describe('per-entry authorization of directory operations', () => {
     const asked: string[] = [];
     const ok = make({ authorize: (_r, op, p) => (asked.push(`${op}:${p}`), true) });
     expect((await ok(post('copy', { from: 'a.txt', to: 'dir', overwrite: true }))).status).toBe(200);
-    expect(asked).toEqual(expect.arrayContaining(['delete:dir', 'delete:dir/ok.txt', 'delete:dir/deep', 'delete:dir/deep/secret.txt']));
+    expect(asked).toEqual(
+      expect.arrayContaining([
+        'delete:dir',
+        'delete:dir/ok.txt',
+        'delete:dir/deep',
+        'delete:dir/deep/secret.txt',
+      ]),
+    );
     expect(await disk('dir')).toBe('A');
   });
 
@@ -660,20 +857,26 @@ describe('per-entry authorization of directory operations', () => {
     await put('d/ok.txt', 'ok');
     await put('d/sub/secret.txt', 'no');
     const seen: string[] = [];
-    const h = make({ authorize: (_r, op, p) => (seen.push(`${op}:${p}`), !(op === 'delete' && p === 'd/sub/secret.txt')) });
+    const h = make({
+      authorize: (_r, op, p) => (seen.push(`${op}:${p}`), !(op === 'delete' && p === 'd/sub/secret.txt')),
+    });
     const res = await h(new Request(url('delete', { path: 'd' }), { method: 'DELETE', headers: H }));
     expect(res.status).toBe(403);
     expect(seen).toEqual(expect.arrayContaining(['delete:d', 'delete:d/sub/secret.txt']));
     expect(await disk('d/ok.txt')).toBe('ok');
     expect(await disk('d/sub/secret.txt')).toBe('no');
     const all = make();
-    expect((await all(new Request(url('delete', { path: 'd' }), { method: 'DELETE', headers: H }))).status).toBe(204);
+    expect(
+      (await all(new Request(url('delete', { path: 'd' }), { method: 'DELETE', headers: H }))).status,
+    ).toBe(204);
     expect(await stat(path.join(root, 'd')).catch(() => null)).toBeNull();
   });
 
   it('a download body with a lone surrogate is 400', async () => {
     const h = make();
-    const res = await h(new Request(url('download'), { method: 'POST', headers: H, body: '{"paths":["a\\ud800b"]}' }));
+    const res = await h(
+      new Request(url('download'), { method: 'POST', headers: H, body: '{"paths":["a\\ud800b"]}' }),
+    );
     expect(res.status).toBe(400);
     expect((await errBody(res)).kind).toBe('invalid');
   });
@@ -703,7 +906,12 @@ describe('errors', () => {
     expect(onError.mock.calls[0]![1]).toBeInstanceOf(Request);
 
     // thrown by authorize
-    const h2 = make({ authorize: () => { throw new Error(root); }, onError });
+    const h2 = make({
+      authorize: () => {
+        throw new Error(root);
+      },
+      onError,
+    });
     const r2 = await h2(new Request(url('list')));
     expect([r2.status, (await r2.text()).includes(base)]).toEqual([500, false]);
     expect(onError).toHaveBeenCalledTimes(2);
@@ -722,8 +930,15 @@ describe('errors', () => {
 
   it('a throwing onError does not break the response', async () => {
     const h = make({
-      store: { ...store, stat: async () => { throw new Error('x'); } },
-      onError: () => { throw new Error('logger down'); },
+      store: {
+        ...store,
+        stat: async () => {
+          throw new Error('x');
+        },
+      },
+      onError: () => {
+        throw new Error('logger down');
+      },
     });
     expect((await h(new Request(url('stat', { path: 'a' })))).status).toBe(500);
   });
@@ -732,7 +947,9 @@ describe('errors', () => {
 describe('httpAdapter against the handler', () => {
   it('round-trips write, read, upload and download through the real client', async () => {
     const h = make({ chunkSize: 4 });
-    const fs = httpAdapter('http://t/api/files', { fetch: ((u: string, i?: RequestInit) => h(new Request(u, i))) as typeof fetch });
+    const fs = httpAdapter('http://t/api/files', {
+      fetch: ((u: string, i?: RequestInit) => h(new Request(u, i))) as typeof fetch,
+    });
     await fs.write!('n/a.txt', 'héllo');
     expect(await fs.read('n/a.txt', 'text')).toBe('héllo');
     const t = fs.upload!.chunked!;
@@ -741,16 +958,23 @@ describe('httpAdapter against the handler', () => {
     await t.put(uploadId, 0, 0, new Blob(['abcd']), new AbortController().signal);
     expect((await t.complete(uploadId)).size).toBe(6);
     expect(await disk('n/big.bin')).toBe('abcdef');
-    await expect(fs.upload!.direct('n/big.bin', new Blob(['x']), { signal: new AbortController().signal })).rejects.toMatchObject({ kind: 'conflict' });
+    await expect(
+      fs.upload!.direct('n/big.bin', new Blob(['x']), { signal: new AbortController().signal }),
+    ).rejects.toMatchObject({ kind: 'conflict' });
     const zip = await fs.download!(['n/a.txt', 'n/big.bin']);
-    expect(Object.keys(unzipSync(new Uint8Array(await (zip as Blob).arrayBuffer()))).sort()).toEqual(['a.txt', 'big.bin']);
+    expect(Object.keys(unzipSync(new Uint8Array(await (zip as Blob).arrayBuffer()))).sort()).toEqual([
+      'a.txt',
+      'big.bin',
+    ]);
   });
 
   it('a symlinked folder stays idle after its parent listing and loads its contents on demand', async () => {
     await put('real/sub/f.txt', 'f');
     await symlink(path.join(root, 'real'), path.join(root, 'alias'));
     const h = make();
-    const fs = httpAdapter('http://t/api/files', { fetch: ((u: string, i?: RequestInit) => h(new Request(u, i))) as typeof fetch });
+    const fs = httpAdapter('http://t/api/files', {
+      fetch: ((u: string, i?: RequestInit) => h(new Request(u, i))) as typeof fetch,
+    });
     const s = createTreeStore({ ...fs, watch: undefined });
     await s.loadFolder('');
     const t = (): ReturnType<typeof s.getSnapshot>['tree'] => s.getSnapshot().tree;

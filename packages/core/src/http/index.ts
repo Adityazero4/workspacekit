@@ -3,15 +3,35 @@ import type { FsErrorKind } from '../errors';
 import { normalizePath } from '../path';
 import { CSRF_HEADER, IF_MTIME_HEADER, ROUTES, parseRoute } from '../protocol';
 import type {
-  CreateBody, DownloadBody, EntriesResponse, EntryResponse, ErrorBody, StatResponse, TransferBody,
-  UploadCompleteBody, UploadInitBody, UploadInitResponse, WatchFrame,
+  CreateBody,
+  DownloadBody,
+  EntriesResponse,
+  EntryResponse,
+  ErrorBody,
+  StatResponse,
+  TransferBody,
+  UploadCompleteBody,
+  UploadInitBody,
+  UploadInitResponse,
+  WatchFrame,
 } from '../protocol';
-import type { ChangeEvent, Entry, FileSystemAdapter, UploadTransport } from '../types';
+import type { ChangeEvent, Entry, FileSystemAdapter, TransferOptions, UploadTransport } from '../types';
 
-type HeadersOpt = HeadersInit | (() => HeadersInit | Promise<HeadersInit>);
+type HeadersOption = HeadersInit | (() => HeadersInit | Promise<HeadersInit>);
+/**
+ * Options for `httpAdapter`: a custom `fetch`, extra headers (or a function returning them), credentials and
+ * watch behavior.
+ *
+ * @example
+ * ```ts
+ * const adapter = httpAdapter('/api/files', {
+ *   headers: async () => ({ Authorization: `Bearer ${await token()}` }),
+ * });
+ * ```
+ */
 export interface HttpAdapterOptions {
   fetch?: typeof fetch;
-  headers?: HeadersOpt;
+  headers?: HeadersOption;
   credentials?: RequestCredentials;
   /** Watch reconnect backoff; the last delay repeats. Default [1000, 2000, 5000, 10000]. */
   reconnectDelaysMs?: number[];
@@ -22,327 +42,461 @@ export interface HttpAdapterOptions {
   onWatchError?: (e: FsError) => void;
 }
 
-/** Cap on one SSE line and on one frame's data; counted in UTF-16 units, close enough to bytes. */
-const MAX_SSE_BYTES = 1_048_576;
-/** Statuses that retrying cannot fix (501: the server cannot watch). */
-const PERMANENT = new Set([400, 404, 501]);
-/** Statuses the user may fix by signing in: reported, then retried slowly. */
-const AUTH = new Set([401, 403]);
+const MAX_SSE_UTF16_UNITS = 1_048_576;
+const STATUSES_RETRY_CANNOT_FIX = new Set([400, 404, 501]);
+const STATUSES_A_SIGN_IN_MAY_FIX = new Set([401, 403]);
+const DEFAULT_RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10000];
+const LINE_BREAK_KEEPING_A_TRAILING_CR = /\r\n|\n|\r(?!$)/;
+const JOINING_NEWLINE = 1;
+const OCTET_STREAM = 'application/octet-stream';
 
-const KINDS = new Set<string>([
-  'not_found', 'conflict', 'forbidden', 'too_large', 'invalid', 'network', 'timeout', 'cancelled', 'unknown',
+const FS_ERROR_KINDS = new Set<string>([
+  'not_found',
+  'conflict',
+  'forbidden',
+  'too_large',
+  'invalid',
+  'network',
+  'timeout',
+  'cancelled',
+  'unknown',
 ]);
 
-async function toError(status: number, text: string, path?: string): Promise<FsError> {
-  let body: Partial<ErrorBody>['error'];
-  try {
-    body = (JSON.parse(text) as Partial<ErrorBody>).error;
-  } catch {
-    // not JSON: fall back to the status code
-  }
-  const kind: FsErrorKind = body && KINDS.has(body.kind) ? body.kind : kindForStatus(status);
-  const p = body?.path ?? path;
-  return new FsError(kind, body?.message || text || `HTTP ${status}`, { status, ...(p === undefined ? {} : { path: p }) });
+const ignoreError = (): void => undefined;
+
+function throwOutsideTheCaller(error: unknown): void {
+  queueMicrotask(() => {
+    throw error;
+  });
 }
 
-export function httpAdapter(baseUrl: string, opts: HttpAdapterOptions = {}): FileSystemAdapter {
-  const base = baseUrl.replace(/\/+$/, '');
-  const doFetch = (...a: Parameters<typeof fetch>): Promise<Response> => (opts.fetch ?? fetch)(...a);
-  const delays = opts.reconnectDelaysMs?.length ? opts.reconnectDelaysMs : [1000, 2000, 5000, 10000];
-  const longest = Math.max(...delays);
-
-  const urlFor = (r: string, query: Record<string, string | number | undefined> = {}): string => {
-    const q = new URLSearchParams();
-    for (const [k, v] of Object.entries(query)) if (v !== undefined) q.set(k, String(v));
-    const qs = q.toString();
-    return `${base}/${parseRoute(r).path}${qs ? `?${qs}` : ''}`;
-  };
-  const resolveHeaders = async (extra?: HeadersInit): Promise<Headers> => {
-    const h = new Headers(typeof opts.headers === 'function' ? await opts.headers() : opts.headers);
-    new Headers(extra).forEach((v, k) => h.set(k, v));
-    return h;
-  };
-
-  interface Req {
-    query?: Record<string, string | number | undefined>;
-    json?: unknown;
-    body?: BodyInit;
-    headers?: HeadersInit;
-    signal?: AbortSignal;
-    path?: string;
+function callIsolated<A>(listener: ((argument: A) => void) | undefined, argument: A): void {
+  try {
+    listener?.(argument);
+  } catch (error) {
+    throwOutsideTheCaller(error);
   }
-  /** Sends the request; resolves only for 2xx, otherwise throws FsError. */
-  async function send(r: string, o: Req = {}): Promise<Response> {
+}
+
+function parseErrorBody(text: string): ErrorBody['error'] | undefined {
+  try {
+    return (JSON.parse(text) as Partial<ErrorBody>).error;
+  } catch {
+    return undefined;
+  }
+}
+
+function errorFromResponse(status: number, text: string, path?: string): FsError {
+  const body = parseErrorBody(text);
+  const kind: FsErrorKind = body && FS_ERROR_KINDS.has(body.kind) ? body.kind : kindForStatus(status);
+  const errorPath = body?.path ?? path;
+  return new FsError(kind, body?.message || text || `HTTP ${status}`, {
+    status,
+    ...(errorPath === undefined ? {} : { path: errorPath }),
+  });
+}
+
+async function readBody<T>(response: Response, read: (response: Response) => Promise<T>): Promise<T> {
+  try {
+    return await read(response);
+  } catch (error) {
+    throw toFsError(error);
+  }
+}
+
+const withSignal = (options?: { signal?: AbortSignal }): { signal?: AbortSignal } =>
+  options?.signal ? { signal: options.signal } : {};
+
+type Query = Record<string, string | number | undefined>;
+
+interface HttpRequest {
+  query?: Query;
+  json?: unknown;
+  body?: BodyInit;
+  headers?: HeadersInit;
+  signal?: AbortSignal;
+  path?: string;
+}
+
+class HttpClient {
+  readonly #base: string;
+  readonly #options: HttpAdapterOptions;
+
+  constructor(baseUrl: string, options: HttpAdapterOptions) {
+    this.#base = baseUrl.replace(/\/+$/, '');
+    this.#options = options;
+  }
+
+  get sendsCredentials(): boolean {
+    return this.#options.credentials === 'include';
+  }
+
+  urlFor(route: string, query: Query = {}): string {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) if (value !== undefined) params.set(key, String(value));
+    const queryString = params.toString();
+    return `${this.#base}/${parseRoute(route).path}${queryString ? `?${queryString}` : ''}`;
+  }
+
+  async headers(extra?: HeadersInit): Promise<Headers> {
+    const configured = this.#options.headers;
+    const headers = new Headers(typeof configured === 'function' ? await configured() : configured);
+    new Headers(extra).forEach((value, key) => headers.set(key, value));
+    return headers;
+  }
+
+  async send(route: string, request: HttpRequest = {}): Promise<Response> {
     try {
-      const method = parseRoute(r).method;
-      const headers = await resolveHeaders(o.headers);
+      const { method } = parseRoute(route);
+      const headers = await this.headers(request.headers);
       if (method !== 'GET') headers.set(CSRF_HEADER, '1');
-      let body = o.body;
-      if (o.json !== undefined) {
-        body = JSON.stringify(o.json);
+      let body = request.body;
+      if (request.json !== undefined) {
+        body = JSON.stringify(request.json);
         headers.set('Content-Type', 'application/json');
       }
-      const res = await doFetch(urlFor(r, o.query), {
+      const fetchImplementation = this.#options.fetch ?? fetch;
+      const response = await fetchImplementation(this.urlFor(route, request.query), {
         method,
         headers,
         ...(body === undefined ? {} : { body }),
-        ...(o.signal ? { signal: o.signal } : {}),
-        ...(opts.credentials ? { credentials: opts.credentials } : {}),
+        ...withSignal(request),
+        ...(this.#options.credentials ? { credentials: this.#options.credentials } : {}),
       });
-      if (!res.ok) throw await toError(res.status, await res.text(), o.path);
-      return res;
-    } catch (e) {
-      throw toFsError(e);
+      if (!response.ok) throw errorFromResponse(response.status, await response.text(), request.path);
+      return response;
+    } catch (error) {
+      throw toFsError(error);
     }
   }
-  async function call<T>(r: string, o?: Req): Promise<T> {
-    const res = await send(r, o);
-    try {
-      return (await res.json()) as T;
-    } catch (e) {
-      throw toFsError(e);
-    }
-  }
-  const body = async <T>(res: Response, f: (r: Response) => Promise<T>): Promise<T> => {
-    try {
-      return await f(res);
-    } catch (e) {
-      throw toFsError(e);
-    }
-  };
 
-  const upload: UploadTransport = {
-    async direct(target, file, o) {
+  async call<T>(route: string, request?: HttpRequest): Promise<T> {
+    const response = await this.send(route, request);
+    return readBody(response, (received) => received.json() as Promise<T>);
+  }
+}
+
+async function xhrUpload(
+  client: HttpClient,
+  path: string,
+  file: Blob,
+  options: { signal: AbortSignal; onProgress?(loaded: number): void; overwrite?: boolean },
+): Promise<Entry> {
+  const { signal } = options;
+  if (signal.aborted) throw new FsError('cancelled');
+  const headers = await client.headers({ 'Content-Type': file.type || OCTET_STREAM });
+  headers.set(CSRF_HEADER, '1');
+  return new Promise<Entry>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const url = client.urlFor(ROUTES.uploadDirect, { path, overwrite: options.overwrite ? 1 : undefined });
+    xhr.open(parseRoute(ROUTES.uploadDirect).method, url);
+    xhr.withCredentials = client.sendsCredentials;
+    headers.forEach((value, key) => xhr.setRequestHeader(key, value));
+    xhr.upload.onprogress = (event) => options.onProgress?.(event.loaded);
+    const abortRequest = (): void => xhr.abort();
+    const stopListening = (): void => signal.removeEventListener('abort', abortRequest);
+    xhr.onload = () => {
+      stopListening();
+      if (xhr.status < 200 || xhr.status >= 300) {
+        return reject(errorFromResponse(xhr.status, xhr.responseText, path));
+      }
+      try {
+        resolve((JSON.parse(xhr.responseText) as EntryResponse).entry);
+      } catch (error) {
+        reject(toFsError(error));
+      }
+    };
+    xhr.onerror = () => {
+      stopListening();
+      reject(new FsError('network', 'upload failed'));
+    };
+    xhr.onabort = () => {
+      stopListening();
+      reject(new FsError('cancelled'));
+    };
+    const abortedWhileHeadersResolved = signal.aborted;
+    if (abortedWhileHeadersResolved) return reject(new FsError('cancelled'));
+    signal.addEventListener('abort', abortRequest, { once: true });
+    xhr.send(file);
+  });
+}
+
+class SseFrameParser {
+  #data: string[] = [];
+  #dataLength = 0;
+  #completedAnyFrame = false;
+  readonly #onFrame: (events: WatchFrame) => void;
+
+  constructor(onFrame: (events: WatchFrame) => void) {
+    this.#onFrame = onFrame;
+  }
+
+  get completedAnyFrame(): boolean {
+    return this.#completedAnyFrame;
+  }
+
+  push(line: string): void {
+    if (line === '') this.#endFrame();
+    else if (line.startsWith('data:')) this.#appendData(line.slice(line[5] === ' ' ? 6 : 5));
+  }
+
+  #appendData(value: string): void {
+    this.#dataLength += value.length + JOINING_NEWLINE;
+    if (this.#dataLength > MAX_SSE_UTF16_UNITS) throw new FsError('too_large', 'SSE frame too large');
+    this.#data.push(value);
+  }
+
+  #endFrame(): void {
+    if (this.#data.length === 0) return;
+    const raw = this.#data.join('\n');
+    this.#data = [];
+    this.#dataLength = 0;
+    this.#completedAnyFrame = true;
+    let events: unknown;
+    try {
+      events = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (Array.isArray(events)) this.#onFrame(events as WatchFrame);
+  }
+}
+
+async function readEventStream(
+  stream: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
+  onChange: (events: ChangeEvent[]) => void,
+): Promise<boolean> {
+  const reader = stream.getReader();
+  signal.addEventListener('abort', () => void reader.cancel().catch(ignoreError), { once: true });
+  const decoder = new TextDecoder();
+  const frames = new SseFrameParser((events) => callIsolated(onChange, events));
+  let unfinishedLine = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done || signal.aborted) return frames.completedAnyFrame;
+    const lines = (unfinishedLine + decoder.decode(value, { stream: true })).split(
+      LINE_BREAK_KEEPING_A_TRAILING_CR,
+    );
+    unfinishedLine = lines.pop() ?? '';
+    try {
+      if (unfinishedLine.length > MAX_SSE_UTF16_UNITS) throw new FsError('too_large', 'SSE line too long');
+      for (const line of lines) frames.push(line);
+    } catch (error) {
+      await reader.cancel().catch(ignoreError);
+      throw error;
+    }
+  }
+}
+
+function sleepUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+type WatchFailure = { stop: true } | { stop: false; retryAfterMs?: number };
+
+function handleWatchFailure(error: unknown, options: HttpAdapterOptions, longestDelay: number): WatchFailure {
+  const status = error instanceof FsError ? error.status : undefined;
+  if (status === undefined) return { stop: false };
+  const cannotBeFixedByRetrying = STATUSES_RETRY_CANNOT_FIX.has(status);
+  if (!cannotBeFixedByRetrying && !STATUSES_A_SIGN_IN_MAY_FIX.has(status)) return { stop: false };
+  callIsolated(options.onWatchError, error as FsError);
+  return cannotBeFixedByRetrying ? { stop: true } : { stop: false, retryAfterMs: longestDelay };
+}
+
+async function keepWatching(
+  client: HttpClient,
+  options: HttpAdapterOptions,
+  onChange: (events: ChangeEvent[]) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const delays = options.reconnectDelaysMs?.length ? options.reconnectDelaysMs : DEFAULT_RECONNECT_DELAYS_MS;
+  const longestDelay = Math.max(...delays);
+  let attempt = 0;
+  let mayHaveMissedChanges = false;
+  while (!signal.aborted) {
+    let retryAfterMs: number | undefined;
+    try {
+      const response = await client.send(ROUTES.watch, { headers: { Accept: 'text/event-stream' }, signal });
+      if (mayHaveMissedChanges && !signal.aborted) callIsolated(onChange, [{ type: 'resync', path: '' }]);
+      mayHaveMissedChanges = true;
+      const serverProvedHealthy =
+        response.body !== null && (await readEventStream(response.body, signal, onChange));
+      if (serverProvedHealthy) attempt = 0;
+    } catch (error) {
+      if (signal.aborted) return;
+      mayHaveMissedChanges = true;
+      const failure = handleWatchFailure(error, options, longestDelay);
+      if (failure.stop) return;
+      retryAfterMs = failure.retryAfterMs;
+    }
+    const backoff = retryAfterMs ?? delays[Math.min(attempt++, delays.length - 1)] ?? 1000;
+    if (!signal.aborted) await sleepUnlessAborted(backoff, signal);
+  }
+}
+
+function uploadTransport(client: HttpClient): UploadTransport {
+  return {
+    async direct(target, file, options) {
       const path = normalizePath(target);
-      if (typeof XMLHttpRequest !== 'undefined') return xhrUpload(path, file, o);
-      const { entry } = await call<EntryResponse>(ROUTES.uploadDirect, {
-        query: { path, overwrite: o.overwrite ? 1 : undefined },
+      if (typeof XMLHttpRequest !== 'undefined') return xhrUpload(client, path, file, options);
+      const { entry } = await client.call<EntryResponse>(ROUTES.uploadDirect, {
+        query: { path, overwrite: options.overwrite ? 1 : undefined },
         body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        signal: o.signal,
+        headers: { 'Content-Type': file.type || OCTET_STREAM },
+        signal: options.signal,
         path,
       });
-      o.onProgress?.(file.size);
+      options.onProgress?.(file.size);
       return entry;
     },
     chunked: {
-      init: (target, totalBytes, o) => {
+      init: (target, totalBytes, options) => {
         const path = normalizePath(target);
-        const json: UploadInitBody = { path, totalBytes, ...(o?.overwrite ? { overwrite: true } : {}) };
-        return call<UploadInitResponse>(ROUTES.uploadInit, { json, path });
+        const json: UploadInitBody = { path, totalBytes, ...(options?.overwrite ? { overwrite: true } : {}) };
+        return client.call<UploadInitResponse>(ROUTES.uploadInit, { json, path });
       },
       put: async (id, index, offset, data, signal) => {
-        await send(ROUTES.uploadChunk, {
+        await client.send(ROUTES.uploadChunk, {
           query: { id, index, offset },
           body: data,
-          headers: { 'Content-Type': 'application/octet-stream' },
+          headers: { 'Content-Type': OCTET_STREAM },
           signal,
         });
       },
-      complete: async (uploadId) => (await call<EntryResponse>(ROUTES.uploadComplete, { json: { uploadId } satisfies UploadCompleteBody })).entry,
+      complete: async (uploadId) => {
+        const json: UploadCompleteBody = { uploadId };
+        return (await client.call<EntryResponse>(ROUTES.uploadComplete, { json })).entry;
+      },
       abort: async (id) => {
-        await send(ROUTES.uploadAbort, { query: { id } });
+        await client.send(ROUTES.uploadAbort, { query: { id } });
       },
     },
   };
+}
 
-  /** Browser path: XHR is the only way to get real upload progress. */
-  async function xhrUpload(
+async function transfer(
+  client: HttpClient,
+  route: string,
+  from: string,
+  to: string,
+  options?: TransferOptions,
+): Promise<Entry> {
+  const source = normalizePath(from);
+  const json: TransferBody = {
+    from: source,
+    to: normalizePath(to),
+    ...(options?.overwrite ? { overwrite: true } : {}),
+  };
+  return (await client.call<EntryResponse>(route, { json, path: source })).entry;
+}
+
+type ReadingMethods = Pick<FileSystemAdapter, 'list' | 'read' | 'stat' | 'url' | 'search' | 'download'>;
+type WritingMethods = Pick<FileSystemAdapter, 'create' | 'write' | 'move' | 'copy' | 'delete'>;
+
+function readingMethods(client: HttpClient): ReadingMethods {
+  const read = async (
     path: string,
-    file: Blob,
-    o: { signal: AbortSignal; onProgress?(loaded: number): void; overwrite?: boolean },
-  ): Promise<Entry> {
-    if (o.signal.aborted) throw new FsError('cancelled');
-    const headers = await resolveHeaders({ 'Content-Type': file.type || 'application/octet-stream' });
-    headers.set(CSRF_HEADER, '1');
-    return new Promise<Entry>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open(parseRoute(ROUTES.uploadDirect).method, urlFor(ROUTES.uploadDirect, { path, overwrite: o.overwrite ? 1 : undefined }));
-      xhr.withCredentials = opts.credentials === 'include';
-      headers.forEach((v, k) => xhr.setRequestHeader(k, v));
-      xhr.upload.onprogress = (e) => o.onProgress?.(e.loaded);
-      const onAbort = (): void => xhr.abort();
-      const done = (): void => o.signal.removeEventListener('abort', onAbort);
-      xhr.onload = () => {
-        done();
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve((JSON.parse(xhr.responseText) as EntryResponse).entry);
-          } catch (e) {
-            reject(toFsError(e));
-          }
-        } else toError(xhr.status, xhr.responseText, path).then(reject);
-      };
-      xhr.onerror = () => (done(), reject(new FsError('network', 'upload failed')));
-      xhr.onabort = () => (done(), reject(new FsError('cancelled')));
-      if (o.signal.aborted) return reject(new FsError('cancelled')); // aborted while headers resolved
-      o.signal.addEventListener('abort', onAbort, { once: true });
-      xhr.send(file);
-    });
-  }
-
-  function watch(onChange: (events: ChangeEvent[]) => void): () => void {
-    const ac = new AbortController();
-    const { signal } = ac;
-    const sleep = (ms: number): Promise<void> =>
-      new Promise((resolve) => {
-        const t = setTimeout(resolve, ms);
-        signal.addEventListener('abort', () => (clearTimeout(t), resolve()), { once: true });
-      });
-
-    /** Returns whether a complete frame arrived; throws on oversize input (after cancelling the reader). */
-    async function pump(stream: ReadableStream<Uint8Array>): Promise<boolean> {
-      const reader = stream.getReader();
-      signal.addEventListener('abort', () => void reader.cancel().catch(() => {}), { once: true });
-      const dec = new TextDecoder();
-      let buf = '';
-      let data: string[] = [];
-      let dataLen = 0;
-      let framed = false;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done || signal.aborted) return framed;
-        buf += dec.decode(value, { stream: true });
-        // A trailing \r is held back: it may be the first half of \r\n.
-        const lines = buf.split(/\r\n|\n|\r(?!$)/);
-        buf = lines.pop() ?? '';
-        if (buf.length > MAX_SSE_BYTES) {
-          await reader.cancel().catch(() => {});
-          throw new FsError('too_large', 'SSE line too long');
-        }
-        for (const line of lines) {
-          if (line === '') {
-            if (data.length) {
-              const raw = data.join('\n');
-              data = [];
-              dataLen = 0;
-              framed = true;
-              let events: unknown;
-              try {
-                events = JSON.parse(raw);
-              } catch {
-                continue; // malformed frame: skip it, keep the stream
-              }
-              if (Array.isArray(events)) {
-                try {
-                  onChange(events as WatchFrame);
-                } catch (e) {
-                  queueMicrotask(() => { throw e; }); // a bad listener must not tear down the stream
-                }
-              }
-            }
-          } else if (line.startsWith('data:')) {
-            const v = line.slice(line[5] === ' ' ? 6 : 5);
-            dataLen += v.length + 1; // +1 for the joining newline, so empty `data:` lines count too
-            if (dataLen > MAX_SSE_BYTES) {
-              await reader.cancel().catch(() => {});
-              throw new FsError('too_large', 'SSE frame too large');
-            }
-            data.push(v);
-          } // comments (`:`) and other fields (event/id/retry) are ignored
-        }
-      }
-    }
-
-    void (async () => {
-      let attempt = 0;
-      let tried = false;
-      while (!signal.aborted) {
-        let wait: number | undefined;
-        try {
-          const res = await send(ROUTES.watch, { headers: { Accept: 'text/event-stream' }, signal });
-          // Any connect after the first attempt may have missed changes: tell the listener to reload before new frames.
-          if (tried && !signal.aborted) {
-            try {
-              onChange([{ type: 'resync', path: '' }]);
-            } catch (e) {
-              queueMicrotask(() => { throw e; });
-            }
-          }
-          tried = true;
-          // backoff resets only once the server proves healthy by delivering a frame
-          if (res.body && (await pump(res.body))) attempt = 0;
-        } catch (e) {
-          if (signal.aborted) return;
-          tried = true;
-          const status = e instanceof FsError ? e.status : undefined;
-          if (status !== undefined && (PERMANENT.has(status) || AUTH.has(status))) {
-            try {
-              opts.onWatchError?.(e as FsError);
-            } catch (err) {
-              queueMicrotask(() => { throw err; });
-            }
-            if (PERMANENT.has(status)) return;
-            wait = longest;
-          }
-          // dropped connection, oversize input or transient HTTP error: back off and retry
-        }
-        if (!signal.aborted) await sleep(wait ?? delays[Math.min(attempt++, delays.length - 1)] ?? 1000);
-      }
-    })();
-    return () => ac.abort();
-  }
-
-  const adapter: FileSystemAdapter = {
-    async list(path, o) {
-      const p = normalizePath(path);
-      const { entries } = await call<EntriesResponse>(ROUTES.list, { query: { path: p, depth: o.depth }, signal: o.signal, path: p });
-      return entries;
+    as: 'text' | 'blob' | 'arrayBuffer',
+    options?: { signal?: AbortSignal },
+  ) => {
+    const normalized = normalizePath(path);
+    const request = { query: { path: normalized }, ...withSignal(options), path: normalized };
+    const response = await client.send(ROUTES.read, request);
+    return readBody<string | Blob | ArrayBuffer>(response, (received) => received[as]());
+  };
+  return {
+    async list(path, options) {
+      const normalized = normalizePath(path);
+      const query = { path: normalized, depth: options.depth };
+      const request = { query, signal: options.signal, path: normalized };
+      return (await client.call<EntriesResponse>(ROUTES.list, request)).entries;
     },
-    read: (async (path: string, as: 'text' | 'blob' | 'arrayBuffer', o?: { signal?: AbortSignal }) => {
-      const p = normalizePath(path);
-      const res = await send(ROUTES.read, { query: { path: p }, ...(o?.signal ? { signal: o.signal } : {}), path: p });
-      return body<string | Blob | ArrayBuffer>(res, (r) => r[as]());
-    }) as FileSystemAdapter['read'],
-    async stat(path, o) {
-      const p = normalizePath(path);
-      return (await call<StatResponse>(ROUTES.stat, { query: { path: p }, ...(o?.signal ? { signal: o.signal } : {}), path: p })).entry;
+    read: read as FileSystemAdapter['read'],
+    async stat(path, options) {
+      const normalized = normalizePath(path);
+      const request = { query: { path: normalized }, ...withSignal(options), path: normalized };
+      return (await client.call<StatResponse>(ROUTES.stat, request)).entry;
     },
     url(entry) {
       return {
-        url: urlFor(ROUTES.read, { path: normalizePath(entry.path), v: entry.mtimeMs }),
-        withCredentials: opts.credentials === 'include',
+        url: client.urlFor(ROUTES.read, { path: normalizePath(entry.path), v: entry.mtimeMs }),
+        withCredentials: client.sendsCredentials,
       };
     },
-    async search(query, o) {
-      return (await call<EntriesResponse>(ROUTES.search, { query: { q: query }, ...(o?.signal ? { signal: o.signal } : {}) })).entries;
+    async search(query, options) {
+      const request = { query: { q: query }, ...withSignal(options) };
+      return (await client.call<EntriesResponse>(ROUTES.search, request)).entries;
     },
-    async create(path, kind) {
-      const p = normalizePath(path);
-      return (await call<EntryResponse>(ROUTES.create, { json: { path: p, kind } satisfies CreateBody, path: p })).entry;
-    },
-    async write(path, text, o) {
-      const p = normalizePath(path);
-      return (
-        await call<EntryResponse>(ROUTES.write, {
-          query: { path: p },
-          body: text,
-          headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-            ...(o?.expectedMtimeMs === undefined ? {} : { [IF_MTIME_HEADER]: String(o.expectedMtimeMs) }),
-          },
-          path: p,
-        })
-      ).entry;
-    },
-    async move(from, to, o) {
-      const f = normalizePath(from);
-      return (await call<EntryResponse>(ROUTES.move, { json: { from: f, to: normalizePath(to), ...(o?.overwrite ? { overwrite: true } : {}) } satisfies TransferBody, path: f })).entry;
-    },
-    async copy(from, to, o) {
-      const f = normalizePath(from);
-      return (await call<EntryResponse>(ROUTES.copy, { json: { from: f, to: normalizePath(to), ...(o?.overwrite ? { overwrite: true } : {}) } satisfies TransferBody, path: f })).entry;
-    },
-    async delete(path) {
-      const p = normalizePath(path);
-      await send(ROUTES.delete, { query: { path: p }, path: p });
-    },
-    upload,
     async download(paths) {
-      const res = await send(ROUTES.download, { json: { paths: paths.map(normalizePath) } satisfies DownloadBody });
-      return body(res, (r) => r.blob());
+      const json: DownloadBody = { paths: paths.map(normalizePath) };
+      const response = await client.send(ROUTES.download, { json });
+      return readBody(response, (received) => received.blob());
     },
-    watch,
   };
-  return adapter;
+}
+
+function writingMethods(client: HttpClient): WritingMethods {
+  return {
+    async create(path, kind) {
+      const normalized = normalizePath(path);
+      const json: CreateBody = { path: normalized, kind };
+      return (await client.call<EntryResponse>(ROUTES.create, { json, path: normalized })).entry;
+    },
+    async write(path, text, options) {
+      const normalized = normalizePath(path);
+      const expectedMtime: Record<string, string> =
+        options?.expectedMtimeMs === undefined ? {} : { [IF_MTIME_HEADER]: String(options.expectedMtimeMs) };
+      const request = {
+        query: { path: normalized },
+        body: text,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', ...expectedMtime },
+        path: normalized,
+      };
+      return (await client.call<EntryResponse>(ROUTES.write, request)).entry;
+    },
+    move: (from, to, options) => transfer(client, ROUTES.move, from, to, options),
+    copy: (from, to, options) => transfer(client, ROUTES.copy, from, to, options),
+    async delete(path) {
+      const normalized = normalizePath(path);
+      await client.send(ROUTES.delete, { query: { path: normalized }, path: normalized });
+    },
+  };
+}
+
+/**
+ * A `FileSystemAdapter` speaking the `ROUTES` protocol to a server made with `createFileHandler`. Uploads use
+ * `XMLHttpRequest` in browsers for real progress. `watch` keeps a server-sent event stream open: it
+ * reconnects with backoff (reset only after the server delivers a frame), delivers a `resync` event after
+ * every reconnect because changes may have been missed, and drops oversized lines or frames (over 1 MiB) by
+ * reconnecting. A throwing listener never tears down the stream.
+ *
+ * @example
+ * ```ts
+ * const adapter = httpAdapter('/api/files', { credentials: 'include' });
+ * const unwatch = adapter.watch!((events) => store.applyChanges(events));
+ * ```
+ */
+export function httpAdapter(baseUrl: string, opts: HttpAdapterOptions = {}): FileSystemAdapter {
+  const client = new HttpClient(baseUrl, opts);
+  return {
+    ...readingMethods(client),
+    ...writingMethods(client),
+    upload: uploadTransport(client),
+    watch(onChange) {
+      const controller = new AbortController();
+      void keepWatching(client, opts, onChange, controller.signal);
+      return () => controller.abort();
+    },
+  };
 }

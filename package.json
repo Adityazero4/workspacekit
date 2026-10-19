@@ -8,18 +8,33 @@
   },
   "scripts": {
     "test": "vitest run",
+    "test:perf": "vitest run --config vitest.perf.config.ts --no-file-parallelism",
+    "test:perf:react": "vitest run --config packages/react/vitest.perf.config.ts --no-file-parallelism",
+    "test:browser": "vitest run --project 'react:browser*'",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "check:forbidden": "node scripts/check-forbidden.mjs",
-    "check": "pnpm typecheck && node --test scripts/check-forbidden.test.mjs && pnpm vitest run && pnpm build && pnpm -r lint:pkg && pnpm --filter @scope/core exec size-limit && pnpm check:forbidden && ! grep -q \"node:\" packages/core/dist/index.js && pnpm --filter @scope/server smoke:dist"
+    "check:comments": "node scripts/check-comments.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:comments && node --test scripts/check-forbidden.test.mjs scripts/check-comments.test.mjs && pnpm build && pnpm vitest run && pnpm test:perf && pnpm test:perf:react && pnpm -r lint:pkg && pnpm --filter @scope/core exec size-limit && pnpm check:forbidden && ! grep -q \"node:\" packages/core/dist/index.js && pnpm --filter @scope/server smoke:dist"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
+    "@eslint/js": "^10.0.1",
     "@size-limit/preset-small-lib": "^14.2.0",
+    "eslint": "^10.13.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
     "publint": "^0.3.25",
     "size-limit": "^14.2.0",
     "tsdown": "^0.23.1",
     "typescript": "6.0.3",
+    "typescript-eslint": "^8.71.2",
     "vitest": "^5.0.5"
   }
 }

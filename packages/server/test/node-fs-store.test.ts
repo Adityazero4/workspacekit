@@ -1,4 +1,16 @@
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -24,7 +36,10 @@ beforeEach(async () => {
 afterEach(() => rm(base, { recursive: true, force: true }));
 
 async function fail(p: Promise<unknown>): Promise<{ kind?: FsErrorKind; message: string }> {
-  const e = await p.then(() => undefined, (err: unknown) => err);
+  const e = await p.then(
+    () => undefined,
+    (err: unknown) => err,
+  );
   if (!isFsError(e)) throw new Error(`expected an FsError, got ${String(e)}`);
   return { kind: e.kind, message: e.message };
 }
@@ -81,7 +96,7 @@ describe('visibility', () => {
     expect(await store.search!('config', 10)).toEqual([]);
   });
 
-  it('never lists this store\'s temp files', async () => {
+  it("never lists this store's temp files", async () => {
     await writeFile(path.join(root, '.a.txt.0123456789ab.tmp'), 'x');
     await writeFile(path.join(root, '.keep.tmp'), 'user file');
     expect((await store.list('', 1)).map((e) => e.path)).toEqual(['.keep.tmp']);
@@ -107,7 +122,9 @@ describe('write', () => {
     expect(second.mtimeMs!).toBeGreaterThan(first.mtimeMs!);
     expect((await store.stat('w.txt'))!.mtimeMs).toBe(second.mtimeMs);
     await sleep(20);
-    expect(await kindOf(store.write('w.txt', enc.encode('v3'), { expectedMtimeMs: first.mtimeMs! }))).toBe('conflict');
+    expect(await kindOf(store.write('w.txt', enc.encode('v3'), { expectedMtimeMs: first.mtimeMs! }))).toBe(
+      'conflict',
+    );
     expect(await kindOf(store.write('gone.txt', enc.encode('v'), { expectedMtimeMs: 1 }))).toBe('conflict');
     expect(await disk('w.txt')).toBe('v2');
     expect(await readdir(root)).toEqual(['link', 'w.txt']);
@@ -122,8 +139,12 @@ describe('write', () => {
       },
     });
     expect(await kindOf(store.write('f.txt', big, { maxBytes: 10 }))).toBe('too_large');
-    expect(await kindOf(store.write('f.txt', enc.encode('0123456789ab'), { maxBytes: 10 }))).toBe('too_large');
-    expect(await kindOf(store.write('new.txt', stream('12345678', '9012'), { maxBytes: 10 }))).toBe('too_large');
+    expect(await kindOf(store.write('f.txt', enc.encode('0123456789ab'), { maxBytes: 10 }))).toBe(
+      'too_large',
+    );
+    expect(await kindOf(store.write('new.txt', stream('12345678', '9012'), { maxBytes: 10 }))).toBe(
+      'too_large',
+    );
     expect(await disk('f.txt')).toBe('original');
     expect((await readdir(root)).sort()).toEqual(['f.txt', 'link']);
   });
@@ -140,9 +161,9 @@ describe('write', () => {
       },
     });
     await store.write('d/f.txt', watcher);
-    const tmp = seen.filter((n) => n !== 'f.txt');
-    expect(tmp).toHaveLength(1);
-    expect(tmp[0]).toMatch(/^\.f\.txt\.[0-9a-f]+\.tmp$/);
+    const staged = seen.filter((n) => n !== 'f.txt');
+    expect(staged).toHaveLength(1);
+    expect(staged[0]).toMatch(/^\.f\.txt\.[0-9a-f]+\.tmp$/);
     expect(await readdir(path.join(root, 'd'))).toEqual(['f.txt']);
   });
 });
@@ -266,14 +287,22 @@ describe('move and copy', () => {
     expect(await kindOf(store.copy('src', 'dst'))).toBe('conflict');
     expect(await disk('dst/stale.txt')).toBe('s');
     await store.copy('src', 'dst', { overwrite: true });
-    expect((await store.list('dst', 3)).map((e) => e.path).sort()).toEqual(['dst/keep.txt', 'dst/sub', 'dst/sub/deep.txt']);
-    expect((await store.list('src', 3)).map((e) => e.path).sort()).toEqual(['src/keep.txt', 'src/sub', 'src/sub/deep.txt']);
+    expect((await store.list('dst', 3)).map((e) => e.path).sort()).toEqual([
+      'dst/keep.txt',
+      'dst/sub',
+      'dst/sub/deep.txt',
+    ]);
+    expect((await store.list('src', 3)).map((e) => e.path).sort()).toEqual([
+      'src/keep.txt',
+      'src/sub',
+      'src/sub/deep.txt',
+    ]);
     expect((await readdir(root)).sort()).toEqual(['dst', 'link', 'src']);
     await store.write('file.txt', enc.encode('f'));
     await store.move('file.txt', 'dst', { overwrite: true }); // file replaces a directory
     expect(await disk('dst')).toBe('f');
     await store.move('src', 'dst', { overwrite: true }); // directory replaces a file
-    expect((await store.stat('src'))).toBeNull();
+    expect(await store.stat('src')).toBeNull();
     expect(await disk('dst/keep.txt')).toBe('k');
   });
 
@@ -283,7 +312,14 @@ describe('move and copy', () => {
     await store.move('a', 'b');
     await store.copy('b', 'c');
     expect((await store.list('', 5)).map((e) => e.path).sort()).toEqual([
-      'b', 'b/sub', 'b/sub/y.txt', 'b/x.txt', 'c', 'c/sub', 'c/sub/y.txt', 'c/x.txt',
+      'b',
+      'b/sub',
+      'b/sub/y.txt',
+      'b/x.txt',
+      'c',
+      'c/sub',
+      'c/sub/y.txt',
+      'c/x.txt',
     ]);
     expect(await kindOf(store.move('b', 'b/inside'))).toBe('invalid');
     expect(await kindOf(store.copy('b', 'b/inside'))).toBe('invalid');
@@ -305,7 +341,11 @@ describe('search', () => {
     await store.write('deep/er/Report.md', enc.encode('1'));
     await store.write('report-top.txt', enc.encode('2'));
     await store.write('x/REPORT2.txt', enc.encode('3'));
-    expect((await store.search!('report', 10)).map((e) => e.path)).toEqual(['report-top.txt', 'x/REPORT2.txt', 'deep/er/Report.md']);
+    expect((await store.search!('report', 10)).map((e) => e.path)).toEqual([
+      'report-top.txt',
+      'x/REPORT2.txt',
+      'deep/er/Report.md',
+    ]);
     expect(await store.search!('report', 2)).toHaveLength(2);
     expect(await store.search!('', 5)).toEqual([]);
     expect(await nodeFsStore(root, { searchLimit: 1 }).search!('report', 10)).toHaveLength(1);
@@ -365,7 +405,10 @@ describe('escaping links', () => {
     const copied = await store.copy('nm/.bin/cli3', 'nm/.bin/cli4');
     expect(copied).toMatchObject({ path: 'nm/.bin/cli4', kind: 'file' });
     await symlink('pkg', path.join(root, 'nm', 'dirlink'));
-    expect(await store.move('nm/dirlink', 'nm/dirlink2')).toMatchObject({ path: 'nm/dirlink2', kind: 'directory' });
+    expect(await store.move('nm/dirlink', 'nm/dirlink2')).toMatchObject({
+      path: 'nm/dirlink2',
+      kind: 'directory',
+    });
     await outsideIntact();
   });
 
@@ -422,7 +465,9 @@ describe('exclude bypass', () => {
     await mkdir(path.join(root, nfd));
     await writeFile(path.join(root, nfd, 'a.txt'), 'a');
     await writeFile(path.join(root, `${nfd}-visible.txt`), 'v');
-    expect((await s.list('', 1)).map((e) => e.path).sort()).toEqual(['.git', 'ok.txt', `${nfc}-visible.txt`].sort());
+    expect((await s.list('', 1)).map((e) => e.path).sort()).toEqual(
+      ['.git', 'ok.txt', `${nfc}-visible.txt`].sort(),
+    );
     expect(await kindOf(s.read(`${nfd}/a.txt`))).toBe('not_found');
     expect(await s.stat(nfd)).toBeNull();
   });

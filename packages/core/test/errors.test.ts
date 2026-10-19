@@ -21,8 +21,13 @@ test('toFsError other mappings', () => {
 
 test('status <-> kind round trip', () => {
   for (const [kind, status] of [
-    ['invalid', 400], ['forbidden', 403], ['not_found', 404], ['conflict', 409],
-    ['too_large', 413], ['unknown', 500], ['timeout', 504],
+    ['invalid', 400],
+    ['forbidden', 403],
+    ['not_found', 404],
+    ['conflict', 409],
+    ['too_large', 413],
+    ['unknown', 500],
+    ['timeout', 504],
   ] as const) {
     expect(statusForKind(kind)).toBe(status);
     expect(kindForStatus(status)).toBe(kind);
