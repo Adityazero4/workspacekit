@@ -27,7 +27,9 @@ test('normalizePath error kinds', () => {
 
 test('normalizePath rejects lone UTF-16 surrogates but keeps valid pairs', () => {
   for (const bad of ['a\uD800b', '\uDC00', 'x/\uD83D', 'a\uDE00\uD83Db']) {
-    expect(() => normalizePath(bad), JSON.stringify(bad)).toThrow(expect.objectContaining({ kind: 'invalid' }));
+    expect(() => normalizePath(bad), JSON.stringify(bad)).toThrow(
+      expect.objectContaining({ kind: 'invalid' }),
+    );
   }
   expect(normalizePath('a/\u{1F600}/b')).toBe('a/\u{1F600}/b');
 });
@@ -77,8 +79,9 @@ test('normalizePath rejects backslashes', () => {
 });
 
 test('normalizePath rejects dot/space-only segments other than "." and ".."', () => {
-  for (const p of ['a/.. /b', 'a/. /b', 'a/.../b', 'a/ /b'])
+  for (const p of ['a/.. /b', 'a/. /b', 'a/.../b', 'a/ /b']) {
     expect(() => normalizePath(p)).toThrow(expect.objectContaining({ kind: 'invalid' }));
+  }
   expect(normalizePath('a/./b')).toBe('a/b');
 });
 

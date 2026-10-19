@@ -2,7 +2,7 @@ import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { FsError, isFsError, normalizePath, type FsErrorKind } from '@scope/core';
 
-const KIND: Record<string, FsErrorKind> = {
+const KIND_BY_NODE_ERROR_CODE: Record<string, FsErrorKind> = {
   ENOENT: 'not_found',
   EEXIST: 'conflict',
   ENOTDIR: 'conflict',
@@ -17,45 +17,64 @@ const KIND: Record<string, FsErrorKind> = {
   ENAMETOOLONG: 'invalid',
 };
 
-/** Maps a node error to an `FsError` whose message names only the relative path. */
-export function toStoreError(e: unknown, rel: string): FsError {
-  if (isFsError(e)) return e;
-  const code = String((e as { code?: unknown } | null)?.code ?? 'EIO');
-  const kind = KIND[code] ?? 'unknown';
+/**
+ * Maps a node error to an `FsError` whose message names only the relative path.
+ *
+ * @example
+ * await rm(abs).catch((error: unknown) => Promise.reject(toStoreError(error, 'src/a.ts')));
+ */
+export function toStoreError(error: unknown, rel: string): FsError {
+  if (isFsError(error)) return error;
+  const code = (error as { code?: string } | null)?.code ?? 'EIO';
+  const kind = KIND_BY_NODE_ERROR_CODE[code] ?? 'unknown';
   return new FsError(kind, `${code}: ${rel || '/'}`, { path: rel });
 }
 
-/** True when `p` is `rootReal` or lies inside it. */
+/**
+ * True when `p` is `rootReal` or lies inside it.
+ *
+ * @example
+ * isInside('/srv/root', '/srv/root/src'); // true
+ */
 export function isInside(rootReal: string, p: string): boolean {
   const base = rootReal.endsWith(path.sep) ? rootReal : rootReal + path.sep;
   return p === rootReal || p.startsWith(base);
 }
 
-/** Real path of the deepest existing ancestor of `abs`, plus the missing tail below it. */
-async function deepestReal(abs: string): Promise<{ real: string; tail: string[] }> {
-  const tail: string[] = [];
-  for (let cur = abs; ; ) {
+async function isDanglingSymlink(abs: string): Promise<boolean> {
+  return lstat(abs).then(
+    (stats) => stats.isSymbolicLink(),
+    () => false,
+  );
+}
+
+async function deepestExistingRealPath(abs: string): Promise<{ real: string; missingTail: string[] }> {
+  const missingTail: string[] = [];
+  for (let candidate = abs; ;) {
     try {
-      return { real: await realpath(cur), tail };
-    } catch (e) {
-      const code = (e as { code?: string }).code;
+      return { real: await realpath(candidate), missingTail };
+    } catch (error) {
+      const code = (error as { code?: string }).code;
       if (code === 'ENOENT') {
-        // A dangling symlink could point anywhere, so never write through one.
-        const link = await lstat(cur).then((s) => s.isSymbolicLink(), () => false);
-        if (link) throw new FsError('forbidden', 'dangling symlink');
-      } else if (code !== 'ENOTDIR') throw e;
-      const up = path.dirname(cur);
-      if (up === cur) throw e;
-      tail.unshift(path.basename(cur));
-      cur = up;
+        if (await isDanglingSymlink(candidate)) throw new FsError('forbidden', 'dangling symlink');
+      } else if (code !== 'ENOTDIR') throw error;
+      const parent = path.dirname(candidate);
+      if (parent === candidate) throw error;
+      missingTail.unshift(path.basename(candidate));
+      candidate = parent;
     }
   }
 }
 
-/** True when `abs` (which may not exist yet) resolves through every symlink to a place inside the root. */
+/**
+ * True when `abs` (which may not exist yet) resolves through every symlink to a place inside the root.
+ *
+ * @example
+ * if (!(await resolvesInside(rootReal, linkTarget))) throw new FsError('forbidden');
+ */
 export async function resolvesInside(rootReal: string, abs: string): Promise<boolean> {
-  const { real, tail } = await deepestReal(abs);
-  return isInside(rootReal, path.join(real, ...tail));
+  const { real, missingTail } = await deepestExistingRealPath(abs);
+  return isInside(rootReal, path.join(real, ...missingTail));
 }
 
 /**
@@ -64,21 +83,26 @@ export async function resolvesInside(rootReal: string, abs: string): Promise<boo
  * checked but not followed in the result, so deleting or moving it affects the link itself.
  * Without `forCreate` the path must exist (`not_found`); with it only the deepest existing
  * ancestor is checked.
+ *
+ * @example
+ * const abs = await resolveInRoot(await realpath('/srv/root'), 'src/main.ts');
  */
 export async function resolveInRoot(
   rootReal: string,
   relPath: string,
   opts: { forCreate?: boolean } = {},
 ): Promise<string> {
-  if (relPath.startsWith('/')) throw new FsError('forbidden', 'absolute paths are not allowed', { path: relPath });
+  if (relPath.startsWith('/')) {
+    throw new FsError('forbidden', 'absolute paths are not allowed', { path: relPath });
+  }
   const rel = normalizePath(relPath);
   if (rel === '') return rootReal;
   try {
     const abs = path.join(rootReal, ...rel.split('/'));
-    const { real, tail } = await deepestReal(abs);
-    const full = path.join(real, ...tail);
+    const { real, missingTail } = await deepestExistingRealPath(abs);
+    const full = path.join(real, ...missingTail);
     if (!isInside(rootReal, full)) throw new FsError('forbidden', 'path escapes root', { path: rel });
-    if (tail.length > 0) {
+    if (missingTail.length > 0) {
       if (!opts.forCreate) throw new FsError('not_found', `ENOENT: ${rel}`, { path: rel });
       return full;
     }

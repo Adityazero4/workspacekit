@@ -40,7 +40,11 @@ test('maps 409 ErrorBody to FsError conflict', async () => {
 });
 
 test('maps fetch TypeError to network and AbortError to cancelled', async () => {
-  const net = httpAdapter(BASE, { fetch: (async () => { throw new TypeError('Failed to fetch'); }) as typeof fetch });
+  const net = httpAdapter(BASE, {
+    fetch: (async () => {
+      throw new TypeError('Failed to fetch');
+    }) as typeof fetch,
+  });
   expect(await net.list('', { depth: 1 }).catch((e) => e)).toMatchObject({ kind: 'network' });
   const ac = new AbortController();
   const abortable = httpAdapter(BASE, {
@@ -74,7 +78,9 @@ test('every non-GET request carries the CSRF header, GET requests do not need it
     if (p.endsWith('/download')) return new Response('zip');
     if (p.endsWith('/list') || p.endsWith('/search')) return json({ entries: [] });
     if (p.endsWith('/init')) return json({ uploadId: 'u', chunkSize: 4 });
-    if (p.endsWith('/delete') || p.endsWith('/chunk') || (p.endsWith('/upload') && req.method === 'DELETE')) return new Response(null, { status: 204 });
+    if (p.endsWith('/delete') || p.endsWith('/chunk') || (p.endsWith('/upload') && req.method === 'DELETE')) {
+      return new Response(null, { status: 204 });
+    }
     return json({ entry });
   });
   const fs = httpAdapter(BASE, { fetch: s.fetch, headers: { 'X-T': '1' } });
@@ -114,7 +120,9 @@ test('json endpoints, move/copy and download', async () => {
   const entry = { path: 'b', name: 'b', kind: 'file' };
   const s = stub((req) => {
     const p = new URL(req.url).pathname;
-    if (p.endsWith('/download')) return new Response('zip', { headers: { 'content-type': 'application/zip' } });
+    if (p.endsWith('/download')) {
+      return new Response('zip', { headers: { 'content-type': 'application/zip' } });
+    }
     if (p.endsWith('/list') || p.endsWith('/search')) return json({ entries: [entry] });
     return p.endsWith('/delete') ? new Response(null, { status: 204 }) : json({ entry });
   });
@@ -136,7 +144,9 @@ test('json endpoints, move/copy and download', async () => {
 test('headers option may be async and is applied to every request including watch', async () => {
   let n = 0;
   const s = stub((req) =>
-    new URL(req.url).pathname.endsWith('/watch') ? new Response(new ReadableStream({ start: () => {} })) : json({ entries: [] }),
+    new URL(req.url).pathname.endsWith('/watch')
+      ? new Response(new ReadableStream({ start: () => {} }))
+      : json({ entries: [] }),
   );
   const fs = httpAdapter(BASE, {
     fetch: s.fetch,
@@ -185,7 +195,13 @@ test('watch parses multi-line SSE frames, ignores comments, reconnects after str
   await expect.poll(() => got.length).toBe(5);
   const resync = [{ type: 'resync', path: '' }];
   // the first connect delivers no resync; every re-connect delivers one before its frames
-  expect(got).toEqual([frames, [{ type: 'updated', path: 'c' }], resync, [{ type: 'deleted', path: 'd' }], resync]);
+  expect(got).toEqual([
+    frames,
+    [{ type: 'updated', path: 'c' }],
+    resync,
+    [{ type: 'deleted', path: 'd' }],
+    resync,
+  ]);
   await expect.poll(() => s.reqs.length).toBe(3);
   stop();
   await new Promise((r) => setTimeout(r, 20));
@@ -221,13 +237,21 @@ test('upload: direct via fetch, chunked init/put/complete/abort', async () => {
   const s = stub((req) => {
     const p = new URL(req.url).pathname;
     if (p.endsWith('/upload/init')) return json({ uploadId: 'u1', chunkSize: 4 });
-    if (p.endsWith('/upload/chunk') || (p.endsWith('/upload') && req.method === 'DELETE')) return new Response(null, { status: 204 });
+    if (p.endsWith('/upload/chunk') || (p.endsWith('/upload') && req.method === 'DELETE')) {
+      return new Response(null, { status: 204 });
+    }
     return json({ entry });
   });
   const up = httpAdapter(BASE, { fetch: s.fetch }).upload!;
   const progress: number[] = [];
   const file = new Blob(['hello']);
-  expect(await up.direct('/d/f.txt', file, { signal: new AbortController().signal, onProgress: (n) => progress.push(n), overwrite: true })).toEqual(entry);
+  expect(
+    await up.direct('/d/f.txt', file, {
+      signal: new AbortController().signal,
+      onProgress: (n) => progress.push(n),
+      overwrite: true,
+    }),
+  ).toEqual(entry);
   expect(progress).toEqual([5]);
   const u = new URL(s.reqs[0]!.url);
   expect(u.pathname).toBe('/api/upload');
@@ -240,7 +264,11 @@ test('upload: direct via fetch, chunked init/put/complete/abort', async () => {
   expect(await s.reqs[1]!.json()).toEqual({ path: 'd/f.txt', totalBytes: 5, overwrite: true });
   await ch.put('u1', 1, 4, new Blob(['o']), new AbortController().signal);
   const cu = new URL(s.reqs[2]!.url);
-  expect([cu.searchParams.get('id'), cu.searchParams.get('index'), cu.searchParams.get('offset')]).toEqual(['u1', '1', '4']);
+  expect([cu.searchParams.get('id'), cu.searchParams.get('index'), cu.searchParams.get('offset')]).toEqual([
+    'u1',
+    '1',
+    '4',
+  ]);
   expect(await ch.complete('u1')).toEqual(entry);
   await ch.abort('u1');
   expect(s.reqs[4]!.method).toBe('DELETE');
@@ -254,7 +282,11 @@ test('watch: a throwing listener does not drop frames or reconnect', async () =>
       new Response(
         new ReadableStream({
           start(c) {
-            c.enqueue(enc.encode('data: [{"type":"created","path":"a"}]\n\ndata: [{"type":"created","path":"b"}]\n\n'));
+            c.enqueue(
+              enc.encode(
+                'data: [{"type":"created","path":"a"}]\n\ndata: [{"type":"created","path":"b"}]\n\n',
+              ),
+            );
           },
         }),
       ),
@@ -262,7 +294,14 @@ test('watch: a throwing listener does not drop frames or reconnect', async () =>
   const got: string[] = [];
   const uncaught: unknown[] = [];
   const onUncaught = (e: unknown): void => void uncaught.push(e);
-  const proc = (globalThis as unknown as { process: { on(e: string, f: (x: unknown) => void): void; off(e: string, f: (x: unknown) => void): void } }).process;
+  const proc = (
+    globalThis as unknown as {
+      process: {
+        on(e: string, f: (x: unknown) => void): void;
+        off(e: string, f: (x: unknown) => void): void;
+      };
+    }
+  ).process;
   proc.on('uncaughtException', onUncaught);
   const stop = httpAdapter(BASE, { fetch: s.fetch, reconnectDelaysMs: [0] }).watch!((ev) => {
     got.push(ev[0]!.path);
@@ -335,7 +374,11 @@ test('xhr upload: progress, success, conflict, mid-flight abort, pre-aborted', (
     const file = new Blob(['hello'], { type: 'text/plain' });
 
     const progress: number[] = [];
-    const ok = up.direct('/a.txt', file, { signal: new AbortController().signal, onProgress: (n) => progress.push(n), overwrite: true });
+    const ok = up.direct('/a.txt', file, {
+      signal: new AbortController().signal,
+      onProgress: (n) => progress.push(n),
+      overwrite: true,
+    });
     await expect.poll(() => FakeXhr.last?.sent).toBe(file);
     const x = FakeXhr.last!;
     expect(x.method).toBe('POST');
@@ -362,7 +405,9 @@ test('xhr upload: progress, success, conflict, mid-flight abort, pre-aborted', (
     const before = FakeXhr.count;
     const pre = new AbortController();
     pre.abort();
-    expect(await up.direct('a.txt', file, { signal: pre.signal }).catch((e) => e)).toMatchObject({ kind: 'cancelled' });
+    expect(await up.direct('a.txt', file, { signal: pre.signal }).catch((e) => e)).toMatchObject({
+      kind: 'cancelled',
+    });
     expect(FakeXhr.count).toBe(before); // no XHR created
   }));
 
@@ -411,7 +456,8 @@ test("drops the connection when one frame's data exceeds 1 MiB", async () => {
   const s = stub(() =>
     ++call > 1
       ? hang()
-      : new Response( // stays open: only the adapter can end this connection
+      : new Response(
+          // stays open: only the adapter can end this connection
           new ReadableStream({
             start(c) {
               for (const part of big.match(/[^]{1,50000}/g)!) c.enqueue(new TextEncoder().encode(part));
@@ -459,13 +505,20 @@ test('drops the connection on a flood of empty data: lines', async () => {
 test.each([400, 404, 501])('stops and reports on %i', async (status) => {
   const s = stub(() => new Response('no', { status }));
   const errors: FsError[] = [];
-  const stop = httpAdapter(BASE, { fetch: s.fetch, reconnectDelaysMs: [0], onWatchError: (e) => errors.push(e) }).watch!(() => {});
+  const stop = httpAdapter(BASE, {
+    fetch: s.fetch,
+    reconnectDelaysMs: [0],
+    onWatchError: (e) => errors.push(e),
+  }).watch!(() => {});
   await expect.poll(() => errors.length).toBe(1);
   await tick();
   stop();
   expect(s.reqs.length).toBe(1);
   expect(errors[0]).toBeInstanceOf(FsError);
-  expect(errors[0]).toMatchObject({ status, kind: { 400: 'invalid', 404: 'not_found', 501: 'unknown' }[status] });
+  expect(errors[0]).toMatchObject({
+    status,
+    kind: { 400: 'invalid', 404: 'not_found', 501: 'unknown' }[status],
+  });
 });
 
 test('401 and 403 are reported each time and retried at the longest delay', async () => {
@@ -476,12 +529,21 @@ test('401 and 403 are reported each time and retried at the longest delay', asyn
     return real(fn, 0);
   }) as typeof setTimeout);
   try {
-    const plan = [() => new Response('x', { status: 401 }), () => new Response('x', { status: 403 }), () => new Response('x', { status: 500 }), hang];
+    const plan = [
+      () => new Response('x', { status: 401 }),
+      () => new Response('x', { status: 403 }),
+      () => new Response('x', { status: 500 }),
+      hang,
+    ];
     let call = 0;
     const s = stub(() => plan[call++]!());
     const errors: FsError[] = [];
     const got: ChangeEvent[][] = [];
-    const stop = httpAdapter(BASE, { fetch: s.fetch, reconnectDelaysMs: [5, 9, 7], onWatchError: (e) => errors.push(e) }).watch!((e) => got.push(e));
+    const stop = httpAdapter(BASE, {
+      fetch: s.fetch,
+      reconnectDelaysMs: [5, 9, 7],
+      onWatchError: (e) => errors.push(e),
+    }).watch!((e) => got.push(e));
     await expect.poll(() => s.reqs.length).toBe(4);
     stop();
     expect(errors.map((e) => e.status)).toEqual([401, 403]);
@@ -496,14 +558,20 @@ test('keeps retrying 500/502/503 and network errors with backoff', async () => {
     () => new Response('x', { status: 500 }),
     () => new Response('x', { status: 502 }),
     () => new Response('x', { status: 503 }),
-    () => { throw new TypeError('down'); },
+    () => {
+      throw new TypeError('down');
+    },
     () => sse('data: [{"type":"created","path":"a"}]\n\n'),
   ];
   let call = 0;
   const s = stub(() => (plan[call++] ?? hang)());
   const errors: FsError[] = [];
   const got: ChangeEvent[][] = [];
-  const stop = httpAdapter(BASE, { fetch: s.fetch, reconnectDelaysMs: [0], onWatchError: (e) => errors.push(e) }).watch!((e) => got.push(e));
+  const stop = httpAdapter(BASE, {
+    fetch: s.fetch,
+    reconnectDelaysMs: [0],
+    onWatchError: (e) => errors.push(e),
+  }).watch!((e) => got.push(e));
   await expect.poll(() => got.length).toBe(3);
   stop();
   expect(got[1]).toEqual([{ type: 'created', path: 'a' }]); // after the first resync (the 5th attempt connected)
@@ -544,5 +612,4 @@ test('watch: a failed first attempt followed by a connect still resyncs', async 
   await expect.poll(() => got.length).toBe(1);
   expect(got[0]).toEqual([{ type: 'resync', path: '' }]);
   stop();
-
 });

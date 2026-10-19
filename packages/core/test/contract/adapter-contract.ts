@@ -11,11 +11,15 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 const signal = (): AbortSignal => new AbortController().signal;
 
 async function expectKind(p: Promise<unknown>, kind: FsErrorKind): Promise<void> {
-  const e = await p.then(() => undefined, (err: unknown) => err);
+  const e = await p.then(
+    () => undefined,
+    (err: unknown) => err,
+  );
   expect(isFsError(e) ? e.kind : e).toBe(kind);
 }
 
-const same = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+const same = (a: Uint8Array, b: Uint8Array): boolean =>
+  a.length === b.length && a.every((v, i) => v === b[i]);
 
 // \u escapes keep the NFC/NFD forms unambiguous in source.
 const NFC_NAME = 'dir with space/résumé #1 100%?+.md';
@@ -105,7 +109,10 @@ export function runAdapterContract(name: string, make: Make): void {
     it('writing or uploading a file over a directory is a conflict', async () => {
       await fs.create('folder', 'directory');
       await expectKind(fs.write('folder', 'x'), 'conflict');
-      await expectKind(fs.upload.direct('folder', new Blob(['x']), { signal: signal(), overwrite: true }), 'conflict');
+      await expectKind(
+        fs.upload.direct('folder', new Blob(['x']), { signal: signal(), overwrite: true }),
+        'conflict',
+      );
       expect((await fs.stat('folder'))?.kind).toBe('directory');
     });
 
@@ -141,7 +148,16 @@ export function runAdapterContract(name: string, make: Make): void {
       expect(await paths('', 5)).toEqual(['b', 'b/sub', 'b/sub/y.txt', 'b/x.txt']);
       expect(await text('b/sub/y.txt')).toBe('y');
       await fs.copy('b', 'c');
-      expect(await paths('', 5)).toEqual(['b', 'b/sub', 'b/sub/y.txt', 'b/x.txt', 'c', 'c/sub', 'c/sub/y.txt', 'c/x.txt']);
+      expect(await paths('', 5)).toEqual([
+        'b',
+        'b/sub',
+        'b/sub/y.txt',
+        'b/x.txt',
+        'c',
+        'c/sub',
+        'c/sub/y.txt',
+        'c/x.txt',
+      ]);
       await expectKind(fs.move('b', 'b/inside'), 'invalid');
     });
 
@@ -159,10 +175,7 @@ export function runAdapterContract(name: string, make: Make): void {
       const empty = await fs.upload.direct('up/empty.bin', new Blob([]), { signal: signal() });
       expect(empty.path).toBe('up/empty.bin');
       expect((await fs.read('up/empty.bin', 'arrayBuffer')).byteLength).toBe(0);
-      await expectKind(
-        fs.upload.direct('up/empty.bin', new Blob(['x']), { signal: signal() }),
-        'conflict',
-      );
+      await expectKind(fs.upload.direct('up/empty.bin', new Blob(['x']), { signal: signal() }), 'conflict');
       await fs.upload.direct('up/empty.bin', new Blob(['x']), { signal: signal(), overwrite: true });
       expect(await text('up/empty.bin')).toBe('x');
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { captureDataTransfer, DEFAULT_SKIP, expandDropped, fromFileList, shouldSkipPath } from '../src/drop/traverse';
+import {
+  captureDataTransfer,
+  DEFAULT_SKIP,
+  expandDropped,
+  fromFileList,
+  shouldSkipPath,
+  type DropEntry,
+} from '../src/drop/traverse';
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 const mkFile = (name: string): File => new File(['x'], name);
@@ -11,17 +18,24 @@ interface Stats {
 }
 const stats = (): Stats => ({ reads: 0, inflight: 0, peak: 0 });
 
-function fileEntry(name: string, fullPath: string, fail = false): any {
+function fileEntry(name: string, fullPath: string, fail = false): DropEntry {
   return {
     isFile: true,
     isDirectory: false,
     name,
     fullPath,
-    file: (ok: (f: File) => void, err: (e: unknown) => void) => (fail ? err(new Error('nope')) : ok(mkFile(name))),
+    file: (ok: (f: File) => void, err: (e: unknown) => void) =>
+      fail ? err(new Error('nope')) : ok(mkFile(name)),
   };
 }
 /** readEntries hands out batches of 100 until empty. */
-function dirEntry(name: string, fullPath: string, children: any[], s: Stats = stats(), fail = false): any {
+function dirEntry(
+  name: string,
+  fullPath: string,
+  children: DropEntry[],
+  s: Stats = stats(),
+  fail = false,
+): DropEntry {
   return {
     isFile: false,
     isDirectory: true,
@@ -30,7 +44,7 @@ function dirEntry(name: string, fullPath: string, children: any[], s: Stats = st
     createReader() {
       let pos = 0;
       return {
-        readEntries(ok: (e: any[]) => void, err: (e: unknown) => void) {
+        readEntries(ok: (e: DropEntry[]) => void, err: (e: unknown) => void) {
           s.reads++;
           if (fail) return err(new Error('nope'));
           s.inflight++;
@@ -46,7 +60,7 @@ function dirEntry(name: string, fullPath: string, children: any[], s: Stats = st
     },
   };
 }
-const files = (n: number, dir: string): any[] =>
+const files = (n: number, dir: string): DropEntry[] =>
   Array.from({ length: n }, (_, i) => fileEntry(`f${i}.txt`, `/${dir}/f${i}.txt`));
 
 describe('expandDropped', () => {
@@ -70,7 +84,9 @@ describe('expandDropped', () => {
 
   it('stops at maxFiles+1 and reports overLimit without walking the whole tree', async () => {
     const s = stats();
-    const r = await expandDropped([{ entry: dirEntry('big', '/big', files(1000, 'big'), s) }], { maxFiles: 150 });
+    const r = await expandDropped([{ entry: dirEntry('big', '/big', files(1000, 'big'), s) }], {
+      maxFiles: 150,
+    });
     expect(r.overLimit).toBe(true);
     expect(r.items).toHaveLength(150);
     expect(s.reads).toBe(2); // 100 + 100 >= 151, never reads batches 3..11
@@ -84,11 +100,17 @@ describe('expandDropped', () => {
 
   it('skips DEFAULT_SKIP names and reports them in skipped', async () => {
     const nm = dirEntry('node_modules', '/p/node_modules', [fileEntry('x.js', '/p/node_modules/x.js')]);
-    const root = dirEntry('p', '/p', [nm, fileEntry('.DS_Store', '/p/.DS_Store'), fileEntry('.env.example', '/p/.env.example')]);
+    const root = dirEntry('p', '/p', [
+      nm,
+      fileEntry('.DS_Store', '/p/.DS_Store'),
+      fileEntry('.env.example', '/p/.env.example'),
+    ]);
     const r = await expandDropped([{ entry: root }]);
     expect(r.items.map((i) => i.relativePath)).toEqual(['p/.env.example']);
     expect(r.skipped.sort()).toEqual(['p/.DS_Store', 'p/node_modules']);
-    for (const n of ['.DS_Store', 'Thumbs.db', 'desktop.ini', 'node_modules', '.git', '__pycache__']) expect(DEFAULT_SKIP(n)).toBe(true);
+    for (const n of ['.DS_Store', 'Thumbs.db', 'desktop.ini', 'node_modules', '.git', '__pycache__']) {
+      expect(DEFAULT_SKIP(n)).toBe(true);
+    }
     expect(DEFAULT_SKIP('.env.example')).toBe(false);
   });
 
@@ -138,7 +160,11 @@ describe('shouldSkipPath', () => {
   it('checks folder segments as directories and the last one as a file', () => {
     const seen: [string, boolean][] = [];
     expect(shouldSkipPath('a/b/c.txt', (n, d) => (seen.push([n, d]), false))).toBe(false);
-    expect(seen).toEqual([['a', true], ['b', true], ['c.txt', false]]);
+    expect(seen).toEqual([
+      ['a', true],
+      ['b', true],
+      ['c.txt', false],
+    ]);
     expect(shouldSkipPath('p/.DS_Store')).toBe(true);
     expect(shouldSkipPath('p/node_modules', (n, d) => d && n === 'node_modules')).toBe(false);
   });
@@ -154,17 +180,36 @@ describe('fromFileList', () => {
 });
 
 describe('captureDataTransfer', () => {
-  it('captures entries synchronously via webkitGetAsEntry', () => {
-    const e = fileEntry('a', '/a');
-    const dt = { items: [{ kind: 'file', webkitGetAsEntry: () => e, getAsFile: () => null }], files: [] } as unknown as DataTransfer;
+  it('captures a folder as its entry, synchronously via webkitGetAsEntry', () => {
+    const e = dirEntry('a', '/a', []);
+    const dt = {
+      items: [{ kind: 'file', webkitGetAsEntry: () => e, getAsFile: () => null }],
+      files: [],
+    } as unknown as DataTransfer;
     expect(captureDataTransfer(dt)).toEqual([{ entry: e }]);
   });
 
   it('falls back to getAsFile when there is no entry, and to dt.files without items', () => {
     const f = mkFile('a');
-    const viaItem = { items: [{ kind: 'file', webkitGetAsEntry: () => null, getAsFile: () => f }], files: [] } as unknown as DataTransfer;
+    const viaItem = {
+      items: [{ kind: 'file', webkitGetAsEntry: () => null, getAsFile: () => f }],
+      files: [],
+    } as unknown as DataTransfer;
     expect(captureDataTransfer(viaItem)).toEqual([{ file: f, relativePath: 'a' }]);
     const viaFiles = { files: [f] } as unknown as DataTransfer;
     expect(captureDataTransfer(viaFiles)).toEqual([{ file: f, relativePath: 'a' }]);
+  });
+
+  it('captures a top-level file as its File, keeping the entry only for folders', () => {
+    const f = mkFile('a');
+    const folder = dirEntry('d', '/d', []);
+    const dt = {
+      items: [
+        { kind: 'file', webkitGetAsEntry: () => fileEntry('a', '/a', true), getAsFile: () => f },
+        { kind: 'file', webkitGetAsEntry: () => folder, getAsFile: () => mkFile('d') },
+      ],
+      files: [],
+    } as unknown as DataTransfer;
+    expect(captureDataTransfer(dt)).toEqual([{ file: f, relativePath: 'a' }, { entry: folder }]);
   });
 });

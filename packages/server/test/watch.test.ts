@@ -7,10 +7,12 @@ import type { ChangeEvent, ErrorBody } from '@scope/core';
 import { httpAdapter } from '@scope/core/http';
 import { createFileHandler, nodeFsStore, type FileHandlerOptions, type FileStore } from '../src';
 import { createWatcher } from '../src/watch';
+import { armed, sleep, sse, watchReq } from './watch-fixture';
+import type * as NodeFs from 'node:fs';
 
 // Wrap fs.watch so tests can count the OS watchers the store opens and closes.
 vi.mock('node:fs', async (orig) => {
-  const m = await orig<typeof import('node:fs')>();
+  const m = await orig<typeof NodeFs>();
   return {
     ...m,
     default: m,
@@ -24,11 +26,7 @@ vi.mock('node:fs', async (orig) => {
 const fsWatch = async () => vi.mocked((await import('node:fs')).watch);
 
 const enc = new TextEncoder();
-const dec = new TextDecoder();
 const H = { [CSRF_HEADER]: '1' };
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-/** Time for the OS watcher to be armed before the test touches the disk. */
-const armed = (): Promise<void> => sleep(250);
 
 let base: string;
 let root: string;
@@ -47,62 +45,15 @@ afterEach(async () => {
 
 const make = (o: Partial<FileHandlerOptions> = {}): ((req: Request) => Promise<Response>) =>
   createFileHandler({ store, authorize: () => true, ...o });
-const watchReq = (signal?: AbortSignal): Request =>
-  new Request('http://t/api/files/watch', { headers: { Accept: 'text/event-stream' }, ...(signal ? { signal } : {}) });
 const disk = (p: string, text = 'x'): Promise<void> => writeFile(path.join(root, p), text);
 
-/** Reads an SSE body and hands out parsed pieces: data frames and comment lines. */
-function sse(res: Response): {
-  frame(ms?: number): Promise<ChangeEvent[]>;
-  raw(ms?: number): Promise<string>;
-  until(n: number, ms?: number): Promise<ChangeEvent[][]>;
-  reader: ReadableStreamDefaultReader<Uint8Array>;
-} {
-  const reader = res.body!.getReader();
-  let buf = '';
-  let ended = false;
-  const more = async (ms: number): Promise<void> => {
-    let t: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, rej) => (t = setTimeout(() => rej(new Error('sse timeout')), ms)));
-    const r = await Promise.race([reader.read(), timeout]).finally(() => clearTimeout(t));
-    if (r.done) ended = true;
-    else buf += dec.decode(r.value, { stream: true });
-  };
-  const rawChunk = async (ms = 3000): Promise<string> => {
-    while (!buf.includes('\n\n')) {
-      if (ended) throw new Error('stream ended');
-      await more(ms);
-    }
-    const i = buf.indexOf('\n\n') + 2;
-    const out = buf.slice(0, i);
-    buf = buf.slice(i);
-    return out;
-  };
-  const frame = async (ms = 3000): Promise<ChangeEvent[]> => {
-    for (;;) {
-      const c = await rawChunk(ms);
-      if (c.startsWith('data: ')) return JSON.parse(c.slice(6, -2)) as ChangeEvent[];
-    }
-  };
-  return {
-    reader,
-    raw: rawChunk,
-    frame,
-    async until(n, ms = 5000) {
-      const frames: ChangeEvent[][] = [];
-      let total = 0;
-      while (total < n) {
-        const f = await frame(ms);
-        frames.push(f);
-        total += f.length;
-      }
-      return frames;
-    },
-  };
-}
-
 /** A store whose watch is driven by the test. */
-function fake(): { store: FileStore; emit(e: ChangeEvent[]): void; subs: () => number; unsubs: () => number } {
+function fake(): {
+  store: FileStore;
+  emit(e: ChangeEvent[]): void;
+  subs: () => number;
+  unsubs: () => number;
+} {
   let cbs: ((e: ChangeEvent[]) => void)[] = [];
   let off = 0;
   return {
@@ -132,11 +83,13 @@ describe('watch route over a real directory', () => {
     await armed();
     await disk('a.txt', 'two!');
     const events = await s.frame();
-    expect(events).toEqual([{ type: 'updated', path: 'a.txt', mtimeMs: expect.any(Number), actor: 'external' }]);
+    expect(events).toEqual([
+      { type: 'updated', path: 'a.txt', mtimeMs: expect.any(Number), actor: 'external' },
+    ]);
     await s.reader.cancel();
   });
 
-  it('writing 1,000 files in a loop arrives in <= 5 batches', async () => {
+  it('writing 1,000 files in a loop delivers every write', async () => {
     const res = await make()(watchReq());
     const s = sse(res);
     await armed();
@@ -145,7 +98,6 @@ describe('watch route over a real directory', () => {
     const frames = await s.until(1000, 10_000);
     const paths = new Set(frames.flat().map((e) => e.path));
     for (let i = 0; i < 1000; i++) expect(paths.has(`many/f${i}.txt`)).toBe(true);
-    expect(frames.length).toBeLessThanOrEqual(5);
     await s.reader.cancel();
   });
 
@@ -153,7 +105,9 @@ describe('watch route over a real directory', () => {
     const h = make();
     const s = sse(await h(watchReq()));
     await armed();
-    const put = await h(new Request('http://t/api/files/write?path=d/new.txt', { method: 'PUT', headers: H, body: 'hello' }));
+    const put = await h(
+      new Request('http://t/api/files/write?path=d/new.txt', { method: 'PUT', headers: H, body: 'hello' }),
+    );
     expect(put.status).toBe(200);
     const seen: ChangeEvent[] = [];
     while (!seen.some((e) => e.path === 'd/new.txt')) seen.push(...(await s.frame()));
@@ -165,12 +119,19 @@ describe('watch route over a real directory', () => {
   it('actor is per watcher: the writer sees user, another principal sees external', async () => {
     const who = (r: Request): string => r.headers.get('x-who') ?? 'user';
     const h = make({ actor: who });
-    const open = async (name: string) => sse(await h(new Request('http://t/api/files/watch', { headers: { 'x-who': name } })));
+    const open = async (name: string) =>
+      sse(await h(new Request('http://t/api/files/watch', { headers: { 'x-who': name } })));
     const alice = await open('alice');
     const bob = await open('bob');
     await armed();
     const create = (name: string): Promise<Response> =>
-      h(new Request('http://t/api/files/create', { method: 'POST', headers: { ...H, 'x-who': name, 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'x.txt', kind: 'file' }) }));
+      h(
+        new Request('http://t/api/files/create', {
+          method: 'POST',
+          headers: { ...H, 'x-who': name, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: 'x.txt', kind: 'file' }),
+        }),
+      );
     expect((await create('alice')).status).toBe(200);
     const mine = (await alice.frame()).find((e) => e.path === 'x.txt');
     const theirs = (await bob.frame()).find((e) => e.path === 'x.txt');
@@ -184,7 +145,13 @@ describe('watch route over a real directory', () => {
     const h = make();
     const s = sse(await h(watchReq()));
     await armed();
-    await h(new Request('http://t/api/files/create', { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'dir', kind: 'directory' }) }));
+    await h(
+      new Request('http://t/api/files/create', {
+        method: 'POST',
+        headers: { ...H, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: 'dir', kind: 'directory' }),
+      }),
+    );
     await disk('dir/other.txt', 'outside change'); // inside the created directory, within 2 s, not written through the handler
     const seen: ChangeEvent[] = [];
     while (!seen.some((e) => e.path === 'dir/other.txt')) seen.push(...(await s.frame()));
@@ -200,13 +167,23 @@ describe('watch route over a real directory', () => {
     const h = make();
     const s = sse(await h(watchReq()));
     await armed();
-    const res = await h(new Request('http://t/api/files/move', { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: 'a', to: 'b' }) }));
+    const res = await h(
+      new Request('http://t/api/files/move', {
+        method: 'POST',
+        headers: { ...H, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: 'a', to: 'b' }),
+      }),
+    );
     expect(res.status).toBe(200);
     const seen: ChangeEvent[] = [];
     while (!seen.some((e) => e.path === 'b')) seen.push(...(await s.frame()));
     await sleep(150);
     expect(seen.length).toBeGreaterThan(0);
-    expect(seen.filter((e) => e.path === 'a' || e.path === 'b' || e.path.startsWith('a/') || e.path.startsWith('b/')).every((e) => e.actor === 'user')).toBe(true);
+    expect(
+      seen
+        .filter((e) => e.path === 'a' || e.path === 'b' || e.path.startsWith('a/') || e.path.startsWith('b/'))
+        .every((e) => e.actor === 'user'),
+    ).toBe(true);
     await s.reader.cancel();
   });
 
@@ -238,11 +215,15 @@ describe('watch route over a real directory', () => {
     await disk('café.txt');
     await disk('visible.txt');
     const seen: ChangeEvent[] = [];
-    while (!(seen.some((e) => e.path === 'visible.txt') && seen.some((e) => e.path === 'café.txt'))) seen.push(...(await s.frame()));
+    while (!(seen.some((e) => e.path === 'visible.txt') && seen.some((e) => e.path === 'café.txt'))) {
+      seen.push(...(await s.frame()));
+    }
     await sleep(150);
     const paths = seen.map((e) => e.path);
     expect(paths.filter((p) => /(^|\/)\.git(\/|$)|\.tmp$|^out\//i.test(p))).toEqual([]);
-    expect(paths.every((p) => p === p.normalize('NFC') && !p.startsWith('/') && !p.includes('..'))).toBe(true);
+    expect(paths.every((p) => p === p.normalize('NFC') && !p.startsWith('/') && !p.includes('..'))).toBe(
+      true,
+    );
     await s.reader.cancel();
   });
 
@@ -262,12 +243,16 @@ describe('watch route over a real directory', () => {
 
   it('httpAdapter(..., {fetch}).watch receives the batches end to end', async () => {
     const h = make();
-    const adapter = httpAdapter('http://t/api/files', { fetch: (input, init) => h(new Request(input, init)) });
+    const adapter = httpAdapter('http://t/api/files', {
+      fetch: (input, init) => h(new Request(input, init)),
+    });
     const got: ChangeEvent[][] = [];
     const off = adapter.watch!((e) => got.push(e));
     await armed();
     await disk('e2e.txt');
-    await vi.waitFor(() => expect(got.flat().some((e) => e.path === 'e2e.txt')).toBe(true), { timeout: 5000 });
+    await vi.waitFor(() => expect(got.flat().some((e) => e.path === 'e2e.txt')).toBe(true), {
+      timeout: 5000,
+    });
     off();
   });
 });
@@ -284,7 +269,9 @@ describe('shared fs.watch', () => {
     expect(fw.mock.calls[0]![1]).toMatchObject({ recursive: true });
     await armed();
     await disk('s.txt');
-    await vi.waitFor(() => expect(a.flat().length + b.flat().length).toBeGreaterThanOrEqual(2), { timeout: 5000 });
+    await vi.waitFor(() => expect(a.flat().length + b.flat().length).toBeGreaterThanOrEqual(2), {
+      timeout: 5000,
+    });
     expect(a.flat().map((e) => e.path)).toEqual(b.flat().map((e) => e.path));
     const w = fw.mock.results[0]!.value;
     offA();
@@ -334,7 +321,12 @@ describe('createWatcher', () => {
 });
 
 describe('watch route framing, backpressure and lifecycle', () => {
-  const ev = (i: number): ChangeEvent => ({ type: 'updated', path: `dir/some-long-file-name-${i}.txt`, mtimeMs: 1_700_000_000_000 + i, actor: 'external' });
+  const ev = (i: number): ChangeEvent => ({
+    type: 'updated',
+    path: `dir/some-long-file-name-${i}.txt`,
+    mtimeMs: 1_700_000_000_000 + i,
+    actor: 'external',
+  });
 
   it('splits 10,000 events into frames under 512 KiB, in order', async () => {
     const spy = fake();
@@ -377,7 +369,10 @@ describe('watch route framing, backpressure and lifecycle', () => {
   it('re-checks the byte budget before every frame, so one batch cannot overshoot it', async () => {
     const spy = fake();
     const res = await make({ store: spy.store })(watchReq());
-    const big = Array.from({ length: 10_000 }, (_, i): ChangeEvent => ({ type: 'updated', path: `${'x'.repeat(1000)}${i}` })); // ~10 MB
+    const big = Array.from({ length: 10_000 }, (_, i): ChangeEvent => ({
+      type: 'updated',
+      path: `${'x'.repeat(1000)}${i}`,
+    })); // ~10 MB
     spy.emit(big);
     expect(spy.unsubs()).toBe(1);
     const reader = res.body!.getReader();

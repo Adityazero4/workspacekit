@@ -1,0 +1,502 @@
+import { FsError, type DropEntry } from '@scope/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import axe from 'axe-core';
+import { afterEach, expect, test, vi } from 'vitest';
+import { commands, userEvent } from 'vitest/browser';
+import { render } from 'vitest-browser-react';
+import '../src/styles.css';
+import { useTabs } from '../src/tabs/useTabs';
+import { isMac } from '../src/tree/keyboard';
+import { Workspace } from '../src/workspace/Workspace';
+
+const FILES = {
+  'README.md': '# Workspace',
+  'docs/api.md': 'api',
+  'docs/guide.md': 'guide',
+  'src/index.ts': 'index',
+  'src/util.ts': 'util',
+  'flaky/deeper/inside.txt': 'inside',
+  'assets/logo.svg': '<svg/>',
+};
+const LATENCY_MS = 30;
+const FAILING_LIST = 'flaky/deeper';
+const FAILING_MOVE = 'README.md';
+const MOD = isMac() ? 'Meta' : 'Control';
+const withMod = (key: string): string => `{${MOD}>}${key}{/${MOD}}`;
+const THEMES = ['light', 'dark'] as const;
+const IS_WEBKIT = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Firefox/.test(navigator.userAgent);
+
+interface Session {
+  adapter: MemoryAdapter;
+  failures: string[];
+}
+
+function withOneFailingListAndOneFailingWrite(
+  memory: MemoryAdapter,
+  failures: string[],
+  uploadsWaitFor: Promise<void>,
+): MemoryAdapter {
+  let listHasFailed = false;
+  let writeHasFailed = false;
+  return {
+    ...memory,
+    list: (path, options) => {
+      if (path !== FAILING_LIST || listHasFailed) return memory.list(path, options);
+      listHasFailed = true;
+      failures.push(`list ${path}`);
+      return Promise.reject(new FsError('network', 'The server did not answer.', { path }));
+    },
+    move: (from, to, options) => {
+      if (from !== FAILING_MOVE || writeHasFailed) return memory.move!(from, to, options);
+      writeHasFailed = true;
+      failures.push(`move ${from}`);
+      return Promise.reject(new FsError('network', 'The server did not answer.', { path: from }));
+    },
+    upload: {
+      ...memory.upload!,
+      direct: async (path, file, options) => {
+        await uploadsWaitFor;
+        return memory.upload!.direct(path, file, options);
+      },
+    },
+  };
+}
+
+function Editor({ path }: { path: string }): React.JSX.Element {
+  const tabs = useTabs();
+  return (
+    <textarea aria-label={`Contents of ${path}`} defaultValue="" onChange={() => tabs.setDirty(path, true)} />
+  );
+}
+
+interface MountOptions {
+  theme?: 'light' | 'dark';
+  defaultFollow?: boolean;
+  uploadsWaitFor?: Promise<void>;
+}
+
+async function mount(options: MountOptions = {}): Promise<Session> {
+  const memory = createMemoryAdapter({ files: FILES, latencyMs: LATENCY_MS });
+  const failures: string[] = [];
+  const adapter = withOneFailingListAndOneFailingWrite(
+    memory,
+    failures,
+    options.uploadsWaitFor ?? Promise.resolve(),
+  );
+  await render(
+    <Workspace
+      adapter={adapter}
+      theme={options.theme}
+      defaultFollow={options.defaultFollow}
+      renderViewer={(path) => <Editor path={path} />}
+      style={{ width: 960, height: 560 }}
+    />,
+  );
+  await expect.poll(rowNames).toEqual(['assets', 'docs', 'flaky', 'src', 'README.md']);
+  return { adapter: memory, failures };
+}
+
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await commands.emulateMedia({ colorScheme: null });
+});
+
+const workspace = (): HTMLElement => document.querySelector<HTMLElement>('[data-fs-part=workspace]')!;
+const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[role=treeitem]')];
+const labelOf = (row: Element): string | null | undefined =>
+  row.querySelector('[data-fs-part=tree-row-label]')?.textContent;
+const rowNames = (): Array<string | null | undefined> => rows().map(labelOf);
+const rowNamed = (name: string): HTMLElement | undefined => rows().find((row) => labelOf(row) === name);
+const focusedRowName = (): string | null | undefined =>
+  document.activeElement?.getAttribute('role') === 'treeitem' ? labelOf(document.activeElement) : undefined;
+const dialog = (): HTMLElement | null =>
+  document.querySelector<HTMLElement>('[role=dialog], [role=alertdialog]');
+const dialogTitle = (): string | null | undefined =>
+  dialog()?.querySelector('[data-fs-part=dialog-title]')?.textContent;
+const menu = (): HTMLElement | null => document.querySelector<HTMLElement>('[role=menu]');
+const tabNames = (): Array<string | null | undefined> =>
+  [...document.querySelectorAll('[role=tab]')].map(
+    (tab) => tab.querySelector('[data-fs-part=tab-label]')?.textContent,
+  );
+const activeTab = (): HTMLElement | undefined =>
+  [...document.querySelectorAll<HTMLElement>('[role=tab]')].find(
+    (tab) => tab.getAttribute('aria-selected') === 'true',
+  );
+const activeTabName = (): string | null | undefined =>
+  activeTab()?.querySelector('[data-fs-part=tab-label]')?.textContent;
+const exists = async (adapter: MemoryAdapter, path: string): Promise<boolean> =>
+  (await adapter.stat!(path)) !== null;
+const press = (keys: string): Promise<void> => userEvent.keyboard(keys);
+
+function tabKeys(direction: 'forwards' | 'backwards'): string {
+  const modifiers = [...(IS_WEBKIT ? ['Alt'] : []), ...(direction === 'backwards' ? ['Shift'] : [])];
+  return `${modifiers.map((key) => `{${key}>}`).join('')}{Tab}${modifiers
+    .map((key) => `{/${key}}`)
+    .reverse()
+    .join('')}`;
+}
+
+async function tabUntil(
+  reached: (element: Element) => boolean,
+  what: string,
+  direction: 'forwards' | 'backwards' = 'forwards',
+): Promise<void> {
+  for (let presses = 0; presses < 40; presses++) {
+    if (document.activeElement && reached(document.activeElement)) return;
+    await press(tabKeys(direction));
+  }
+  throw new Error(
+    `Tab never reached ${what}; focus is on ${document.activeElement?.outerHTML.slice(0, 120)}`,
+  );
+}
+
+const isTreeRow = (element: Element): boolean => element.getAttribute('role') === 'treeitem';
+
+async function goToRow(name: string): Promise<void> {
+  if (!isTreeRow(document.activeElement!)) await tabUntil(isTreeRow, 'the tree');
+  await press('{Home}');
+  for (let presses = 0; presses < 40 && focusedRowName() !== name; presses++) await press('{ArrowDown}');
+  expect(focusedRowName(), `arrowing down to "${name}"`).toBe(name);
+}
+
+async function expandFocusedRow(): Promise<void> {
+  const row = document.activeElement!;
+  await press('{ArrowRight}');
+  await expect.poll(() => row.getAttribute('aria-expanded')).toBe('true');
+}
+
+async function openMenuAndPick(label: string, beforePicking?: () => Promise<void>): Promise<void> {
+  await press('{Shift>}{F10}{/Shift}');
+  await expect.poll(menu).not.toBeNull();
+  await beforePicking?.();
+  for (let presses = 0; presses < 20; presses++) {
+    if (document.activeElement?.textContent?.startsWith(label)) break;
+    await press('{ArrowDown}');
+  }
+  expect(document.activeElement?.textContent).toMatch(new RegExp(`^${label}`));
+  await press('{Enter}');
+  await expect.poll(menu).toBeNull();
+}
+
+async function focusDialogButton(text: string): Promise<void> {
+  await tabUntil((element) => element.tagName === 'BUTTON' && element.textContent === text, `"${text}"`);
+}
+
+async function expectNoAxeViolations(element: HTMLElement, state: string): Promise<void> {
+  const results = await axe.run(element);
+  const described = results.violations.map(
+    (violation) =>
+      `${state}: ${violation.id}: ${violation.help} (${violation.nodes.map((node) => node.target).join(', ')})`,
+  );
+  expect.soft(described).toEqual([]);
+}
+
+async function expectNoAxeViolationsInEitherColorScheme(element: HTMLElement, state: string): Promise<void> {
+  for (const colorScheme of THEMES) {
+    await commands.emulateMedia({ colorScheme });
+    await expect.poll(() => matchMedia('(prefers-color-scheme: dark)').matches).toBe(colorScheme === 'dark');
+    const colorTransitions = document
+      .getAnimations()
+      .filter((animation) => animation instanceof CSSTransition);
+    await Promise.all(colorTransitions.map((transition) => transition.finished));
+    await expectNoAxeViolations(element, `${colorScheme} ${state}`);
+  }
+  await commands.emulateMedia({ colorScheme: null });
+}
+
+test('create a file and a folder, rename after a failed write, delete: keyboard only, through the menu and the dialogs', async () => {
+  const { adapter, failures } = await mount();
+
+  await goToRow('docs');
+  await openMenuAndPick('New file');
+  await expect.poll(dialogTitle).toMatch(/New file/);
+  await press('notes.md{Enter}');
+  await expect.poll(() => exists(adapter, 'docs/notes.md')).toBe(true);
+  await expect.poll(focusedRowName, { message: 'the new file is focused' }).toBe('notes.md');
+
+  await goToRow('src');
+  await openMenuAndPick('New folder');
+  await expect.poll(dialogTitle).toMatch(/New folder/);
+  await press('components{Enter}');
+  await expect.poll(async () => (await adapter.stat!('src/components'))?.kind).toBe('directory');
+  await expect.poll(focusedRowName, { message: 'the new folder is focused' }).toBe('components');
+
+  await goToRow('README.md');
+  await press('{F2}');
+  const renameInput = (): HTMLInputElement | null =>
+    document.querySelector<HTMLInputElement>('[data-fs-part=tree-rename-input]');
+  await expect.poll(renameInput).not.toBeNull();
+  await press(`${withMod('a')}INTRO.md{Enter}`);
+  await expect.poll(() => failures).toEqual(['move README.md']);
+  await expect
+    .poll(() => renameInput()?.value, { message: 'the field reopens with the typed name' })
+    .toBe('INTRO.md');
+  await expect.poll(() => document.activeElement).toBe(renameInput());
+  await press('{Enter}');
+  await expect.poll(() => exists(adapter, 'INTRO.md')).toBe(true);
+  expect(await exists(adapter, 'README.md')).toBe(false);
+  await expect.poll(focusedRowName).toBe('INTRO.md');
+
+  await goToRow('docs');
+  await expandFocusedRow();
+  await goToRow('api.md');
+  await press('{Delete}');
+  await expect.poll(() => dialog()?.getAttribute('role')).toBe('alertdialog');
+  await focusDialogButton('Delete');
+  await press('{Enter}');
+  await expect.poll(() => exists(adapter, 'docs/api.md')).toBe(false);
+  await expect.poll(() => rowNamed('api.md')).toBeUndefined();
+  expect(isTreeRow(document.activeElement!), 'focus is back in the tree').toBe(true);
+});
+
+test('copy, cut and paste with a conflict, and a drag move: keyboard and synthetic drag events only', async () => {
+  const { adapter } = await mount();
+
+  await goToRow('README.md');
+  await press(withMod('c'));
+  await goToRow('docs');
+  await press(withMod('v'));
+  await expect.poll(() => exists(adapter, 'docs/README.md')).toBe(true);
+  expect(await exists(adapter, 'README.md'), 'a copy keeps the original').toBe(true);
+
+  await goToRow('README.md');
+  await press(withMod('c'));
+  await goToRow('docs');
+  await press(withMod('v'));
+  await expect.poll(dialogTitle).toBe('"docs/README.md" already exists');
+  await expect
+    .poll(() => document.activeElement?.textContent, { message: 'Keep both has focus' })
+    .toBe('Keep both');
+  await press('{Enter}');
+  await expect.poll(() => exists(adapter, 'docs/README copy.md')).toBe(true);
+
+  await goToRow('src');
+  await expandFocusedRow();
+  await goToRow('util.ts');
+  await press(withMod('x'));
+  await expect.poll(() => rowNamed('util.ts')?.hasAttribute('data-cut')).toBe(true);
+  await goToRow('docs');
+  await press(withMod('v'));
+  await expect.poll(() => exists(adapter, 'docs/util.ts')).toBe(true);
+  expect(await exists(adapter, 'src/util.ts')).toBe(false);
+
+  const dataTransfer = new DataTransfer();
+  const fire = (target: Element, type: string): void => {
+    const event = new DragEvent(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+    target.dispatchEvent(event);
+  };
+  fire(rowNamed('assets')!, 'dragstart');
+  for (const type of ['dragenter', 'dragover', 'drop']) fire(rowNamed('src')!, type);
+  fire(rowNamed('assets') ?? workspace(), 'dragend');
+  await expect.poll(() => exists(adapter, 'src/assets/logo.svg')).toBe(true);
+  expect(await exists(adapter, 'assets')).toBe(false);
+});
+
+const fileEntry = (fullPath: string): DropEntry => ({
+  isFile: true,
+  isDirectory: false,
+  name: fullPath.split('/').at(-1)!,
+  fullPath,
+  file: (ok) => ok(new File([fullPath], fullPath.split('/').at(-1)!)),
+});
+const folderEntry = (fullPath: string, children: DropEntry[]): DropEntry => {
+  let read = false;
+  return {
+    isFile: false,
+    isDirectory: true,
+    name: fullPath.split('/').at(-1)!,
+    fullPath,
+    createReader: () => ({
+      readEntries: (ok) => {
+        ok(read ? [] : children);
+        read = true;
+      },
+    }),
+  };
+};
+const folderTransfer = (entries: DropEntry[]): DataTransfer =>
+  ({
+    types: ['Files'],
+    dropEffect: 'none',
+    items: entries.map((entry) => ({ kind: 'file', webkitGetAsEntry: () => entry, getAsFile: () => null })),
+    files: [],
+  }) as unknown as DataTransfer;
+
+const pickedFilesWithRelativePaths = (paths: string[]): File[] =>
+  paths.map((path) => {
+    const file = new File([path], path.split('/').at(-1)!);
+    Object.defineProperty(file, 'webkitRelativePath', { value: path });
+    return file;
+  });
+
+function pick(input: HTMLInputElement, files: File[]): void {
+  Object.defineProperty(input, 'files', { value: files, configurable: true });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+test('upload files and a folder through the keyboard menu, and a folder through a synthetic drop', async () => {
+  let releaseUploads = (): void => {};
+  const uploadsWaitFor = new Promise<void>((resolve) => (releaseUploads = resolve));
+  const { adapter } = await mount({ uploadsWaitFor });
+  const pickers: HTMLInputElement[] = [];
+  vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (this: HTMLInputElement) {
+    pickers.push(this);
+  });
+
+  await goToRow('docs');
+  await openMenuAndPick('Upload files');
+  await expect.poll(() => pickers.length).toBe(1);
+  pick(pickers[0]!, [new File(['one'], 'one.txt'), new File(['two'], 'two.txt')]);
+  await expect.poll(() => document.querySelector('[data-fs-part=upload-progress]')).not.toBeNull();
+  await expect.poll(() => document.querySelector('[data-fs-part=tree-row-placeholder]')).not.toBeNull();
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'upload in progress');
+  releaseUploads();
+  await expect.poll(() => exists(adapter, 'docs/two.txt')).toBe(true);
+  expect(await exists(adapter, 'docs/one.txt')).toBe(true);
+
+  await goToRow('docs');
+  await openMenuAndPick('Upload folder');
+  await expect.poll(() => pickers.length).toBe(2);
+  expect(pickers[1]!.hasAttribute('webkitdirectory')).toBe(true);
+  pick(pickers[1]!, pickedFilesWithRelativePaths(['shots/cat.png', 'shots/raw/dog.png']));
+  await expect.poll(() => exists(adapter, 'docs/shots/raw/dog.png')).toBe(true);
+  expect(await exists(adapter, 'docs/shots/cat.png')).toBe(true);
+
+  const photos = folderTransfer([
+    folderEntry('/photos', [
+      fileEntry('/photos/cat.png'),
+      folderEntry('/photos/raw', [fileEntry('/photos/raw/dog.png')]),
+    ]),
+  ]);
+  const target = document.activeElement!;
+  for (const type of ['dragenter', 'dragover', 'drop']) {
+    const event = new DragEvent(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: photos });
+    target.dispatchEvent(event);
+  }
+  await expect.poll(() => exists(adapter, 'docs/photos/raw/dog.png')).toBe(true);
+  expect(await exists(adapter, 'docs/photos/cat.png')).toBe(true);
+  await expect
+    .poll(() => document.querySelector('[data-fs-part=upload-summary]')?.textContent)
+    .toBe('Uploaded 2 files to "docs".');
+  await expect.poll(() => rowNamed('photos')).toBeDefined();
+});
+
+test('a failed listing shows an error row and loads on the next expand', async () => {
+  const { failures } = await mount();
+  await goToRow('flaky');
+  await expandFocusedRow();
+  await goToRow('deeper');
+  await press('{ArrowRight}');
+  await expect.poll(() => rowNamed('deeper')?.getAttribute('data-status')).toBe('error');
+  expect(failures).toEqual([`list ${FAILING_LIST}`]);
+  await expect.element(rowNamed('deeper')!).toHaveAccessibleDescription('The server did not answer.');
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'error row');
+  await press('{ArrowLeft}');
+  await press('{ArrowRight}');
+  await expect.poll(() => rowNamed('inside.txt')).toBeDefined();
+  expect(rowNamed('deeper')!.hasAttribute('data-status')).toBe(false);
+});
+
+test('search reveals a file deep in the tree and previews it; Enter pins; a dirty tab asks before closing', async () => {
+  await mount();
+  await tabUntil((element) => element.getAttribute('data-fs-part') === 'search-input', 'the search box');
+  await press('guide');
+  await expect.poll(() => document.querySelectorAll('[role=option]').length).toBe(1);
+  await press('{ArrowDown}{Enter}');
+  await expect.poll(focusedRowName, { message: 'the reveal focuses the row' }).toBe('guide.md');
+  await expect.poll(activeTabName).toBe('guide.md');
+  expect(activeTab()!.hasAttribute('data-preview'), 'search opens a preview').toBe(true);
+
+  await goToRow('src');
+  await expandFocusedRow();
+  await goToRow('index.ts');
+  await press('{Enter}');
+  await expect.poll(activeTabName).toBe('index.ts');
+  expect(activeTab()!.hasAttribute('data-preview'), 'Enter pins').toBe(false);
+  expect(tabNames()).toEqual(['guide.md', 'index.ts']);
+
+  await tabUntil(
+    (element) => element.getAttribute('aria-label') === 'Contents of src/index.ts',
+    'the editor',
+  );
+  await press('edited');
+  await expect.poll(() => activeTab()?.hasAttribute('data-dirty')).toBe(true);
+  await expectNoAxeViolationsInEitherColorScheme(
+    document.querySelector<HTMLElement>('[role=tablist]')!,
+    'tab strip with a preview and a dirty tab',
+  );
+  await tabUntil((element) => element.getAttribute('role') === 'tab', 'the tab strip', 'backwards');
+  await press('{End}');
+  await press('{Delete}');
+  await expect.poll(() => dialog()?.getAttribute('role')).toBe('alertdialog');
+  expect(dialog()!.textContent).toContain('index.ts');
+  await focusDialogButton('Close without saving');
+  await press('{Enter}');
+  await expect.poll(tabNames).toEqual(['guide.md']);
+});
+
+test('follow keeps up with a burst of agent changes without taking keyboard focus', async () => {
+  const { adapter } = await mount({ defaultFollow: true });
+  await goToRow('README.md');
+  const burst = Array.from(
+    { length: 300 },
+    (_, index) => `src/generated-${String(index).padStart(3, '0')}.ts`,
+  );
+  await Promise.all(burst.map((path) => adapter.write!(path, 'generated')));
+  adapter.emit(burst.map((path) => ({ type: 'updated' as const, path, actor: 'agent' as const })));
+  await expect.poll(activeTabName, { timeout: 5000 }).toBe('generated-299.ts');
+  expect(focusedRowName(), 'focus stays on the row the user is on').toBe('README.md');
+  await expect.poll(() => rowNamed('generated-299.ts')?.getAttribute('aria-selected')).toBe('true');
+  expect(tabNames()).toHaveLength(1);
+
+  await tabUntil(
+    (element) => element.getAttribute('role') === 'toolbar' || element.closest('[role=toolbar]') !== null,
+    'the toolbar',
+    'backwards',
+  );
+  await press('{End}');
+  const follow = document.activeElement!;
+  expect(follow.getAttribute('aria-label')).toBe('Follow agent changes');
+  await press('{Enter}');
+  await expect.poll(() => follow.getAttribute('aria-pressed')).toBe('false');
+  adapter.emit([{ type: 'updated', path: 'src/index.ts', actor: 'agent' }]);
+  await expect.poll(() => rowNamed('index.ts')?.hasAttribute('data-changed')).toBe(true);
+  expect(activeTabName(), 'follow is off').toBe('generated-299.ts');
+});
+
+test.each(THEMES)(
+  'axe: no violations with the menu, a dialog, the conflict dialog and search results open (%s)',
+  async (theme) => {
+    const { adapter } = await mount({ theme });
+
+    await goToRow('docs');
+    await openMenuAndPick('New file', () => expectNoAxeViolations(workspace(), `${theme} menu open`));
+    await expect.poll(dialog).not.toBeNull();
+    await expectNoAxeViolations(workspace(), `${theme} new file dialog`);
+    await press('{Escape}');
+    await expect.poll(dialog).toBeNull();
+
+    await goToRow('README.md');
+    await press(withMod('c'));
+    await goToRow('docs');
+    await press(withMod('v'));
+    await expect.poll(() => exists(adapter, 'docs/README.md')).toBe(true);
+    await press(withMod('v'));
+    await expect.poll(dialogTitle).toBe('"docs/README.md" already exists');
+    await expectNoAxeViolations(workspace(), `${theme} conflict dialog`);
+    await press('{Escape}');
+    await expect.poll(dialog).toBeNull();
+
+    await tabUntil(
+      (element) => element.getAttribute('data-fs-part') === 'search-input',
+      'the search box',
+      'backwards',
+    );
+    await press('md');
+    await expect.poll(() => document.querySelectorAll('[role=option]').length).toBeGreaterThan(1);
+    await press('{ArrowDown}');
+    await expectNoAxeViolations(workspace(), `${theme} search results`);
+  },
+);

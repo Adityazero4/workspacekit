@@ -5,3 +5,4 @@ internal/
 *.tsbuildinfo
 .DS_Store
 .superpowers/
+.vitest

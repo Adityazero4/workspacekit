@@ -46,14 +46,41 @@ test('validateTransfer', () => {
 });
 
 test('validateName rejects bidi, zero-width and other invisible format characters', () => {
-  for (const ch of ['\u202E', '\u202A', '\u2066', '\u200B', '\u200E', '\u200F', '\u2060', '\uFEFF', '\u007F', '\u0085'])
+  for (const ch of [
+    '\u202E',
+    '\u202A',
+    '\u2066',
+    '\u200B',
+    '\u200E',
+    '\u200F',
+    '\u2060',
+    '\uFEFF',
+    '\u007F',
+    '\u0085',
+  ]) {
     expect(validateName(`a${ch}b.txt`, new Set())).toBe('invalid_chars');
+  }
   expect(validateName('family \u{1F468}\u200D\u{1F469}.txt', new Set())).toBeNull(); // ZWJ emoji allowed
 });
 
 test('validateName rejects all format/invisible characters except scoped joiners', () => {
-  for (const ch of ['\u00AD', '\u061C', '\u180E', '\u2028', '\u2029', '\u206F', '\u115F', '\u1160', '\u3164', '\uFFA0', '\u2800', '\u034F', '\u{E0001}'])
+  for (const ch of [
+    '\u00AD',
+    '\u061C',
+    '\u180E',
+    '\u2028',
+    '\u2029',
+    '\u206F',
+    '\u115F',
+    '\u1160',
+    '\u3164',
+    '\uFFA0',
+    '\u2800',
+    '\u034F',
+    '\u{E0001}',
+  ]) {
     expect(validateName(`a${ch}b.txt`, new Set())).toBe('invalid_chars');
+  }
   expect(validateName('family \u{1F468}\u200D\u{1F469}.txt', new Set())).toBeNull();
 });
 
@@ -65,8 +92,9 @@ test('validateName allows ZWNJ inside names and treats joiner-only names as empt
 });
 
 test('validateName rejects trailing dot/space and Windows reserved device names', () => {
-  for (const n of ['name.', 'name ', 'CON', 'con.txt', 'NUL', 'com1.log', 'LPT9', 'aux.md'])
+  for (const n of ['name.', 'name ', 'CON', 'con.txt', 'NUL', 'com1.log', 'LPT9', 'aux.md']) {
     expect(validateName(n, new Set())).toBe('reserved');
+  }
   expect(validateName('console.txt', new Set())).toBeNull();
 });
 
@@ -80,5 +108,7 @@ test('joiners are only allowed between two non-ASCII characters', () => {
 
 test('names differing only by joiners are duplicates', () => {
   expect(validateName('\u0645\u06CC\u062E.txt', new Set(['\u0645\u06CC\u200C\u062E.txt']))).toBe('duplicate');
-  expect(uniqueName('\u0645\u06CC\u200C\u062E.txt', new Set(['\u0645\u06CC\u062E.txt']))).toBe('\u0645\u06CC\u200C\u062E copy.txt');
+  expect(uniqueName('\u0645\u06CC\u200C\u062E.txt', new Set(['\u0645\u06CC\u062E.txt']))).toBe(
+    '\u0645\u06CC\u200C\u062E copy.txt',
+  );
 });

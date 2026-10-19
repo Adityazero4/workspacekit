@@ -1,0 +1,168 @@
+/**
+ * Every styleable element carries `data-fs-part="<part>"`; these are the valid part names.
+ *
+ * @example
+ * ```ts
+ * import { PARTS } from '@scope/react';
+ * PARTS.includes('tree-row'); // true
+ * ```
+ */
+export const PARTS: readonly [
+  'tree-viewport',
+  'tree',
+  'tree-row',
+  'tree-row-label',
+  'tree-row-icon',
+  'tree-chevron',
+  'tree-badge',
+  'tree-trailing',
+  'tree-row-error',
+  'tree-sticky',
+  'tree-sticky-row',
+  'tree-empty',
+  'tree-rename-input',
+  'tree-rename-error',
+  'tree-row-more',
+  'tree-row-placeholder',
+  'search',
+  'search-input',
+  'search-status',
+  'search-viewport',
+  'search-results',
+  'search-result',
+  'search-result-name',
+  'search-result-path',
+  'search-match',
+  'menu',
+  'menu-anchor',
+  'menu-item',
+  'menu-item-danger',
+  'menu-item-icon',
+  'menu-item-label',
+  'menu-shortcut',
+  'menu-separator',
+  'dialog-overlay',
+  'dialog',
+  'dialog-title',
+  'dialog-description',
+  'dialog-form',
+  'dialog-label',
+  'dialog-input',
+  'dialog-checkbox',
+  'dialog-message',
+  'dialog-actions',
+  'dialog-button',
+  'dialog-button-danger',
+  'tabs',
+  'tab',
+  'tab-label',
+  'tab-close',
+  'workspace',
+  'workspace-files',
+  'workspace-files-toggle',
+  'workspace-viewer',
+  'split-pane',
+  'workspace-pane',
+  'workspace-separator',
+  'toolbar',
+  'toolbar-button',
+  'upload-status',
+  'upload-summary',
+  'upload-list',
+  'upload-run',
+  'upload-label',
+  'upload-progress',
+  'upload-button',
+  'upload-input',
+  'drop-overlay',
+  'viewer-placeholder',
+] = [
+  'tree-viewport',
+  'tree',
+  'tree-row',
+  'tree-row-label',
+  'tree-row-icon',
+  'tree-chevron',
+  'tree-badge',
+  'tree-trailing',
+  'tree-row-error',
+  'tree-sticky',
+  'tree-sticky-row',
+  'tree-empty',
+  'tree-rename-input',
+  'tree-rename-error',
+  'tree-row-more',
+  'tree-row-placeholder',
+  'search',
+  'search-input',
+  'search-status',
+  'search-viewport',
+  'search-results',
+  'search-result',
+  'search-result-name',
+  'search-result-path',
+  'search-match',
+  'menu',
+  'menu-anchor',
+  'menu-item',
+  'menu-item-danger',
+  'menu-item-icon',
+  'menu-item-label',
+  'menu-shortcut',
+  'menu-separator',
+  'dialog-overlay',
+  'dialog',
+  'dialog-title',
+  'dialog-description',
+  'dialog-form',
+  'dialog-label',
+  'dialog-input',
+  'dialog-checkbox',
+  'dialog-message',
+  'dialog-actions',
+  'dialog-button',
+  'dialog-button-danger',
+  'tabs',
+  'tab',
+  'tab-label',
+  'tab-close',
+  'workspace',
+  'workspace-files',
+  'workspace-files-toggle',
+  'workspace-viewer',
+  'split-pane',
+  'workspace-pane',
+  'workspace-separator',
+  'toolbar',
+  'toolbar-button',
+  'upload-status',
+  'upload-summary',
+  'upload-list',
+  'upload-run',
+  'upload-label',
+  'upload-progress',
+  'upload-button',
+  'upload-input',
+  'drop-overlay',
+  'viewer-placeholder',
+];
+
+/**
+ * A styleable part name.
+ *
+ * @example
+ * ```ts
+ * const part: Part = 'tree-row';
+ * ```
+ */
+export type Part = (typeof PARTS)[number];
+
+/**
+ * Extra class names per part, merged after the part's own class.
+ *
+ * @example
+ * ```ts
+ * const classNames: ClassNames = { 'tree-row': 'my-row', tab: 'my-tab' };
+ * ```
+ */
+export type ClassNames = Partial<Record<Part, string>>;

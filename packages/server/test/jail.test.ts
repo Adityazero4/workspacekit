@@ -24,13 +24,22 @@ beforeEach(async () => {
 afterEach(() => rm(base, { recursive: true, force: true }));
 
 async function kind(p: Promise<unknown>): Promise<FsErrorKind | undefined> {
-  const e = await p.then(() => undefined, (err: unknown) => err);
+  const e = await p.then(
+    () => undefined,
+    (err: unknown) => err,
+  );
   return isFsError(e) ? e.kind : undefined;
 }
 
 describe('resolveInRoot', () => {
   it('rejects .., absolute, NUL', async () => {
-    for (const bad of ['../outside/secret.txt', 'real/../../outside', '/etc/passwd', 'real/a\0b', 'real\\..\\x']) {
+    for (const bad of [
+      '../outside/secret.txt',
+      'real/../../outside',
+      '/etc/passwd',
+      'real/a\0b',
+      'real\\..\\x',
+    ]) {
       expect(['forbidden', 'invalid']).toContain(await kind(resolveInRoot(root, bad)));
     }
   });
@@ -51,8 +60,12 @@ describe('resolveInRoot', () => {
     expect(await kind(resolveInRoot(root, 'link/new.txt', { forCreate: true }))).toBe('forbidden');
     expect(await kind(resolveInRoot(root, 'link/a/b/new.txt', { forCreate: true }))).toBe('forbidden');
     expect(await kind(resolveInRoot(root, 'dangling/x', { forCreate: true }))).toBe('forbidden');
-    expect(await resolveInRoot(root, 'real/a/b.txt', { forCreate: true })).toBe(path.join(root, 'real', 'a', 'b.txt'));
-    expect(await resolveInRoot(root, 'alias/new.txt', { forCreate: true })).toBe(path.join(root, 'real', 'new.txt'));
+    expect(await resolveInRoot(root, 'real/a/b.txt', { forCreate: true })).toBe(
+      path.join(root, 'real', 'a', 'b.txt'),
+    );
+    expect(await resolveInRoot(root, 'alias/new.txt', { forCreate: true })).toBe(
+      path.join(root, 'real', 'new.txt'),
+    );
   });
 
   it('requires existence unless forCreate; the root is allowed', async () => {

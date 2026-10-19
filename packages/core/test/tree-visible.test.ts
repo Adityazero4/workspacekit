@@ -1,6 +1,15 @@
 import { expect, test } from 'vitest';
 import { basename, parentPath } from '../src/path';
-import { applyBatch, emptyTree, flattenVisible, mergeListing, type SortSpec, type TreeData, type TreeOp, type VisibleRow } from '../src/tree/model';
+import {
+  applyBatch,
+  emptyTree,
+  flattenVisible,
+  mergeListing,
+  type SortSpec,
+  type TreeData,
+  type TreeOp,
+  type VisibleRow,
+} from '../src/tree/model';
 import { createVisibleRowIndex, type VisibleRowIndex } from '../src/tree/visible';
 import type { Entry } from '../src/types';
 
@@ -10,7 +19,8 @@ const byName: SortSpec = { by: 'name', direction: 'asc' };
 const SORTS: SortSpec[] = (['name', 'extension', 'mtime', 'size'] as const).flatMap((by) =>
   (['asc', 'desc'] as const).map((direction) => ({ by, direction })),
 );
-const rowsOf = (idx: VisibleRowIndex): VisibleRow[] => Array.from({ length: idx.count }, (_, i) => idx.rowAt(i));
+const rowsOf = (idx: VisibleRowIndex): VisibleRow[] =>
+  Array.from({ length: idx.count }, (_, i) => idx.rowAt(i));
 
 function sample(): TreeData {
   let t = mergeListing(emptyTree(), '', 2, [dir('a'), dir('a/b'), file('a/x.txt'), file('top.md')]);
@@ -21,7 +31,15 @@ function sample(): TreeData {
 test('rowAt, indexOf and ancestorsAt on a small tree', () => {
   const t = sample();
   const idx = createVisibleRowIndex(t, { root: '', expanded: new Set(['a', 'a/b', 'a/b/c']), sort: byName });
-  expect(rowsOf(idx).map((r) => r.path)).toEqual(['a', 'a/b', 'a/b/c', 'a/b/c/d.txt', 'a/b/e.txt', 'a/x.txt', 'top.md']);
+  expect(rowsOf(idx).map((r) => r.path)).toEqual([
+    'a',
+    'a/b',
+    'a/b/c',
+    'a/b/c/d.txt',
+    'a/b/e.txt',
+    'a/x.txt',
+    'top.md',
+  ]);
   expect(idx.indexOf('a/b/e.txt')).toBe(4);
   expect(idx.indexOf('a/b/c/d.txt')).toBe(3);
   expect(idx.indexOf('')).toBe(-1);
@@ -41,7 +59,10 @@ test('rowAt, indexOf and ancestorsAt on a small tree', () => {
 
 test('expanded folders that are not loaded, loading or errored contribute zero rows but keep their status', () => {
   let t = mergeListing(emptyTree(), '', 1, [dir('a'), dir('b'), dir('c')]);
-  t = applyBatch(t, [{ kind: 'status', path: 'b', status: 'loading' }, { kind: 'status', path: 'c', status: 'error' }]);
+  t = applyBatch(t, [
+    { kind: 'status', path: 'b', status: 'loading' },
+    { kind: 'status', path: 'c', status: 'error' },
+  ]);
   const idx = createVisibleRowIndex(t, { root: '', expanded: new Set(['a', 'b', 'c']), sort: byName });
   expect(rowsOf(idx).map((r) => [r.path, r.isExpanded, r.status])).toEqual([
     ['a', true, 'idle'],
@@ -51,9 +72,40 @@ test('expanded folders that are not loaded, loading or errored contribute zero r
   expect(idx.indexOf('c')).toBe(2);
 });
 
+/** The reference for `hide`: the same tree with hidden entries dropped from every listing (their subtrees become unreachable). */
+const without = (t: TreeData, hide: ((e: Entry) => boolean) | undefined): TreeData =>
+  hide
+    ? {
+        folders: new Map(
+          [...t.folders].map(([k, n]) => [
+            k,
+            { ...n, children: new Map([...n.children].filter(([, e]) => !hide(e))) },
+          ]),
+        ),
+      }
+    : t;
+
+test('hide drops entries and their subtrees from count, rows, posInSet, setSize and indexOf', () => {
+  const t = sample();
+  const expanded = new Set(['a', 'a/b', 'a/b/c']);
+  const hide = (e: Entry): boolean => e.name === 'b' || e.name === 'top.md';
+  const idx = createVisibleRowIndex(t, { root: '', expanded, sort: byName, hide });
+  expect(rowsOf(idx).map((r) => [r.path, r.posInSet, r.setSize])).toEqual([
+    ['a', 1, 1],
+    ['a/x.txt', 1, 1],
+  ]);
+  expect(idx.indexOf('a/b')).toBe(-1);
+  expect(idx.indexOf('a/b/e.txt')).toBe(-1);
+  // reusing an index built with another `hide` must not keep its counts
+  const shown = createVisibleRowIndex(t, { root: '', expanded, sort: byName }, idx);
+  expect(shown.count).toBe(7);
+  expect(createVisibleRowIndex(t, { root: '', expanded, sort: byName, hide }, shown).count).toBe(2);
+});
+
 // Random trees from random op batches (detached nodes, stale listings, statuses), random expanded sets that include
-// unloaded folders, files and missing paths, random roots, every sort spec; each index is built from the previous one.
-test('random trees: rowAt matches flattenVisible, indexOf inverts it, ancestorsAt is the open chain', () => {
+// unloaded folders, files and missing paths, random roots, every sort spec, random `hide` predicates (kept across steps
+// or replaced); each index is built from the previous one.
+test('random trees: rowAt matches flattenVisible minus hidden subtrees, indexOf inverts it, ancestorsAt is the open chain', () => {
   let seed = 11; // mulberry32: every bit is usable, unlike a power-of-two LCG's low bits
   const rnd = (n: number): number => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -62,11 +114,21 @@ test('random trees: rowAt matches flattenVisible, indexOf inverts it, ancestorsA
     return Math.floor((((x ^ (x >>> 14)) >>> 0) / 4294967296) * n);
   };
   const NAMES = ['a', 'b', 'c.md', 'd.txt', 'e10', 'e9', 'F.ts'];
-  const rp = (max: number): string => Array.from({ length: 1 + rnd(max) }, () => NAMES[rnd(NAMES.length)]).join('/');
-  const ent = (path: string, kind: Entry['kind']): Entry => ({ path, name: basename(path), kind, mtimeMs: rnd(3), size: rnd(3) });
+  const rp = (max: number): string =>
+    Array.from({ length: 1 + rnd(max) }, () => NAMES[rnd(NAMES.length)]).join('/');
+  const ent = (path: string, kind: Entry['kind']): Entry => ({
+    path,
+    name: basename(path),
+    kind,
+    mtimeMs: rnd(3),
+    size: rnd(3),
+  });
   let t = emptyTree();
-  const pick = <T,>(xs: T[], fallback: () => T): T => (xs.length && rnd(5) ? xs[rnd(xs.length)]! : fallback());
-  const dirs = (): string[] => [...t.folders.values()].flatMap((n) => [...n.children.values()].filter((e) => e.kind === 'directory').map((e) => e.path));
+  const pick = <T>(xs: T[], fallback: () => T): T => (xs.length && rnd(5) ? xs[rnd(xs.length)]! : fallback());
+  const dirs = (): string[] =>
+    [...t.folders.values()].flatMap((n) =>
+      [...n.children.values()].filter((e) => e.kind === 'directory').map((e) => e.path),
+    );
   const under = (parent: string, name: string): string => (parent ? `${parent}/${name}` : name);
   const op = (): TreeOp => {
     const r = rnd(10);
@@ -83,13 +145,26 @@ test('random trees: rowAt matches flattenVisible, indexOf inverts it, ancestorsA
       }
       return { kind: 'listing', folder, depth, entries: [...listed.values()] };
     }
-    if (r < 7) return { kind: 'status', path: any(), status: (['loading', 'loaded', 'error', 'idle'] as const)[rnd(4)]! };
-    if (r < 8) return { kind: 'upsert', entry: ent(rnd(2) ? under(any(), rp(1)) : rp(3), rnd(2) ? 'directory' : 'file') };
+    if (r < 7) {
+      return {
+        kind: 'status',
+        path: any(),
+        status: (['loading', 'loaded', 'error', 'idle'] as const)[rnd(4)]!,
+      };
+    }
+    if (r < 8) {
+      return {
+        kind: 'upsert',
+        entry: ent(rnd(2) ? under(any(), rp(1)) : rp(3), rnd(2) ? 'directory' : 'file'),
+      };
+    }
     if (r < 9) return { kind: 'remove', path: any() };
     return { kind: 'move', from: any(), to: rp(2) };
   };
 
   let expanded = new Set<string>();
+  let hide: ((e: Entry) => boolean) | undefined;
+  let hidSome = false;
   let prev: VisibleRowIndex | undefined;
   const sortsSeen = new Set<string>();
   for (let step = 0; step < 3000; step++) {
@@ -108,15 +183,26 @@ test('random trees: rowAt matches flattenVisible, indexOf inverts it, ancestorsA
     const root = rnd(6) ? '' : rp(2);
     const sort = rnd(4) ? byName : SORTS[rnd(SORTS.length)]!;
     sortsSeen.add(`${sort.by}:${sort.direction}`);
+    const h = rnd(10);
+    if (h === 0) hide = undefined;
+    else if (h === 1) {
+      const names = new Set(NAMES.filter(() => rnd(3) === 0));
+      hide = rnd(2) ? (e) => names.has(e.name) : (e) => e.kind === 'directory' && names.has(e.name);
+    }
     const opts = { root, expanded, sort };
-    const idx = createVisibleRowIndex(t, opts, rnd(5) ? prev : undefined);
+    const idx = createVisibleRowIndex(t, hide ? { ...opts, hide } : opts, rnd(5) ? prev : undefined);
     prev = idx;
 
-    const flat = flattenVisible(t, opts);
+    const flat = flattenVisible(without(t, hide), opts);
+    if (hide && flat.length < flattenVisible(t, opts).length) hidSome = true;
     expect(idx.count).toBe(flat.length);
     expect(rowsOf(idx)).toEqual(flat);
     const at = new Map(flat.map((r, i) => [r.path, i]));
-    const candidates = [root, rp(3), ...[...t.folders.values()].flatMap((n) => [n.path, ...[...n.children.values()].map((e) => e.path)])];
+    const candidates = [
+      root,
+      rp(3),
+      ...[...t.folders.values()].flatMap((n) => [n.path, ...[...n.children.values()].map((e) => e.path)]),
+    ];
     for (const p of candidates) expect(idx.indexOf(p)).toBe(at.get(p) ?? -1);
     flat.forEach((r, i) => {
       const chain: VisibleRow[] = [];
@@ -125,4 +211,5 @@ test('random trees: rowAt matches flattenVisible, indexOf inverts it, ancestorsA
     });
   }
   expect(sortsSeen.size).toBe(SORTS.length);
+  expect(hidSome).toBe(true);
 });

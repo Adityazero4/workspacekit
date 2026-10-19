@@ -1,6 +1,12 @@
 import type { ChangeEvent, Entry, EntryKind, TransferOptions } from '@scope/core';
 
-/** Storage backend the HTTP handler talks to. Paths are normalized, `/`-separated, root is `''`. */
+/**
+ * Storage backend the HTTP handler talks to. Paths are normalized, `/`-separated, root is `''`.
+ *
+ * @example
+ * const store: FileStore = nodeFsStore('/srv/workspace');
+ * const entries = await store.list('', 1);
+ */
 export interface FileStore {
   list(path: string, depth: number): Promise<Entry[]>;
   stat(path: string): Promise<Entry | null>;
