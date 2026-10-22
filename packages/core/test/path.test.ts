@@ -20,6 +20,35 @@ test('normalizePath', () => {
   expect(() => normalizePath('a\0b')).toThrow(FsError);
 });
 
+test('normalizePath returns canonical paths unchanged and still checks the ones that only look canonical', () => {
+  for (const canonical of [
+    'a',
+    'src/app/main.ts',
+    'd0/f-12_x.txt',
+    'a b/c d',
+    'x./y ',
+    '-x',
+    '.env',
+    'a/.git',
+  ]) {
+    expect(normalizePath(canonical), JSON.stringify(canonical)).toBe(canonical);
+  }
+  for (const [path, normalized] of [
+    ['a//b', 'a/b'],
+    ['a/', 'a'],
+    ['/a', 'a'],
+    ['a/./b', 'a/b'],
+    ['a/b/..', 'a'],
+  ]) {
+    expect(normalizePath(path!), JSON.stringify(path)).toBe(normalized);
+  }
+  for (const invalid of ['a/ /b', 'a/. /b', ' ', 'a/...', 'a/ .']) {
+    expect(() => normalizePath(invalid), JSON.stringify(invalid)).toThrow(
+      expect.objectContaining({ kind: 'invalid' }),
+    );
+  }
+});
+
 test('normalizePath error kinds', () => {
   expect(() => normalizePath('a/../../x')).toThrow(expect.objectContaining({ kind: 'forbidden' }));
   expect(() => normalizePath('a\0b')).toThrow(expect.objectContaining({ kind: 'invalid' }));

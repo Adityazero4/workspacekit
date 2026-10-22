@@ -466,7 +466,7 @@ test('a failed followMove keeps a clean tab open at the source', async () => {
   const failing: FileSystemAdapter = {
     ...adapter,
     move: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await Promise.resolve();
       throw new FsError('unknown', 'the server refused');
     },
   };
@@ -511,9 +511,10 @@ test('renaming a to b and then c to a while the first is in flight keeps both fo
     await ctx().store.loadFolder('');
     ctx().expanded.set(new Set(['a', 'c']));
   });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  });
+  for (const folder of ['a', 'c']) {
+    await vi.waitFor(() => expect(statusOf(ctx().store.getSnapshot().tree, folder)).toBe('loaded'));
+  }
+  await settle();
   await act(async () => {
     await Promise.all([
       followMove(ctx(), 'a', 'b', () => ctx().store.rename('a', 'b')),

@@ -12,6 +12,7 @@ import { FileSystemProvider } from '../src/provider/FileSystemProvider';
 import { useFileSystem, type FileSystemContext, type Notice } from '../src/provider/hooks';
 import { FileTree, type FileTreeProps } from '../src/tree/FileTree';
 import { isMac } from '../src/tree/keyboard';
+import { interactionSettled } from './support/interactionSettled';
 
 const ROW_HEIGHT = 24;
 const MOD = isMac() ? 'Meta' : 'Control';
@@ -57,7 +58,6 @@ afterEach(async () => {
   await commands.emulateMedia({ colorScheme: null });
 });
 
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 100));
 const rightClickWithoutAPointer = (element: HTMLElement): MouseEvent => {
   const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 });
   element.dispatchEvent(event);
@@ -340,7 +340,7 @@ test('a click on another row closes the menu and leaves focus and selection on t
   await userEvent.click(rowNamed('a.txt'));
   await expect.poll(menu).toBeNull();
   await expect.poll(() => fs.selected.get()).toBe('a.txt');
-  await settle();
+  await interactionSettled();
   expect(active(), 'focus stays where the user clicked').toBe('a.txt');
 });
 
@@ -353,7 +353,7 @@ test('scrolling the tree closes the menu, whose anchor scrolled away, keeps the 
   const viewport = document.querySelector<HTMLElement>('[data-fs-part=tree-viewport]')!;
   viewport.scrollTop = 20 * ROW_HEIGHT;
   await expect.poll(menu).toBeNull();
-  await settle();
+  await interactionSettled();
   expect(viewport.scrollTop, 'the scroll is not undone by a focus return').toBe(20 * ROW_HEIGHT);
   expect(active(), 'focus is back on the row the menu came from').toBe('f02.txt');
   await userEvent.keyboard('{ArrowDown}');
@@ -410,7 +410,7 @@ test('an entry with no applicable action opens no menu and keeps the browser men
   await mount({ 'a.txt': '' }, { canPerform: () => false });
   const event = rightClickWithoutAPointer(rowNamed('a.txt'));
   await userEvent.click(moreButton('a.txt'));
-  await settle();
+  await interactionSettled();
   expect(menu()).toBeNull();
   expect(event.defaultPrevented, 'the native context menu is not suppressed').toBe(false);
 });
@@ -423,7 +423,7 @@ test('a menu whose row disappears closes and does not come back with the row', a
   await expect.poll(menu).toBeNull();
   await adapter.create!('a.txt', 'file');
   await expect.poll(rowNames).toEqual(['a.txt', 'b.txt']);
-  await settle();
+  await interactionSettled();
   expect(menu(), 'the closed overlay is not stuck on a.txt').toBeNull();
   await openContextMenu('b.txt');
   expect(menuLabels()).toContain('Copy');
@@ -448,7 +448,7 @@ test('a held-down shortcut runs once', async () => {
   pasteKey(true);
   pasteKey(true);
   await expect.poll(rowNames).toContain('a copy.txt');
-  await settle();
+  await interactionSettled();
   expect(rowNames()).toEqual(['a copy.txt', 'a.txt']);
 });
 

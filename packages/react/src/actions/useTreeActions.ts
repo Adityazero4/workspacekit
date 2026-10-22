@@ -134,6 +134,46 @@ async function runReportingFailures(
   }
 }
 
+function focusedRowReceiving(tree: FileTreeApi, event: KeyboardEvent): VisibleRow | undefined {
+  const isOnARow = (event.target as Element).getAttribute('role') === 'treeitem';
+  if (event.defaultPrevented || event.repeat || !isOnARow || tree.focusedPath === null) return undefined;
+  const rowIndex = tree.index.indexOf(tree.focusedPath);
+  return rowIndex < 0 ? undefined : tree.index.rowAt(rowIndex);
+}
+
+function actionForKey(
+  shown: Action[],
+  intent: TreeKeyIntent,
+  event: KeyboardEvent,
+  isMacPlatform: boolean,
+): Action | undefined {
+  const builtinId = builtinIdFor(intent);
+  return (
+    shown.find((candidate) => candidate.id === builtinId) ??
+    shown.find(
+      (candidate) =>
+        candidate.shortcut !== undefined && matchesShortcut(candidate.shortcut, event, isMacPlatform),
+    )
+  );
+}
+
+function useIdentityStableOpenMenu(
+  overlay: UiStore<TreeOverlay | null>,
+  visibleFor: (entry: Entry) => Action[],
+): TreeActions['openMenu'] {
+  const [latestVisibleActions] = useState(createLatestVisibleActions);
+  const { read: visibleForLatest, update: updateVisibleFor } = latestVisibleActions;
+  useLayoutEffect(() => updateVisibleFor(visibleFor));
+  return (entry, anchor) => {
+    if (visibleForLatest(entry).length === 0) return false;
+    const { path } = entry;
+    overlay.set((current) =>
+      current?.kind === 'menu' && current.path === path ? current : { kind: 'menu', path, anchor },
+    );
+    return true;
+  };
+}
+
 /**
  * The tree's actions: the built-in ones the adapter supports plus `actions`, filtered by `when` and
  * `canPerform`, and the menu and dialog state they open.
@@ -175,27 +215,9 @@ export function useTreeActions(
     const action = visibleFor(entry).find((candidate) => candidate.id === actionId);
     if (action) void runReportingFailures(action, entry, contextFor(entry, returnFocusTo), fs);
   };
-  const [latestVisibleActions] = useState(createLatestVisibleActions);
-  const { read: visibleForLatest, update: updateVisibleFor } = latestVisibleActions;
-  useLayoutEffect(() => updateVisibleFor(visibleFor));
-  const openMenu = (entry: Entry, anchor: MenuAnchor): boolean => {
-    if (visibleForLatest(entry).length === 0) return false;
-    const { path } = entry;
-    overlay.set((current) =>
-      current?.kind === 'menu' && current.path === path ? current : { kind: 'menu', path, anchor },
-    );
-    return true;
-  };
-
-  const focusedRowReceiving = (event: KeyboardEvent): VisibleRow | undefined => {
-    const isOnARow = (event.target as Element).getAttribute('role') === 'treeitem';
-    if (event.defaultPrevented || event.repeat || !isOnARow || tree.focusedPath === null) return undefined;
-    const rowIndex = tree.index.indexOf(tree.focusedPath);
-    return rowIndex < 0 ? undefined : tree.index.rowAt(rowIndex);
-  };
-
+  const openMenu = useIdentityStableOpenMenu(overlay, visibleFor);
   const onKeyDown = (event: KeyboardEvent): void => {
-    const row = focusedRowReceiving(event);
+    const row = focusedRowReceiving(tree, event);
     if (!row) return;
     const target = event.target as Element;
     const isMacPlatform = isMac();
@@ -206,14 +228,7 @@ export function useTreeActions(
       }
       return;
     }
-    const shown = visibleFor(row.entry);
-    const builtinId = builtinIdFor(intent);
-    const action =
-      shown.find((candidate) => candidate.id === builtinId) ??
-      shown.find(
-        (candidate) =>
-          candidate.shortcut !== undefined && matchesShortcut(candidate.shortcut, event, isMacPlatform),
-      );
+    const action = actionForKey(visibleFor(row.entry), intent, event, isMacPlatform);
     if (!action) return;
     event.preventDefault();
     run(action, row.entry);

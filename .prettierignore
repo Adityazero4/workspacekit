@@ -5,3 +5,4 @@ coverage
 internal
 .superpowers
 pnpm-lock.yaml
+.playwright-mcp/

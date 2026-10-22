@@ -70,11 +70,13 @@ export const ROUTES = {
   download: 'POST download',
   /**
    * 200 `text/event-stream`. Each frame is one `data:` line holding a JSON `ChangeEvent[]`,
-   * followed by a blank line. `: ping` comment lines are heartbeats. A `{ type: 'resync', path: '' }`
-   * event means changes were missed (the server dropped an oversized batch; `httpAdapter` also
-   * delivers one after every re-connect): the client must reload every loaded folder.
+   * followed by a blank line. `created`, `updated` and `moved` events carry the `entry` as it now
+   * exists. `: ping` comment lines are heartbeats. A `{ type: 'resync', path: '' }` event means
+   * changes were missed (the server dropped an oversized batch; `httpAdapter` also delivers one
+   * after every re-connect): the client must reload every loaded folder.
    * 501 `unknown` means this server cannot watch; clients should not retry. 503 `unknown` with
-   * `Retry-After` means watching could not start right now; clients retry.
+   * `Retry-After` means watching could not start right now; clients retry after that delay. 401 is
+   * retried, since a sign-in may fix it; 403 is permanent.
    */
   watch: 'GET watch',
 } as const;

@@ -20,12 +20,19 @@ import {
   type RefCallback,
 } from 'react';
 import { useFileSystem, useTreeSnapshot, useUiValue, type FileSystemContext } from '../provider/hooks';
+import { internalsOf } from '../provider/internals';
 import type { RevealOptions } from '../provider/reveal';
 import { withMembership, type UiStore } from '../provider/ui-store';
+import { isBeingMoved } from '../tabs/followTree';
 import { createInlineRename, type InlineRename } from './inlineRename';
 import { isMac, treeKeyIntent, type TreeKeyIntent } from './keyboard';
 import { useRevealHost } from './revealHost';
-import { useRovingFocus, type RovingFocus, type TreeRowBindings } from './rovingFocus';
+import {
+  useRovingFocus,
+  type RovingFocus,
+  type RovingFocusController,
+  type TreeRowBindings,
+} from './rovingFocus';
 import { findTypeahead, typeaheadStep, type TypeaheadState } from './typeahead';
 
 /**
@@ -248,12 +255,7 @@ export function useFileTreeWithInlineRename(options: UseFileTreeOptions): {
     else options.onOpenFile?.(entry, 'pin');
   };
   const onKeyDown = useTreeKeyboard({ index, tree, hide, fs, rovingFocus, commands, open });
-  const [inlineRename] = useState(() => createInlineRename(rovingFocus.controller));
-  const renaming = useUiValue(inlineRename.session)?.path ?? null;
-  useLayoutEffect(() => {
-    if (renaming !== null && !entryAt(tree, renaming)) inlineRename.end(null);
-  }, [tree, renaming, inlineRename]);
-  useEffect(() => fs.store.onMove(inlineRename.followMove), [fs.store, inlineRename]);
+  const { inlineRename, renaming } = useInlineRenameFollowingTheTree(fs, tree, rovingFocus.controller);
 
   const { focusedPath, treeHasFocus, controller } = rovingFocus;
   const tabbableIndex = tabStopIndex(index, focusedPath, selected);
@@ -292,6 +294,22 @@ export function useFileTreeWithInlineRename(options: UseFileTreeOptions): {
     reveal: fs.reveal,
   };
   return { tree: api, inlineRename, flashing };
+}
+
+function useInlineRenameFollowingTheTree(
+  fs: FileSystemContext,
+  tree: TreeData,
+  focus: RovingFocusController,
+): { inlineRename: InlineRename; renaming: string | null } {
+  const [inlineRename] = useState(() => createInlineRename(focus));
+  const renaming = useUiValue(inlineRename.session)?.path ?? null;
+  const { followedMoves, onMovedPaths } = internalsOf(fs);
+  useLayoutEffect(() => {
+    const gone = renaming !== null && !entryAt(tree, renaming);
+    if (gone && !isBeingMoved(followedMoves.get(), renaming)) inlineRename.end(null);
+  }, [tree, renaming, inlineRename, followedMoves]);
+  useEffect(() => onMovedPaths(inlineRename.followMove), [onMovedPaths, inlineRename]);
+  return { inlineRename, renaming };
 }
 
 type HidePredicate = (entry: Entry) => boolean;

@@ -2,15 +2,16 @@ import { watch as fsWatch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename } from 'node:path';
-import type { ChangeEvent } from '@scope/core';
+import type { ChangeEvent, Entry } from '@scope/core';
 
 /**
- * What `probe` learns about a path: `null` = gone, `undefined` = must not be reported.
+ * What `probe` learns about a path from one stat: its birth time and the entry a listing would show for it
+ * (kind, size, mtime). `null` = gone, `undefined` = must not be reported.
  *
  * @example
- * const probe: Probe = exists ? { mtimeMs, birthMs } : null;
+ * const probe: Probe = exists ? { birthMs, entry } : null;
  */
-export type Probe = { mtimeMs: number; birthMs: number } | null | undefined;
+export type Probe = { birthMs: number; entry: Entry } | null | undefined;
 
 /**
  * What `createWatcher` watches and how it looks paths up.
@@ -147,7 +148,12 @@ class RecursiveWatcher {
       if (this.#reportedPaths.size >= MAX_REMEMBERED_PATHS) this.#reportedPaths.clear();
       this.#reportedPaths.add(rel);
     }
-    return { type: isNew ? 'created' : 'updated', path: rel, mtimeMs: probe.mtimeMs };
+    return {
+      type: isNew ? 'created' : 'updated',
+      path: rel,
+      mtimeMs: probe.entry.mtimeMs,
+      entry: probe.entry,
+    };
   }
 
   async #classifyBatch(batch: [string, string][], generation: number): Promise<ChangeEvent[]> {
@@ -207,13 +213,14 @@ class RecursiveWatcher {
 /**
  * One `fs.watch(root, { recursive: true })` shared by every subscriber: it starts with the first and closes
  * with the last. Changes are coalesced (50 ms of quiet, at most 500 ms), deduplicated by path and reported as
- * `deleted` (gone), `created` (never reported before and born after the watch began) or `updated`. Birth time
- * is that of the inode: an atomic write or editor save that replaces an old file gets a new one and reports
- * `created`; consumers treat `created` and `updated` alike. Up to 200,000 reported paths are remembered; past
- * that the memory is dropped and unknown paths fall back to their birth time. macOS reports the watched
- * directory itself under its own name, so a deletion under that name is reported only while the root still
- * exists (then it is a top-level entry of that name). Throws from `subscribe` when the OS watcher cannot
- * start.
+ * `deleted` (gone), `created` (never reported before and born after the watch began) or `updated`; created
+ * and updated events carry the probed `entry`, so clients can place it without listing its folder. Birth
+ * time is that of the inode: an atomic write or editor save that replaces an old file gets a new one and
+ * reports `created`; consumers treat `created` and `updated` alike. Up to 200,000 reported paths are
+ * remembered; past that the memory is dropped and unknown paths fall back to their birth time. macOS reports
+ * the watched directory itself under its own name, so a deletion under that name is reported only while the
+ * root still exists (then it is a top-level entry of that name). Throws from `subscribe` when the OS watcher
+ * cannot start.
  *
  * @example
  * const subscribe = createWatcher({ root, hiddenName, probe });

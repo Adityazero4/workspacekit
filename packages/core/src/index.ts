@@ -6,5 +6,6 @@ export * from './naming';
 export * from './tree/model';
 export * from './tree/visible';
 export * from './tree/store';
+export * from './polling';
 export * from './upload/engine';
 export * from './drop/traverse';

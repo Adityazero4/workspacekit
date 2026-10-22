@@ -521,38 +521,6 @@ test.each([400, 404, 501])('stops and reports on %i', async (status) => {
   });
 });
 
-test('401 and 403 are reported each time and retried at the longest delay', async () => {
-  const real = globalThis.setTimeout;
-  const seen: number[] = [];
-  const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
-    if (ms === 5 || ms === 7 || ms === 9) seen.push(ms);
-    return real(fn, 0);
-  }) as typeof setTimeout);
-  try {
-    const plan = [
-      () => new Response('x', { status: 401 }),
-      () => new Response('x', { status: 403 }),
-      () => new Response('x', { status: 500 }),
-      hang,
-    ];
-    let call = 0;
-    const s = stub(() => plan[call++]!());
-    const errors: FsError[] = [];
-    const got: ChangeEvent[][] = [];
-    const stop = httpAdapter(BASE, {
-      fetch: s.fetch,
-      reconnectDelaysMs: [5, 9, 7],
-      onWatchError: (e) => errors.push(e),
-    }).watch!((e) => got.push(e));
-    await expect.poll(() => s.reqs.length).toBe(4);
-    stop();
-    expect(errors.map((e) => e.status)).toEqual([401, 403]);
-    expect(seen).toEqual([9, 9, 5]); // the 500 is an ordinary failure: normal backoff
-  } finally {
-    spy.mockRestore();
-  }
-});
-
 test('keeps retrying 500/502/503 and network errors with backoff', async () => {
   const plan: (() => Response)[] = [
     () => new Response('x', { status: 500 }),

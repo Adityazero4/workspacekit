@@ -286,19 +286,26 @@ test('focus on a row that is not visible changes nothing', async () => {
   expect(tabbable()).toEqual(['z.txt']);
 });
 
+const PAST_THE_TYPEAHEAD_RESET_MS = 600;
+
 test('typeahead finds the next match and wraps', async () => {
   await mount({ 'alpha.txt': '', 'beta.txt': '', 'bravo.txt': '', 'charlie.txt': '' });
   rowNamed('alpha.txt').focus();
-  await userEvent.keyboard('b');
-  await expect.poll(active).toBe('beta.txt');
-  await userEvent.keyboard('r');
-  await expect.poll(active).toBe('bravo.txt');
-  await new Promise((resolve) => setTimeout(resolve, 600));
-  await userEvent.keyboard('b');
-  await expect.poll(active, { message: 'a fresh "b" searches after bravo and wraps' }).toBe('beta.txt');
-  await new Promise((resolve) => setTimeout(resolve, 600));
-  await userEvent.keyboard('C');
-  await expect.poll(active).toBe('charlie.txt');
+  vi.useFakeTimers({ toFake: ['performance'] });
+  try {
+    await userEvent.keyboard('b');
+    await expect.poll(active).toBe('beta.txt');
+    await userEvent.keyboard('r');
+    await expect.poll(active).toBe('bravo.txt');
+    vi.advanceTimersByTime(PAST_THE_TYPEAHEAD_RESET_MS);
+    await userEvent.keyboard('b');
+    await expect.poll(active, { message: 'a fresh "b" searches after bravo and wraps' }).toBe('beta.txt');
+    vi.advanceTimersByTime(PAST_THE_TYPEAHEAD_RESET_MS);
+    await userEvent.keyboard('C');
+    await expect.poll(active).toBe('charlie.txt');
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test('Enter opens a file as a pinned tab and toggles a folder', async () => {

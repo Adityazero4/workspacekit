@@ -12,10 +12,11 @@ pnpm --filter @scope/react bench 10000 100000   # only these sizes
 and for each shape (`wide`, `10x100k`, `chains64`) and size opens
 `?shape=<shape>&size=<files>`, which renders
 `<Workspace adapter={createMemoryAdapter({ files: generateShape(shape, files) })} />`. The tree is generated once
-per page and reused across the runs. Every figure is the median of 3 runs:
+per page and reused across the runs. Every figure is the median of 5 runs, after 1 warm-up run that is discarded,
+each started from a collected heap:
 
-- **first render**: from `root.render` to the first painted tree row, the first mount in a freshly loaded page (3
-  pages), as a user opening the app sees it;
+- **first render**: from `root.render` to the first painted tree row, the first mount in a freshly loaded page (6
+  pages, the first a warm-up), as a user opening the app sees it;
 - **heap**: from CDP (`HeapProfiler.collectGarbage`, then `Performance.getMetrics` `JSHeapUsedSize`), before and
   after mounting the workspace. The difference is what the workspace holds; the page total also counts the in-page
   memory adapter, which stands in for a server;
@@ -39,4 +40,8 @@ The budgets are asserted separately, in `test/scale.browser.test.tsx`, by the `r
 page, measures the cold first render by opening this page in a fresh tab through the Vitest server, and reads the
 heap from `performance.memory` (Chromium started with `--enable-precise-memory-info` and `--js-flags=--expose-gc`).
 Its frame budgets rest on `requestAnimationFrame` gaps only: inside the Vitest iframe no long-animation-frame
-entries arrive, so asserting on them could never fail.
+entries arrive, so asserting on them could never fail. Each budget is the median of the same 5 runs after a
+warm-up (Ruling P3-20); the run prints every budget's raw samples, and a failure message lists them. It also
+holds the viewer budgets: a 500-page `VirtualPages` scrolled end to end, the heap after opening and closing 20
+files of mixed kinds, the heap while scrolling a 500-page TIFF, and a 1 MiB text file from its bytes to an
+editable view.

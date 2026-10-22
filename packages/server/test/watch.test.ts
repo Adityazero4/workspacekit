@@ -84,8 +84,43 @@ describe('watch route over a real directory', () => {
     await disk('a.txt', 'two!');
     const events = await s.frame();
     expect(events).toEqual([
-      { type: 'updated', path: 'a.txt', mtimeMs: expect.any(Number), actor: 'external' },
+      {
+        type: 'updated',
+        path: 'a.txt',
+        mtimeMs: expect.any(Number),
+        actor: 'external',
+        entry: expect.objectContaining({ path: 'a.txt' }),
+      },
     ]);
+    await s.reader.cancel();
+  });
+
+  it('server watch events carry kind, size and mtime', async () => {
+    const s = sse(await make()(watchReq()));
+    await armed();
+    await mkdir(path.join(root, 'docs'));
+    await disk('docs/note.txt', 'hello');
+    await mkdir(path.join(root, '.git'));
+    await disk('.git/HEAD', 'ref');
+    const seen: ChangeEvent[] = [];
+    while (!seen.some((e) => e.path === 'docs/note.txt')) seen.push(...(await s.frame()));
+    const note = seen.find((e) => e.path === 'docs/note.txt')!;
+    expect(note.entry).toEqual({
+      path: 'docs/note.txt',
+      name: 'note.txt',
+      kind: 'file',
+      size: 5,
+      mtimeMs: note.mtimeMs,
+    });
+    const docs = seen.find((e) => e.path === 'docs')!;
+    expect(docs.entry).toEqual({
+      path: 'docs',
+      name: 'docs',
+      kind: 'directory',
+      size: null,
+      mtimeMs: docs.mtimeMs,
+    });
+    expect(seen.filter((e) => e.path.startsWith('.git'))).toEqual([]);
     await s.reader.cancel();
   });
 
@@ -302,7 +337,7 @@ describe('createWatcher', () => {
       hiddenName: () => false,
       async probe(rel: string) {
         if (rel === 'one') await sleep(600);
-        return { mtimeMs: 1, birthMs: 0 };
+        return { birthMs: 0, entry: { path: rel, name: rel, kind: 'file' as const, size: 1, mtimeMs: 1 } };
       },
     };
     const subscribe = createWatcher(src);

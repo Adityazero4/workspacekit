@@ -1,7 +1,8 @@
 'use client';
-import { FsError, parentPath, type Entry, type FileSystemAdapter } from '@scope/core';
+import { parentPath, type Entry, type FileSystemAdapter } from '@scope/core';
 import type { Action, ActionContext } from './actions';
 import { pasteInto } from './clipboard';
+import { downloadEntry } from './download';
 
 /**
  * The ids of the built-in actions, in menu order; `canPerform` receives them (and custom action ids).
@@ -48,8 +49,6 @@ interface BuiltinAction extends Action {
   isSupportedBy: (adapter: FileSystemAdapter) => boolean;
 }
 
-const DOWNLOAD_URL_LIFETIME_MS = 40_000;
-
 const always = (): boolean => true;
 const folderOf = (entry: Entry): string => (entry.kind === 'directory' ? entry.path : parentPath(entry.path));
 
@@ -69,51 +68,6 @@ async function confirmAndDelete(entry: Entry, context: ActionContext): Promise<v
 async function copyPath(entry: Entry, { fs }: ActionContext): Promise<void> {
   await navigator.clipboard.writeText(entry.path);
   fs.notify({ kind: 'success', message: `Copied the path of "${entry.name}".` });
-}
-
-function clickDownloadLink(href: string, fileName: string, opensElsewhere: boolean): void {
-  const link = document.createElement('a');
-  link.href = href;
-  link.download = fileName;
-  if (opensElsewhere) {
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-  }
-  document.body.append(link);
-  link.click();
-  link.remove();
-}
-
-const DOWNLOADABLE_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:', 'blob:']);
-
-function parsedUrlOrNull(url: string): URL | null {
-  try {
-    return new URL(url, location.href);
-  } catch {
-    return null;
-  }
-}
-
-function safeDownloadUrl(url: string): string {
-  const parsed = parsedUrlOrNull(url);
-  if (!parsed || !DOWNLOADABLE_PROTOCOLS.has(parsed.protocol)) {
-    throw new FsError(
-      'invalid',
-      `the adapter returned the download URL "${url}", which is not an http, https or blob URL; return one of those`,
-    );
-  }
-  return parsed.href;
-}
-
-async function download(entry: Entry, { fs }: ActionContext): Promise<void> {
-  const result = await fs.adapter.download!([entry.path]);
-  if (!(result instanceof Blob)) {
-    clickDownloadLink(safeDownloadUrl(result.url), result.fileName ?? entry.name, true);
-    return;
-  }
-  const url = URL.createObjectURL(result);
-  clickDownloadLink(url, entry.kind === 'directory' ? `${entry.name}.zip` : entry.name, false);
-  setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS);
 }
 
 const clipboardOpIsSupported = (_entry: Entry, { fs }: ActionContext): boolean => {
@@ -200,7 +154,7 @@ const BUILTIN_ACTIONS: readonly BuiltinAction[] = [
     label: 'Download',
     group: 'transfer',
     isSupportedBy: (adapter) => adapter.download !== undefined,
-    run: download,
+    run: (entry, { fs }) => downloadEntry(fs.adapter, entry),
   },
   {
     id: 'uploadFiles',

@@ -6,6 +6,7 @@ import {
   use,
   useId,
   type Context,
+  type HTMLAttributes,
   type NamedExoticComponent,
   type ReactNode,
 } from 'react';
@@ -15,10 +16,10 @@ import type { MenuAnchor } from '../components';
 import { partProps } from '../cx';
 import { useIsInDropTarget, type TreeDragHandlers } from '../dnd/useTreeDnd';
 import { Icons } from '../icons';
-import { useEntryState, useExpanded, useSelected } from '../provider/hooks';
+import { useEntryState, useExpanded, useSelected, type EntryState } from '../provider/hooks';
 import type { UiStore } from '../provider/ui-store';
 import type { FileTreeProps } from './FileTree';
-import { useRenameSession, type InlineRename } from './inlineRename';
+import { useRenameSession, type InlineRename, type RenameSession } from './inlineRename';
 import { RenameInput } from './RenameInput';
 import { useIsFlashing } from './revealHost';
 import type { TreeRowBindings } from './rovingFocus';
@@ -89,10 +90,11 @@ export interface TreeRowViewProps {
 
 /**
  * One virtualized tree row: chevron, icon, label (or the rename input), badge and trailing slots, the More
- * actions button, plus the cut, changed, pending, drop-target and loading/error markers. Memoized; it reads
- * its entry, selection, expansion, cut, rename, drop-target and flash state through per-path selectors. The
- * row is draggable (except while being renamed) and a drop target. The More actions button is not a tab stop
- * (the tree keeps one); keyboard users open the same menu with Shift+F10 or the ContextMenu key.
+ * actions button, plus the cut, changed, changed-below, pending, drop-target and loading/error markers.
+ * Memoized; it reads its entry, selection, expansion, cut, rename, drop-target and flash state through
+ * per-path selectors. The row is draggable (except while being renamed) and a drop target. The More actions
+ * button is not a tab stop (the tree keeps one); keyboard users open the same menu with Shift+F10 or the
+ * ContextMenu key.
  *
  * @example
  * ```tsx
@@ -106,7 +108,6 @@ export const TreeRow: NamedExoticComponent<TreeRowViewProps> = memo(function Tre
 ) {
   const { path, rowIndex, offset, depth, setSize, posInSet, isTabStop, isFocused } = props;
   const shared = useTreeRowShared();
-  const { classNames } = shared;
   const state = useEntryState(path);
   const isSelected = useSelected(path);
   const isExpanded = useExpanded(path);
@@ -118,12 +119,8 @@ export const TreeRow: NamedExoticComponent<TreeRowViewProps> = memo(function Tre
   const { entry } = state;
   if (!entry) return null;
   const isFile = entry.kind === 'file';
-  const icon =
-    statusIcon(state.status) ??
-    (shared.renderIcon ? shared.renderIcon(entry, { expanded: isExpanded }) : defaultIcon(entry, isExpanded));
 
   return (
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- treeRowAttributes supplies role="treeitem" and tabIndex; the tree's onKeyDown handles the keys
     <div
       {...treeRowAttributes({
         id: shared.bindings.rowId(rowIndex),
@@ -137,31 +134,87 @@ export const TreeRow: NamedExoticComponent<TreeRowViewProps> = memo(function Tre
         isFocused,
       })}
       {...treeRowFocusHandlers(shared.bindings, path)}
-      {...partProps('tree-row', classNames)}
-      data-cut={isCut ? '' : undefined}
-      data-changed={state.changed ? '' : undefined}
-      data-pending={state.pending ? '' : undefined}
-      data-drop-target={isDropTarget ? '' : undefined}
-      data-flash={isFlashing ? '' : undefined}
-      data-status={state.status === 'loading' || state.status === 'error' ? state.status : undefined}
-      aria-busy={state.status === 'loading' ? true : undefined}
+      {...partProps('tree-row', shared.classNames)}
+      {...rowStateMarkers(state, { isCut, isDropTarget, isFlashing })}
       aria-describedby={state.error ? errorDescriptionId : undefined}
       style={{
         transform: `translateY(${offset}px)`,
         paddingInlineStart: `calc(${depth} * var(--fs-indent))`,
       }}
-      onClick={(event) => shared.activate(entry, event.detail)}
-      onDoubleClick={() => {
-        if (isFile) shared.openFile(entry, 'pin');
-      }}
-      onContextMenu={(event) => {
-        if (shared.openMenu(entry, { x: event.clientX, y: event.clientY })) event.preventDefault();
-      }}
+      {...rowPointerAndDragHandlers(shared, entry)}
       draggable={shared.draggable && !renameSession}
-      onDragStart={(event) => shared.drag.dragStart(event, entry)}
-      onDragOver={(event) => shared.drag.dragOver(event, entry)}
-      onDrop={(event) => shared.drag.drop(event, entry)}
     >
+      <TreeRowContent
+        entry={entry}
+        state={state}
+        isExpanded={isExpanded}
+        renameSession={renameSession}
+        errorDescriptionId={errorDescriptionId}
+      />
+    </div>
+  );
+});
+
+interface RowStateMarkers {
+  'data-cut': '' | undefined;
+  'data-changed': '' | undefined;
+  'data-changed-below': '' | undefined;
+  'data-pending': '' | undefined;
+  'data-drop-target': '' | undefined;
+  'data-flash': '' | undefined;
+  'data-status': 'loading' | 'error' | undefined;
+  'aria-busy': true | undefined;
+}
+
+function rowStateMarkers(
+  state: EntryState,
+  flags: { isCut: boolean; isDropTarget: boolean; isFlashing: boolean },
+): RowStateMarkers {
+  return {
+    'data-cut': flags.isCut ? '' : undefined,
+    'data-changed': state.changed ? '' : undefined,
+    'data-changed-below': state.changedBelow ? '' : undefined,
+    'data-pending': state.pending ? '' : undefined,
+    'data-drop-target': flags.isDropTarget ? '' : undefined,
+    'data-flash': flags.isFlashing ? '' : undefined,
+    'data-status': state.status === 'loading' || state.status === 'error' ? state.status : undefined,
+    'aria-busy': state.status === 'loading' ? true : undefined,
+  };
+}
+
+function rowPointerAndDragHandlers(shared: TreeRowShared, entry: Entry): HTMLAttributes<HTMLDivElement> {
+  return {
+    onClick: (event) => shared.activate(entry, event.detail),
+    onDoubleClick: () => {
+      if (entry.kind === 'file') shared.openFile(entry, 'pin');
+    },
+    onContextMenu: (event) => {
+      if (shared.openMenu(entry, { x: event.clientX, y: event.clientY })) event.preventDefault();
+    },
+    onDragStart: (event) => shared.drag.dragStart(event, entry),
+    onDragOver: (event) => shared.drag.dragOver(event, entry),
+    onDrop: (event) => shared.drag.drop(event, entry),
+  };
+}
+
+interface TreeRowContentProps {
+  entry: Entry;
+  state: EntryState;
+  isExpanded: boolean;
+  renameSession: RenameSession | null;
+  errorDescriptionId: string;
+}
+
+function TreeRowContent(props: TreeRowContentProps): React.JSX.Element {
+  const { entry, state, isExpanded, renameSession, errorDescriptionId } = props;
+  const shared = useTreeRowShared();
+  const { classNames } = shared;
+  const isFile = entry.kind === 'file';
+  const icon =
+    statusIcon(state.status) ??
+    (shared.renderIcon ? shared.renderIcon(entry, { expanded: isExpanded }) : defaultIcon(entry, isExpanded));
+  return (
+    <>
       <span {...partProps('tree-chevron', classNames)} aria-hidden="true">
         {!isFile && <Icons.Chevron />}
       </span>
@@ -182,28 +235,36 @@ export const TreeRow: NamedExoticComponent<TreeRowViewProps> = memo(function Tre
       {shared.renderTrailing && (
         <span {...partProps('tree-trailing', classNames)}>{shared.renderTrailing(entry)}</span>
       )}
-      <button
-        type="button"
-        {...partProps('tree-row-more', classNames)}
-        tabIndex={-1}
-        aria-hidden="true"
-        title="More actions"
-        onClick={(event) => {
-          event.stopPropagation();
-          shared.openMenu(entry, anchorBelow(event.currentTarget));
-        }}
-        onDoubleClick={(event) => event.stopPropagation()}
-      >
-        <Icons.More />
-      </button>
+      <RowMoreActionsButton entry={entry} />
       {state.error && (
         <span {...partProps('tree-row-error', classNames)} id={errorDescriptionId} hidden>
           {state.error.message}
         </span>
       )}
-    </div>
+    </>
   );
-});
+}
+
+function RowMoreActionsButton(props: { entry: Entry }): React.JSX.Element {
+  const { entry } = props;
+  const shared = useTreeRowShared();
+  return (
+    <button
+      type="button"
+      {...partProps('tree-row-more', shared.classNames)}
+      tabIndex={-1}
+      aria-hidden="true"
+      title="More actions"
+      onClick={(event) => {
+        event.stopPropagation();
+        shared.openMenu(entry, anchorBelow(event.currentTarget));
+      }}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
+      <Icons.More />
+    </button>
+  );
+}
 
 function useTreeRowShared(): TreeRowShared {
   const shared = use(TreeRowContext);

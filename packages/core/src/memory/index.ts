@@ -32,7 +32,9 @@ export interface MemoryAdapterOptions {
   chunkSize?: number;
 }
 /**
- * An in-memory `FileSystemAdapter` that can also `emit` change events, as if made by someone else.
+ * An in-memory `FileSystemAdapter` that can also `emit` change events, as if made by someone else. A
+ * `created`, `updated` or `moved` event without an `entry` gets the adapter's entry at its path, if one
+ * exists.
  *
  * @example
  * ```ts
@@ -96,7 +98,18 @@ class MemoryFiles {
     path: string,
     extra: Partial<ChangeEvent> = {},
   ): void {
-    events.push({ type, path, mtimeMs: this.get(path)?.mtimeMs, actor: 'user', ...extra });
+    events.push(this.withEntry({ type, path, mtimeMs: this.get(path)?.mtimeMs, actor: 'user', ...extra }));
+  }
+
+  withEntry(event: ChangeEvent): ChangeEvent {
+    if (event.entry || event.type === 'deleted' || event.type === 'resync') return event;
+    let path: string;
+    try {
+      path = normalizePath(event.path);
+    } catch {
+      return event;
+    }
+    return this.#nodes.has(path) ? { ...event, entry: this.entryOf(path) } : event;
   }
 
   #setNode(path: string, node: MemoryNode): void {
@@ -359,7 +372,7 @@ export function createMemoryAdapter(opts: MemoryAdapterOptions = {}): MemoryAdap
   const read = (path: string, as: 'text' | 'blob' | 'arrayBuffer', options?: { signal?: AbortSignal }) =>
     afterLatency(() => files.read(path, as), options?.signal);
   return {
-    emit: (events) => files.emit(events),
+    emit: (events) => files.emit(events.map((event) => files.withEntry(event))),
     read: read as FileSystemAdapter['read'],
     list: (path, options) => afterLatency(() => files.list(path, options.depth), options.signal),
     stat: (path, options) =>

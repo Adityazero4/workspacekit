@@ -1,3 +1,4 @@
+import { normalizedOrUndefined } from '../adapter-paths';
 import { FsError, toFsError } from '../errors';
 import { uniqueName, validateName, validateTransfer, type NameProblem } from '../naming';
 import { basename, isSameOrDescendant, joinPath, normalizePath, parentPath, remapPrefix } from '../path';
@@ -16,6 +17,10 @@ import {
   type TreeData,
   type TreeOp,
 } from './model';
+import { ChangedBelowCounts, ChangeMarks } from './change-marks';
+import { ListingRequests } from './listing-requests';
+import { OwnMoveEchoes, type OwnMove } from './own-move-echoes';
+import { PendingTreeOps } from './pending-ops';
 
 /**
  * Options for `TreeStore.move` and `TreeStore.copy`: the adapter's `TransferOptions` plus the destination
@@ -48,6 +53,11 @@ export interface TreeSnapshot {
   readonly pending: ReadonlySet<string>;
   /** Changed by someone other than the user since `markSeen`. */
   readonly changed: ReadonlySet<string>;
+  /**
+   * The folders with at least one path in `changed` below them, without the root. A new set only when a
+   * folder joins or leaves it.
+   */
+  readonly changedBelow: ReadonlySet<string>;
   /**
    * The path most recently marked in `changed` by someone other than the user, with a `sequence` that grows
    * by one for every such mark, even of a path already marked; `null` before the first. Remapping marks when
@@ -158,24 +168,6 @@ function assertNotRoot(path: string, operation: string): void {
 
 const isLoaded = (tree: TreeData, path: string): boolean => statusOf(tree, path) === 'loaded';
 
-const ECHO_WINDOW_MS = 10_000;
-
-interface OwnMove {
-  from: string;
-  to: string;
-  inFlight: boolean;
-  consumedWhileInFlight: string[];
-  expiry?: ReturnType<typeof setTimeout>;
-}
-
-function normalizedOrUndefined(path: string): string | undefined {
-  try {
-    return normalizePath(path);
-  } catch {
-    return undefined;
-  }
-}
-
 const placedAt = (answered: Entry, path: string): Entry => ({ ...answered, path, name: basename(path) });
 
 function withStatus(tree: TreeData, path: string, status: FolderStatus): TreeData {
@@ -227,12 +219,25 @@ function restoreSubtree(tree: TreeData, lifted: LiftedSubtree, path: string): Tr
 }
 
 type NormalizedChange =
-  | { type: 'created' | 'updated' | 'deleted'; path: string; external: boolean }
-  | { type: 'moved'; from: string; path: string; external: boolean };
+  | { type: 'created' | 'updated' | 'deleted'; path: string; external: boolean; entry?: Entry }
+  | { type: 'moved'; from: string; path: string; external: boolean; entry?: Entry };
 
 type EntryChangeEvent = ChangeEvent & { type: Exclude<ChangeEvent['type'], 'resync'> };
 
 const isEntryChange = (event: ChangeEvent): event is EntryChangeEvent => event.type !== 'resync';
+
+function trustedEntry(event: EntryChangeEvent, path: string, root: string): Entry | undefined {
+  const { entry } = event;
+  if (event.type === 'deleted' || typeof entry !== 'object' || entry === null) return undefined;
+  const fits =
+    typeof entry.path === 'string' &&
+    normalizedOrUndefined(entry.path) === path &&
+    path !== root &&
+    entry.name === basename(path) &&
+    (entry.kind === 'file' || entry.kind === 'directory');
+  if (!fits) return undefined;
+  return entry.path === path ? entry : { ...entry, path };
+}
 
 function normalizeChange(event: EntryChangeEvent, root: string): NormalizedChange | undefined {
   let path: string;
@@ -245,125 +250,17 @@ function normalizeChange(event: EntryChangeEvent, root: string): NormalizedChang
   }
   const inRoot = (candidate: string): boolean => isSameOrDescendant(candidate, root);
   const external = event.actor !== undefined && event.actor !== 'user';
-  if (event.type !== 'moved') return inRoot(path) ? { type: event.type, path, external } : undefined;
+  const entry = trustedEntry(event, path, root);
+  const withEntry = entry ? { entry } : {};
+  if (event.type !== 'moved') {
+    return inRoot(path) ? { type: event.type, path, external, ...withEntry } : undefined;
+  }
   if (oldPath === undefined || !inRoot(oldPath)) {
-    return inRoot(path) ? { type: 'created', path, external } : undefined;
+    return inRoot(path) ? { type: 'created', path, external, ...withEntry } : undefined;
   }
   if (!inRoot(path)) return { type: 'deleted', path: oldPath, external };
   if (isSameOrDescendant(path, oldPath)) return undefined;
-  return { type: 'moved', from: oldPath, path, external };
-}
-
-class ChangeMarks {
-  #marks: ReadonlySet<string>;
-  #copied = false;
-  #marksBelow: Map<string, number> | undefined;
-  #latestExternal: string | null = null;
-  #externalCount = 0;
-
-  constructor(marks: ReadonlySet<string>) {
-    this.#marks = marks;
-  }
-
-  get marks(): ReadonlySet<string> {
-    return this.#marks;
-  }
-
-  get markedExternally(): boolean {
-    return this.#externalCount > 0;
-  }
-
-  latestExternalChangeAfter(
-    previous: TreeSnapshot['latestExternalChange'],
-  ): TreeSnapshot['latestExternalChange'] {
-    if (this.#latestExternal === null) return previous;
-    return { path: this.#latestExternal, sequence: (previous?.sequence ?? 0) + this.#externalCount };
-  }
-
-  markExternal(path: string): void {
-    this.#latestExternal = path;
-    this.#externalCount++;
-    this.mark(path);
-  }
-
-  mark(path: string): void {
-    if (this.#marks.has(path)) return;
-    this.#writable().add(path);
-    this.#countInAncestors(path, 1);
-  }
-
-  unmarkAtOrBelow(path: string): string[] {
-    if (!this.#marksBelow) {
-      this.#marksBelow = new Map();
-      for (const marked of this.#marks) this.#countInAncestors(marked, 1);
-    }
-    const unmarked = this.#marksBelow.get(path)
-      ? [...this.#marks].filter((marked) => isSameOrDescendant(marked, path))
-      : this.#marks.has(path)
-        ? [path]
-        : [];
-    if (unmarked.length === 0) return unmarked;
-    const writable = this.#writable();
-    for (const marked of unmarked) {
-      writable.delete(marked);
-      this.#countInAncestors(marked, -1);
-    }
-    return unmarked;
-  }
-
-  #writable(): Set<string> {
-    if (!this.#copied) {
-      this.#marks = new Set(this.#marks);
-      this.#copied = true;
-    }
-    return this.#marks as Set<string>;
-  }
-
-  #countInAncestors(path: string, by: 1 | -1): void {
-    if (!this.#marksBelow) return;
-    for (let ancestor = path; ancestor !== '';) {
-      ancestor = parentPath(ancestor);
-      this.#marksBelow.set(ancestor, (this.#marksBelow.get(ancestor) ?? 0) + by);
-    }
-  }
-}
-
-class PendingTreeOps {
-  #tree: TreeData;
-  readonly #ops: TreeOp[] = [];
-  readonly #touched = new Set<string>();
-
-  constructor(tree: TreeData) {
-    this.#tree = tree;
-  }
-
-  get treeWithoutPendingOps(): TreeData {
-    return this.#tree;
-  }
-
-  queue(...ops: TreeOp[]): void {
-    this.#ops.push(...ops);
-  }
-
-  markTouchedByPendingOps(...paths: string[]): void {
-    for (const path of paths) this.#touched.add(path);
-  }
-
-  treeAfterFlushingOpsTouching(path: string): TreeData {
-    for (let ancestorOrSelf = path; ; ancestorOrSelf = parentPath(ancestorOrSelf)) {
-      if (this.#touched.has(ancestorOrSelf)) {
-        this.#tree = applyBatch(this.#tree, this.#ops.splice(0));
-        this.#touched.clear();
-        break;
-      }
-      if (ancestorOrSelf === '') break;
-    }
-    return this.#tree;
-  }
-
-  finish(): TreeData {
-    return applyBatch(this.#tree, this.#ops);
-  }
+  return { type: 'moved', from: oldPath, path, external, ...withEntry };
 }
 
 interface FollowUpLoads {
@@ -371,11 +268,6 @@ interface FollowUpLoads {
   refetchRequested: Set<string>;
   reissued: Set<string>;
   resync: boolean;
-}
-
-interface CoalescingListing {
-  requestId: number;
-  trailingReloadDue: boolean;
 }
 
 interface Mutation<T> {
@@ -398,6 +290,7 @@ class ObservableTreeStore implements TreeStore {
   #tree: TreeData = emptyTree();
   #errors: ReadonlyMap<string, FsError> = new Map();
   #changed: ReadonlySet<string> = new Set();
+  readonly #changedBelow: ChangedBelowCounts;
   #latestExternalChange: TreeSnapshot['latestExternalChange'] = null;
   readonly #pendingCount = new Map<string, number>();
   #pending: ReadonlySet<string> = new Set();
@@ -405,18 +298,12 @@ class ObservableTreeStore implements TreeStore {
   #snapshot: TreeSnapshot;
   readonly #listeners = new Set<() => void>();
   readonly #moveListeners = new Set<(from: string, to: string) => void>();
-  readonly #ownMovesAwaitingEcho = new Set<OwnMove>();
+  readonly #ownMoveEchoes = new OwnMoveEchoes();
   #notifyScheduled = false;
   #disposed = false;
   #unwatch: (() => void) | undefined;
 
-  readonly #inFlightRequestId = new Map<string, number>();
-  readonly #latestRequestId = new Map<string, number>();
-  readonly #requestedByCaller = new Set<string>();
-  readonly #inFlightLoads = new Map<string, Promise<void>>();
-  readonly #coalescingListings = new Map<string, CoalescingListing>();
-  readonly #trailingReloads = new WeakSet<Promise<void>>();
-  #lastRequestId = 0;
+  readonly #listings = new ListingRequests();
 
   #resyncRunning = false;
   #resyncRequestedAgain = false;
@@ -426,6 +313,7 @@ class ObservableTreeStore implements TreeStore {
     this.#options = options;
     this.#fetchDepth = options.fetchDepth ?? 2;
     this.#root = normalizePath(options.root ?? '');
+    this.#changedBelow = new ChangedBelowCounts(this.#root);
     this.#snapshot = this.#takeSnapshot();
   }
 
@@ -550,7 +438,7 @@ class ObservableTreeStore implements TreeStore {
   applyChanges = (events: ChangeEvent[]): void => {
     if (this.#disposed || events.length === 0) return;
     const pending = new PendingTreeOps(this.#tree);
-    const marks = new ChangeMarks(this.#changed);
+    const marks = new ChangeMarks(this.#changed, this.#changedBelow);
     const followUp: FollowUpLoads = {
       reloadParents: new Set(),
       refetchRequested: new Set(),
@@ -559,16 +447,23 @@ class ObservableTreeStore implements TreeStore {
     };
     const errorsBefore = this.#errors;
     const moves: Array<{ from: string; to: string }> = [];
-    for (const event of events) {
-      if (!isEntryChange(event)) {
-        followUp.resync = true;
-        continue;
+    try {
+      for (const event of events) {
+        if (!isEntryChange(event)) {
+          followUp.resync = true;
+          continue;
+        }
+        const change = normalizeChange(event, this.#root);
+        if (!change) continue;
+        const isOwnMoveEcho =
+          change.type === 'moved' && this.#ownMoveEchoes.consume(change.from, change.path);
+        if (change.type === 'moved' && !isOwnMoveEcho) moves.push({ from: change.from, to: change.path });
+        const changeToApply = isOwnMoveEcho ? { ...change, entry: undefined } : change;
+        this.#applyChange(pending, marks, changeToApply, followUp);
       }
-      const change = normalizeChange(event, this.#root);
-      if (change?.type === 'moved' && !this.#consumeEchoOfOwnMove(change.from, change.path)) {
-        moves.push({ from: change.from, to: change.path });
-      }
-      if (change) this.#applyChange(pending, marks, change, followUp);
+    } catch (error) {
+      marks.discard();
+      throw error;
     }
     const tree = pending.finish();
     this.#latestExternalChange = marks.latestExternalChangeAfter(this.#latestExternalChange);
@@ -590,11 +485,9 @@ class ObservableTreeStore implements TreeStore {
   };
 
   markSeen = (path: string): void => {
-    const normalized = normalizePath(path);
-    if (!this.#changed.has(normalized)) return;
-    const next = new Set(this.#changed);
-    next.delete(normalized);
-    this.#changed = next;
+    const marks = new ChangeMarks(this.#changed, this.#changedBelow);
+    if (!marks.unmark(normalizePath(path))) return;
+    this.#changed = marks.marks;
     this.#commit();
   };
 
@@ -608,30 +501,11 @@ class ObservableTreeStore implements TreeStore {
     this.#unwatch?.();
     this.#listeners.clear();
     this.#moveListeners.clear();
-    for (const own of this.#ownMovesAwaitingEcho) clearTimeout(own.expiry);
-    this.#ownMovesAwaitingEcho.clear();
+    this.#ownMoveEchoes.dispose();
   };
 
-  #stopAwaitingEchoSoon(own: OwnMove): void {
-    own.inFlight = false;
-    if (!this.#ownMovesAwaitingEcho.has(own)) return;
-    own.expiry = setTimeout(() => this.#ownMovesAwaitingEcho.delete(own), ECHO_WINDOW_MS);
-  }
-
-  #consumeEchoOfOwnMove(from: string, to: string): boolean {
-    for (const own of this.#ownMovesAwaitingEcho) {
-      if (own.from !== from || (!own.inFlight && own.to !== to)) continue;
-      if (own.inFlight) own.consumedWhileInFlight.push(to);
-      clearTimeout(own.expiry);
-      this.#ownMovesAwaitingEcho.delete(own);
-      return true;
-    }
-    return false;
-  }
-
   #stopAwaitingEchoOfFailedMove(own: OwnMove): void {
-    this.#ownMovesAwaitingEcho.delete(own);
-    for (const to of own.consumedWhileInFlight.splice(0)) this.#announceMove(own.from, to);
+    for (const to of this.#ownMoveEchoes.stopAwaitingFailed(own)) this.#announceMove(own.from, to);
   }
 
   #announceMove(from: string, to: string): void {
@@ -667,6 +541,7 @@ class ObservableTreeStore implements TreeStore {
       errors: this.#errors,
       pending: this.#pending,
       changed: this.#changed,
+      changedBelow: this.#changedBelow.shareFolders(),
       latestExternalChange: this.#latestExternalChange,
     };
   }
@@ -692,15 +567,7 @@ class ObservableTreeStore implements TreeStore {
   }
 
   #discardLoadsAndErrorsAtOrBelow(path: string): string[] {
-    const discarded: string[] = [];
-    for (const loading of this.#inFlightRequestId.keys()) {
-      if (!isSameOrDescendant(loading, path)) continue;
-      this.#inFlightRequestId.delete(loading);
-      this.#inFlightLoads.delete(loading);
-      this.#requestedByCaller.delete(loading);
-      this.#coalescingListings.delete(loading);
-      discarded.push(loading);
-    }
+    const discarded = this.#listings.discardAtOrBelow(path);
     if ([...this.#errors.keys()].some((errorPath) => isSameOrDescendant(errorPath, path))) {
       this.#errors = new Map([...this.#errors].filter(([errorPath]) => !isSameOrDescendant(errorPath, path)));
     }
@@ -722,15 +589,11 @@ class ObservableTreeStore implements TreeStore {
   }
 
   #isCurrentRequest(path: string, requestId: number): boolean {
-    return !this.#disposed && this.#inFlightRequestId.get(path) === requestId;
+    return !this.#disposed && this.#listings.isCurrent(path, requestId);
   }
 
   async #fetchFolder(path: string, explicit: boolean): Promise<void> {
-    const requestId = ++this.#lastRequestId;
-    this.#inFlightRequestId.set(path, requestId);
-    this.#latestRequestId.set(path, requestId);
-    this.#coalescingListings.delete(path);
-    if (explicit) this.#requestedByCaller.add(path);
+    const requestId = this.#listings.begin(path, explicit);
     if (!isLoaded(this.#tree, path)) {
       this.#tree = withStatus(this.#tree, path, 'loading');
       this.#commit();
@@ -741,28 +604,20 @@ class ObservableTreeStore implements TreeStore {
     } catch (error) {
       if (this.#isCurrentRequest(path, requestId)) this.#fail(path, toFsError(error));
     } finally {
-      if (this.#inFlightRequestId.get(path) === requestId) {
-        this.#inFlightRequestId.delete(path);
-        this.#requestedByCaller.delete(path);
-      }
+      this.#listings.end(path, requestId);
       this.#startTrailingReloadIfDue(path, requestId);
     }
   }
 
   #startTrailingReloadIfDue(path: string, requestId: number): void {
-    const coalescing = this.#coalescingListings.get(path);
-    if (coalescing?.requestId !== requestId) return;
-    this.#coalescingListings.delete(path);
-    if (!coalescing.trailingReloadDue || this.#disposed || !isLoaded(this.#tree, path)) return;
-    this.#trailingReloads.add(this.#load(path, true, false));
-    const trailingRequestId = this.#inFlightRequestId.get(path);
-    if (trailingRequestId === undefined) return;
-    this.#coalescingListings.set(path, { requestId: trailingRequestId, trailingReloadDue: false });
+    const due = this.#listings.takeDueTrailingReload(path, requestId);
+    if (!due || this.#disposed || !isLoaded(this.#tree, path)) return;
+    this.#listings.coalesceTrailingReload(path, this.#load(path, true, false));
   }
 
   #applyListing(path: string, requestId: number, entries: Entry[]): void {
     const lackingListing = knownListingThatLacks(this.#tree, path, this.#root);
-    if (lackingListing !== undefined && !this.#requestedByCaller.has(path)) {
+    if (lackingListing !== undefined && !this.#listings.isRequestedByCaller(path)) {
       this.#discardGhostListing(path);
       return;
     }
@@ -781,9 +636,9 @@ class ObservableTreeStore implements TreeStore {
 
   #discardBackgroundLoadsLackedBelow(path: string): TreeOp[] {
     const ops: TreeOp[] = [];
-    for (const loading of this.#inFlightRequestId.keys()) {
+    for (const loading of this.#listings.liveInFlightPaths()) {
       const isBackgroundLoadBelow =
-        loading !== path && !this.#requestedByCaller.has(loading) && isSameOrDescendant(loading, path);
+        loading !== path && !this.#listings.isRequestedByCaller(loading) && isSameOrDescendant(loading, path);
       if (isBackgroundLoadBelow && knownListingThatLacks(this.#tree, loading, path) !== undefined) {
         ops.push(...idleStatusFor(this.#tree, this.#discardLoadsAndErrorsAtOrBelow(loading)));
       }
@@ -792,16 +647,15 @@ class ObservableTreeStore implements TreeStore {
   }
 
   #reloadOutdatedListingOnce(listing: string, requestId: number): void {
-    const lastRequestedBeforeThisOne = (this.#latestRequestId.get(listing) ?? 0) < requestId;
-    if (lastRequestedBeforeThisOne) void this.#load(listing, true, false);
+    if (this.#listings.lastRequestedBefore(listing, requestId)) void this.#load(listing, true, false);
   }
 
   async #loadUntilNoNewerLoad(path: string, force: boolean): Promise<void> {
     let load = this.#load(path, force, true);
     for (;;) {
       await load;
-      const newer = this.#inFlightLoads.get(path);
-      if (newer === undefined || this.#trailingReloads.has(newer)) return;
+      const newer = this.#listings.loadToWaitFor(path);
+      if (newer === undefined) return;
       load = newer;
     }
   }
@@ -809,17 +663,10 @@ class ObservableTreeStore implements TreeStore {
   #load(path: string, force: boolean, explicit: boolean): Promise<void> {
     if (!force) {
       if (isLoaded(this.#tree, path)) return Promise.resolve();
-      const running = this.#inFlightLoads.get(path);
-      if (running) {
-        if (explicit && this.#inFlightRequestId.has(path)) this.#requestedByCaller.add(path);
-        return running;
-      }
+      const running = this.#listings.joinRunningLoad(path, explicit);
+      if (running) return running;
     }
-    const run: Promise<void> = this.#fetchFolder(path, explicit).finally(() => {
-      if (this.#inFlightLoads.get(path) === run) this.#inFlightLoads.delete(path);
-    });
-    this.#inFlightLoads.set(path, run);
-    return run;
+    return this.#listings.trackLoad(path, this.#fetchFolder(path, explicit));
   }
 
   async #ensureLoaded(dir: string): Promise<void> {
@@ -860,8 +707,9 @@ class ObservableTreeStore implements TreeStore {
   }
 
   #dropChangedAtOrBelow(path: string): void {
-    if (![...this.#changed].some((changed) => isSameOrDescendant(changed, path))) return;
-    this.#changed = new Set([...this.#changed].filter((changed) => !isSameOrDescendant(changed, path)));
+    const marks = new ChangeMarks(this.#changed, this.#changedBelow);
+    marks.unmarkAtOrBelow(path);
+    this.#changed = marks.marks;
   }
 
   #assertNameIsFree(
@@ -888,7 +736,7 @@ class ObservableTreeStore implements TreeStore {
     return names;
   }
 
-  async #transfer(op: 'move' | 'copy', from: string, to: string, opts?: TreeTransferOptions): Promise<Entry> {
+  #checkTransfer(op: 'move' | 'copy', from: string, to: string, opts?: TreeTransferOptions): Entry {
     const source = entryAt(this.#tree, from);
     if (!source) throw notFound(from);
     if (isSameOrDescendant(from, to)) {
@@ -900,6 +748,11 @@ class ObservableTreeStore implements TreeStore {
     const adapterSupportsIt =
       op === 'move' ? this.#adapter.move !== undefined : this.#adapter.copy !== undefined;
     if (!adapterSupportsIt) throw unsupported();
+    return source;
+  }
+
+  async #transfer(op: 'move' | 'copy', from: string, to: string, opts?: TreeTransferOptions): Promise<Entry> {
+    const source = this.#checkTransfer(op, from, to, opts);
     const sourceStatusResets =
       op === 'move' ? idleStatusFor(this.#tree, this.#discardLoadsAndErrorsAtOrBelow(from)) : [];
     this.#tree = applyBatch(this.#tree, [
@@ -909,8 +762,7 @@ class ObservableTreeStore implements TreeStore {
     const liftedSource = liftSubtree(this.#tree, from);
     const replacedDestination = liftSubtree(this.#tree, to);
     let placedAtDestination: Entry | undefined;
-    const own: OwnMove = { from, to, inFlight: true, consumedWhileInFlight: [] };
-    if (op === 'move') this.#ownMovesAwaitingEcho.add(own);
+    const own = op === 'move' ? this.#ownMoveEchoes.expect(from, to) : undefined;
     const committed = this.#mutate({
       pendingPaths: [from, to],
       reloadAfter: [parentPath(from), parentPath(to)],
@@ -939,18 +791,18 @@ class ObservableTreeStore implements TreeStore {
       },
       confirm: upsertEntry,
       afterConfirm: (moved) => {
-        if (op !== 'move') return;
-        own.to = moved.path;
+        if (!own) return;
+        this.#ownMoveEchoes.landedAt(own, moved.path);
         this.#announceMove(from, moved.path);
       },
       afterRollback: () => {
-        if (op === 'move') this.#stopAwaitingEchoOfFailedMove(own);
+        if (own) this.#stopAwaitingEchoOfFailedMove(own);
       },
     });
     try {
       return await committed;
     } finally {
-      this.#stopAwaitingEchoSoon(own);
+      if (own) this.#ownMoveEchoes.stopAwaitingSoon(own);
     }
   }
 
@@ -1021,10 +873,14 @@ class ObservableTreeStore implements TreeStore {
     );
     const hadEntry = entryAt(pending.treeAfterFlushingOpsTouching(from), from) !== undefined;
     const parentLoaded = isLoaded(pending.treeAfterFlushingOpsTouching(parent), parent);
+    const placed = parentLoaded
+      ? this.#entryToPlace(change, pending.treeAfterFlushingOpsTouching(to))
+      : undefined;
     const movesOutOfView = hadEntry && !parentLoaded;
     pending.queue(movesOutOfView ? { kind: 'remove', path: from } : { kind: 'move', from, to });
+    if (placed) pending.queue({ kind: 'upsert', entry: placed });
     pending.markTouchedByPendingOps(from, to);
-    const entryArrivesWithParentListing = !hadEntry && parentLoaded;
+    const entryArrivesWithParentListing = !hadEntry && parentLoaded && !placed;
     if (entryArrivesWithParentListing) followUp.reloadParents.add(parent);
     for (const marked of marks.unmarkAtOrBelow(from)) marks.mark(remapPrefix(marked, from, to));
     if (change.external && parentLoaded) marks.markExternal(to);
@@ -1043,15 +899,10 @@ class ObservableTreeStore implements TreeStore {
   }
 
   #requestInFlightListingAgainOnce(folder: string, followUp: FollowUpLoads): void {
-    const inFlight = this.#inFlightRequestId.get(folder);
-    if (inFlight === undefined) return;
-    const coalescing = this.#coalescingListings.get(folder);
-    if (coalescing?.requestId === inFlight) {
-      coalescing.trailingReloadDue = true;
-      return;
-    }
+    const requestedBy = this.#listings.markReissue(folder);
+    if (requestedBy === undefined) return;
     followUp.reissued.add(folder);
-    if (this.#requestedByCaller.has(folder)) followUp.refetchRequested.add(folder);
+    if (requestedBy === 'caller') followUp.refetchRequested.add(folder);
     else followUp.reloadParents.add(folder);
   }
 
@@ -1064,30 +915,37 @@ class ObservableTreeStore implements TreeStore {
     const { path } = change;
     this.#reissueInFlightListingsAbove(path, followUp);
     if (change.type === 'created') {
-      for (const requested of this.#requestedByCaller) {
-        if (isSameOrDescendant(requested, path)) followUp.refetchRequested.add(requested);
+      for (const requested of this.#listings.callerRequestsAtOrBelow(path)) {
+        followUp.refetchRequested.add(requested);
       }
       pending.queue(
         ...idleStatusFor(pending.treeWithoutPendingOps, this.#discardLoadsAndErrorsAtOrBelow(path)),
       );
     }
     const parent = parentPath(path);
-    if (isLoaded(pending.treeAfterFlushingOpsTouching(parent), parent)) {
-      if (this.#inFlightRequestId.has(parent)) this.#requestInFlightListingAgainOnce(parent, followUp);
-      else followUp.reloadParents.add(parent);
-      if (change.external) marks.markExternal(path);
-    }
+    const tree = pending.treeAfterFlushingOpsTouching(path);
+    if (!isLoaded(tree, parent)) return;
+    const placed = this.#entryToPlace(change, tree);
+    if (placed) {
+      pending.queue({ kind: 'upsert', entry: placed });
+      pending.markTouchedByPendingOps(path);
+    } else if (this.#listings.isInFlight(parent)) this.#requestInFlightListingAgainOnce(parent, followUp);
+    else followUp.reloadParents.add(parent);
+    if (change.external) marks.markExternal(path);
+  }
+
+  #entryToPlace(change: NormalizedChange, tree: TreeData): Entry | undefined {
+    const { entry, path } = change;
+    const mutationInFlight =
+      this.#pending.has(path) || (change.type === 'moved' && this.#pending.has(change.from));
+    if (!entry || mutationInFlight) return undefined;
+    const replacesALoadedFolder =
+      change.type !== 'updated' && entry.kind === 'directory' && tree.folders.has(path);
+    return replacesALoadedFolder ? undefined : entry;
   }
 
   #startFollowUpLoads(followUp: FollowUpLoads): void {
-    const firstFollowUpRequestId = this.#lastRequestId + 1;
-    this.#startFollowUpRequests(followUp);
-    for (const path of followUp.reissued) {
-      const requestId = this.#inFlightRequestId.get(path);
-      if (requestId !== undefined && requestId >= firstFollowUpRequestId) {
-        this.#coalescingListings.set(path, { requestId, trailingReloadDue: false });
-      }
-    }
+    this.#listings.coalesceReissues(followUp.reissued, () => this.#startFollowUpRequests(followUp));
   }
 
   #startFollowUpRequests(followUp: FollowUpLoads): void {
@@ -1117,15 +975,19 @@ class ObservableTreeStore implements TreeStore {
  * server-side failure heals itself.
  *
  * Live changes: `applyChanges` folds a batch into one tree update. A recreated path drops its in-flight
- * listings (listings the caller asked for are requested again), a change inside a loaded folder reloads that
- * folder (the listing replaces entries wholesale, so a file that became a folder loses stale children), every
- * change requests again every listing in flight up to `fetchDepth` levels above the changed path, or above
- * either end of a move (a stale answer could bring a deleted entry back, drop a moved one, or undo a fresher
- * listing of the changed folder; a listing farther up cannot contain the path), and a `resync` event reloads
- * every loaded folder. A listing in flight is replaced this way (by a reload or a re-issue) only once:
- * further changes during its flight queue one trailing background reload of the folder, started when it
- * lands, so churn cannot keep a folder loading; a ghost or missing entry lasts at most one listing round
- * trip. At most one resync pass runs; resyncs that arrive meanwhile fold into one follow-up pass.
+ * listings (listings the caller asked for are requested again). A change inside a loaded folder that carries
+ * its `entry` places it there without a request; the entry is server data, so one whose path or name does not
+ * match the event, whose kind is unknown, whose path has a store mutation in flight, or that would replace a
+ * loaded folder (a recreated or overwritten directory) is ignored, and so is the entry of an own move's echo.
+ * Any other change inside a loaded folder reloads that folder (the listing replaces entries wholesale, so a
+ * file that became a folder loses stale children). Every change requests again every listing in flight up to
+ * `fetchDepth` levels above the changed path, or above either end of a move (a stale answer could bring a
+ * deleted entry back, drop a moved one, or undo a fresher listing of the changed folder; a listing farther up
+ * cannot contain the path), and a `resync` event reloads every loaded folder. A listing in flight is
+ * replaced this way (by a reload or a re-issue) only once: further changes during its flight queue one
+ * trailing background reload of the folder, started when it lands, so churn cannot keep a folder loading; a
+ * ghost or missing entry lasts at most one listing round trip. At most one resync pass runs; resyncs that
+ * arrive meanwhile fold into one follow-up pass.
  * `loadFolder` waits for the newest load of its folder except a trailing reload, so a load requested again
  * settles with the answer that is applied, not the dropped one.
  *

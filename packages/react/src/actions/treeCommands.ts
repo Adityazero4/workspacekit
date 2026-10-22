@@ -1,11 +1,12 @@
 'use client';
 import type { Entry } from '@scope/core';
-import { createContext, use, useEffect, useLayoutEffect, useState, type Context } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
+import { useFileSystemInternals } from '../provider/internals';
 import { createUiStore, type UiStore } from '../provider/ui-store';
 
 /**
- * What a mounted tree lets the container around it run: its actions, as its menus run them, and Collapse all.
- * Identity-stable for the life of the tree; every call uses the tree's latest render.
+ * What a mounted tree lets code outside it run: its actions, as its menus run them, Collapse all, inline
+ * rename and row focus. Identity-stable for the life of the tree; every call uses the tree's latest render.
  *
  * @example
  * ```ts
@@ -24,17 +25,20 @@ export interface TreeCommands {
    */
   runAction: (actionId: string, entry: Entry, returnFocusTo: HTMLElement) => void;
   collapseAll: () => void;
+  /** Starts the inline rename of the row at `path`. */
+  startRename: (path: string) => void;
+  /** Scrolls the row at `path` into view and focuses it, when it is visible. */
+  focus: (path: string) => void;
 }
 
 /**
- * Where a container finds the commands of the trees mounted inside it. Like the provider's reveal and
- * conflict hosts, the first tree attached is the one that answers.
+ * Where the toolbar and `useWorkspace` find the commands of the trees mounted under a provider. Like the
+ * provider's reveal and conflict hosts, the first tree attached is the one that answers.
  *
  * @example
- * ```tsx
- * const [host] = useState(createTreeCommandsHost);
- * <TreeCommandsContext value={host}><FileTree /></TreeCommandsContext>
- * host.current.get()?.collapseAll();
+ * ```ts
+ * const { treeCommands } = useFileSystemInternals();
+ * treeCommands.current.get()?.collapseAll();
  * ```
  */
 export interface TreeCommandsHost {
@@ -81,18 +85,6 @@ export function createTreeCommandsHost(): TreeCommandsHost {
   };
 }
 
-/**
- * Set by a container (the `Workspace`) whose toolbar runs the tree's commands.
- *
- * @example
- * ```tsx
- * <TreeCommandsContext value={host}>{children}</TreeCommandsContext>
- * ```
- */
-export const TreeCommandsContext: Context<TreeCommandsHost | null> = createContext<TreeCommandsHost | null>(
-  null,
-);
-
 function createCommandsCallingTheLatest(): {
   commands: TreeCommands;
   update: (latest: TreeCommands) => void;
@@ -101,12 +93,16 @@ function createCommandsCallingTheLatest(): {
     canRun: () => false,
     runAction: () => undefined,
     collapseAll: () => undefined,
+    startRename: () => undefined,
+    focus: () => undefined,
   };
   return {
     commands: {
       canRun: (actionId, entry) => latest.canRun(actionId, entry),
       runAction: (actionId, entry, returnFocusTo) => latest.runAction(actionId, entry, returnFocusTo),
       collapseAll: () => latest.collapseAll(),
+      startRename: (path) => latest.startRename(path),
+      focus: (path) => latest.focus(path),
     },
     update: (next) => {
       latest = next;
@@ -130,7 +126,7 @@ export interface CanRunInputs {
 }
 
 /**
- * Attaches the tree to the surrounding `TreeCommandsContext`, if any, while it is mounted, through
+ * Attaches the tree to the provider's tree-commands host while it is mounted, through
  * identity-stable commands that call the tree's latest ones. When one of `canRunInputs` changes, the host
  * publishes the commands anew once the latest ones are in place, so a toolbar that reads them shows what
  * `canRun` now answers.
@@ -138,17 +134,17 @@ export interface CanRunInputs {
  * @example
  * ```ts
  * useAttachedTreeCommands(
- *   { canRun, runAction: treeActions.runFromOutside, collapseAll: tree.collapseAll },
+ *   { canRun, runAction: treeActions.runFromOutside, collapseAll, startRename, focus },
  *   { adapter: fs.adapter, actions: props.actions, canPerform: props.canPerform },
  * );
  * ```
  */
 export function useAttachedTreeCommands(latest: TreeCommands, canRunInputs: CanRunInputs): void {
-  const host = use(TreeCommandsContext);
+  const host = useFileSystemInternals().treeCommands;
   const [callingTheLatest] = useState(createCommandsCallingTheLatest);
   const { commands, update } = callingTheLatest;
   const { adapter, actions, canPerform } = canRunInputs;
   useLayoutEffect(() => update(latest));
-  useLayoutEffect(() => host?.commandsChanged(commands), [host, commands, adapter, actions, canPerform]);
-  useEffect(() => host?.attach(commands), [host, commands]);
+  useLayoutEffect(() => host.commandsChanged(commands), [host, commands, adapter, actions, canPerform]);
+  useEffect(() => host.attach(commands), [host, commands]);
 }

@@ -33,18 +33,29 @@ export interface HttpAdapterOptions {
   fetch?: typeof fetch;
   headers?: HeadersOption;
   credentials?: RequestCredentials;
-  /** Watch reconnect backoff; the last delay repeats. Default [1000, 2000, 5000, 10000]. */
+  /**
+   * Watch reconnect backoff; the last delay repeats. Default [1000, 2000, 5000, 10000]. A 503 to the watch
+   * request with `Retry-After` (integer seconds or an IMF-fixdate, capped at 60 s) waits that long instead,
+   * but never less than this backoff step or 1 s; any other `Retry-After` value is ignored.
+   */
   reconnectDelaysMs?: number[];
   /**
-   * Called when `watch` gives up on a permanent failure (HTTP 400/404/501), and on every 401/403,
-   * which it keeps retrying at the longest reconnect delay (a sign-in may fix it).
+   * Called when `watch` gives up on a permanent failure (HTTP 400, 403, 404 or 501), and once per run of
+   * consecutive 401s, which it keeps retrying (a sign-in may fix it) at the longest reconnect delay, but
+   * never sooner than 5 s.
    */
   onWatchError?: (e: FsError) => void;
 }
 
 const MAX_SSE_UTF16_UNITS = 1_048_576;
-const STATUSES_RETRY_CANNOT_FIX = new Set([400, 404, 501]);
-const STATUSES_A_SIGN_IN_MAY_FIX = new Set([401, 403]);
+const STATUSES_RETRY_CANNOT_FIX = new Set([400, 403, 404, 501]);
+const UNAUTHORIZED = 401;
+const SERVICE_UNAVAILABLE = 503;
+const SHORTEST_SIGN_IN_RETRY_MS = 5000;
+const LONGEST_RETRY_AFTER_MS = 60_000;
+const SHORTEST_RETRY_AFTER_MS = 1000;
+const INTEGER_SECONDS = /^\d+$/;
+const IMF_FIXDATE = /^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
 const DEFAULT_RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10000];
 const LINE_BREAK_KEEPING_A_TRAILING_CR = /\r\n|\n|\r(?!$)/;
 const JOINING_NEWLINE = 1;
@@ -94,6 +105,25 @@ function errorFromResponse(status: number, text: string, path?: string): FsError
     status,
     ...(errorPath === undefined ? {} : { path: errorPath }),
   });
+}
+
+const watchRetryAfterMsOf = new WeakMap<FsError, number>();
+
+function parseRetryAfterMs(header: string | null): number | undefined {
+  const value = header?.trim() ?? '';
+  let delayMs: number;
+  if (INTEGER_SECONDS.test(value)) delayMs = Number(value) * 1000;
+  else if (IMF_FIXDATE.test(value)) delayMs = Date.parse(value) - Date.now();
+  else return undefined;
+  return Number.isNaN(delayMs) ? undefined : Math.min(Math.max(delayMs, 0), LONGEST_RETRY_AFTER_MS);
+}
+
+function failedResponseError(route: string, response: Response, text: string, path?: string): FsError {
+  const error = errorFromResponse(response.status, text, path);
+  if (route !== ROUTES.watch || response.status !== SERVICE_UNAVAILABLE) return error;
+  const delayMs = parseRetryAfterMs(response.headers.get('Retry-After'));
+  if (delayMs !== undefined) watchRetryAfterMsOf.set(error, delayMs);
+  return error;
 }
 
 async function readBody<T>(response: Response, read: (response: Response) => Promise<T>): Promise<T> {
@@ -163,7 +193,7 @@ class HttpClient {
         ...withSignal(request),
         ...(this.#options.credentials ? { credentials: this.#options.credentials } : {}),
       });
-      if (!response.ok) throw errorFromResponse(response.status, await response.text(), request.path);
+      if (!response.ok) throw failedResponseError(route, response, await response.text(), request.path);
       return response;
     } catch (error) {
       throw toFsError(error);
@@ -305,13 +335,23 @@ function sleepUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
 
 type WatchFailure = { stop: true } | { stop: false; retryAfterMs?: number };
 
-function handleWatchFailure(error: unknown, options: HttpAdapterOptions, longestDelay: number): WatchFailure {
-  const status = error instanceof FsError ? error.status : undefined;
-  if (status === undefined) return { stop: false };
-  const cannotBeFixedByRetrying = STATUSES_RETRY_CANNOT_FIX.has(status);
-  if (!cannotBeFixedByRetrying && !STATUSES_A_SIGN_IN_MAY_FIX.has(status)) return { stop: false };
-  callIsolated(options.onWatchError, error as FsError);
-  return cannotBeFixedByRetrying ? { stop: true } : { stop: false, retryAfterMs: longestDelay };
+const httpStatusOf = (error: unknown): number | undefined =>
+  error instanceof FsError ? error.status : undefined;
+
+function handleWatchFailure(
+  error: unknown,
+  options: HttpAdapterOptions,
+  longestDelay: number,
+  previousFailureStatus: number | undefined,
+): WatchFailure {
+  if (!(error instanceof FsError) || error.status === undefined) return { stop: false };
+  if (STATUSES_RETRY_CANNOT_FIX.has(error.status)) {
+    callIsolated(options.onWatchError, error);
+    return { stop: true };
+  }
+  if (error.status !== UNAUTHORIZED) return { stop: false, retryAfterMs: watchRetryAfterMsOf.get(error) };
+  if (previousFailureStatus !== UNAUTHORIZED) callIsolated(options.onWatchError, error);
+  return { stop: false, retryAfterMs: Math.max(longestDelay, SHORTEST_SIGN_IN_RETRY_MS) };
 }
 
 async function keepWatching(
@@ -324,10 +364,12 @@ async function keepWatching(
   const longestDelay = Math.max(...delays);
   let attempt = 0;
   let mayHaveMissedChanges = false;
+  let previousFailureStatus: number | undefined;
   while (!signal.aborted) {
     let retryAfterMs: number | undefined;
     try {
       const response = await client.send(ROUTES.watch, { headers: { Accept: 'text/event-stream' }, signal });
+      previousFailureStatus = undefined;
       if (mayHaveMissedChanges && !signal.aborted) callIsolated(onChange, [{ type: 'resync', path: '' }]);
       mayHaveMissedChanges = true;
       const serverProvedHealthy =
@@ -336,11 +378,13 @@ async function keepWatching(
     } catch (error) {
       if (signal.aborted) return;
       mayHaveMissedChanges = true;
-      const failure = handleWatchFailure(error, options, longestDelay);
+      const failure = handleWatchFailure(error, options, longestDelay, previousFailureStatus);
+      previousFailureStatus = httpStatusOf(error);
       if (failure.stop) return;
       retryAfterMs = failure.retryAfterMs;
     }
-    const backoff = retryAfterMs ?? delays[Math.min(attempt++, delays.length - 1)] ?? 1000;
+    const step = delays[Math.min(attempt++, delays.length - 1)] ?? 1000;
+    const backoff = retryAfterMs === undefined ? step : Math.max(retryAfterMs, step, SHORTEST_RETRY_AFTER_MS);
     if (!signal.aborted) await sleepUnlessAborted(backoff, signal);
   }
 }

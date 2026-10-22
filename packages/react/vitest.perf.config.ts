@@ -19,6 +19,7 @@ export default defineConfig({
   optimizeDeps: { include: ['react', 'react/jsx-runtime', 'react/compiler-runtime', 'react-dom/client'] },
   test: {
     name: 'react:perf',
+    reporters: ['verbose'],
     fileParallelism: false,
     include: ['test/scale.browser.test.tsx'],
     browser: {

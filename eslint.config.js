@@ -39,6 +39,7 @@ export default defineConfig([
         'error',
         { considerDefaultExhaustiveForUnions: true },
       ],
+      'max-lines-per-function': ['error', { max: 60, skipBlankLines: true, skipComments: true, IIFEs: true }],
     },
   },
   {

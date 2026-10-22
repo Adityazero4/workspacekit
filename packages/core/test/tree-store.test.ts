@@ -460,6 +460,73 @@ test('markSeen removes path from changed', async () => {
   expect(s.getSnapshot()).toBe(snap);
 });
 
+test('changedBelow follows marks, markSeen, delete and move', async () => {
+  const s = createTreeStore(wrap(seed()));
+  await s.loadFolder('');
+  await s.loadFolder('a/b');
+  const below = (): string[] => [...s.getSnapshot().changedBelow].sort();
+  expect(below()).toEqual([]);
+
+  s.applyChanges([{ type: 'updated', path: 'a/b/c.txt', actor: 'external' }]);
+  expect(below(), 'every folder above the mark, not the root').toEqual(['a', 'a/b']);
+  const afterFirstMark = s.getSnapshot().changedBelow;
+  s.applyChanges([{ type: 'updated', path: 'a/x.txt', actor: 'external' }]);
+  expect(s.getSnapshot().changedBelow, 'same membership keeps the set').toBe(afterFirstMark);
+
+  s.markSeen('a/b/c.txt');
+  expect(below(), 'a/x.txt is still marked below a').toEqual(['a']);
+  expect(afterFirstMark, 'an earlier snapshot never changes').toEqual(new Set(['a', 'a/b']));
+
+  s.applyChanges([{ type: 'updated', path: 'a/b/c.txt', actor: 'external' }]);
+  s.applyChanges([{ type: 'moved', oldPath: 'a', path: 'dir/a', actor: 'external' }]);
+  expect(below(), 'the counts follow the moved marks').toEqual(['dir', 'dir/a', 'dir/a/b']);
+
+  s.applyChanges([{ type: 'deleted', path: 'dir/a/b', actor: 'external' }]);
+  expect(below()).toEqual(['dir', 'dir/a']);
+  s.applyChanges([{ type: 'deleted', path: 'dir/a', actor: 'external' }]);
+  expect(below(), 'dir/a was the only folder marked below dir').toEqual([]);
+
+  s.applyChanges([{ type: 'updated', path: 'dir/one.txt', actor: 'external' }]);
+  expect(below()).toEqual(['dir']);
+  await s.remove('dir');
+  expect(below(), 'a local delete drops the marks below it').toEqual([]);
+  expect(s.getSnapshot().changed).toEqual(new Set());
+});
+
+test('a batch that throws partway leaves changedBelow in step with changed', async () => {
+  const s = createTreeStore(wrap(seed()));
+  await s.loadFolder('');
+  await s.loadFolder('a/b');
+  const throwingEntry = new Proxy({} as Entry, {
+    get: () => {
+      throw new Error('a hostile entry');
+    },
+  });
+  expect(() =>
+    s.applyChanges([
+      { type: 'updated', path: 'a/b/c.txt', actor: 'external' },
+      { type: 'updated', path: 'd.txt', actor: 'external', entry: throwingEntry },
+    ]),
+  ).toThrow('a hostile entry');
+  s.applyChanges([{ type: 'updated', path: 'dir/one.txt', actor: 'external' }]);
+  expect([...s.getSnapshot().changed]).toEqual(['dir/one.txt']);
+  expect([...s.getSnapshot().changedBelow]).toEqual(['dir']);
+});
+
+test('changedBelow under a store root leaves out the root and the folders above it', async () => {
+  const s = createTreeStore(wrap(seed()), { root: 'a' });
+  await s.loadFolder('a');
+  await s.loadFolder('a/b');
+  s.applyChanges([
+    { type: 'updated', path: 'a/b/c.txt', actor: 'external' },
+    { type: 'updated', path: 'a/x.txt', actor: 'external' },
+  ]);
+  expect([...s.getSnapshot().changedBelow]).toEqual(['a/b']);
+  s.applyChanges([{ type: 'deleted', path: 'a', actor: 'external' }]);
+  expect(s.getSnapshot().changed).toEqual(new Set());
+  expect(s.getSnapshot().changedBelow).toEqual(new Set());
+});
+
 test('subscribe notifies once per state change; getSnapshot is referentially stable between changes', async () => {
   const s = createTreeStore(wrap(seed()));
   let n = 0;
@@ -1638,4 +1705,149 @@ test('a store move that fails stops expecting its echo at once: the same move by
   await renaming;
   deliver([{ type: 'moved', oldPath: 'a.txt', path: 'b.txt', actor: 'agent' }]);
   expect(moves).toEqual(['a.txt->b.txt']);
+});
+
+const fileEntry = (path: string, size: number): Entry => ({
+  path,
+  name: basename(path),
+  kind: 'file',
+  size,
+  mtimeMs: 7,
+});
+
+test('an updated event with an entry upserts without listing the parent', async () => {
+  const a = wrap(seed());
+  const s = createTreeStore(a);
+  await s.loadFolder('');
+  a.lists.length = 0;
+  s.applyChanges([
+    { type: 'updated', path: 'a/x.txt', actor: 'agent', entry: fileEntry('a/x.txt', 42) },
+    { type: 'created', path: '/dir/new.txt', actor: 'agent', entry: fileEntry('dir/new.txt', 3) },
+  ]);
+  await settle();
+  expect(a.lists).toEqual([]);
+  expect(entryAt(tree(s), 'a/x.txt')?.size).toBe(42);
+  expect(entryAt(tree(s), 'dir/new.txt')?.size).toBe(3);
+  expect([...s.getSnapshot().changed].sort()).toEqual(['a/x.txt', 'dir/new.txt']);
+  expect(s.getSnapshot().latestExternalChange).toEqual({ path: 'dir/new.txt', sequence: 2 });
+});
+
+test.each<[string, Partial<Entry>]>([
+  ['a different path', { path: 'a/other.txt' }],
+  ['a name that is not the basename of its path', { name: 'other.txt' }],
+  ['an unknown kind', { kind: 'symlink' as Entry['kind'] }],
+  ['a path that cannot be normalized', { path: '../x.txt' }],
+])('an event whose entry has %s falls back to a reload', async (_problem, override) => {
+  const a = wrap(seed());
+  const s = createTreeStore(a);
+  await s.loadFolder('');
+  a.lists.length = 0;
+  const entry = { ...fileEntry('a/x.txt', 42), ...override };
+  s.applyChanges([{ type: 'updated', path: 'a/x.txt', actor: 'agent', entry }]);
+  await settle();
+  expect(a.lists).toEqual(['a']);
+  expect(entryAt(tree(s), 'a/x.txt')?.size).toBe(1);
+  expect(s.getSnapshot().changed.has('a/x.txt')).toBe(true);
+});
+
+test('an entry for a path with a store mutation in flight falls back to a reload', async () => {
+  const removing = deferred<void>();
+  const a = wrap(seed(), { delete: () => removing.promise });
+  const s = createTreeStore(a);
+  await s.loadFolder('');
+  const removal = s.remove('d.txt');
+  a.lists.length = 0;
+  s.applyChanges([{ type: 'updated', path: 'd.txt', actor: 'agent', entry: fileEntry('d.txt', 9) }]);
+  expect(entryAt(tree(s), 'd.txt'), 'the optimistic removal stands').toBeUndefined();
+  expect(a.lists, 'the parent is listed instead').toEqual(['']);
+  removing.resolve();
+  await removal;
+});
+
+test('a created directory entry over a loaded folder falls back to listing the parent, so the old children go', async () => {
+  const inner = seed();
+  const a = wrap(inner);
+  const s = createTreeStore(a);
+  await s.loadFolder('');
+  await s.loadFolder('a/b');
+  await inner.delete!('a/b');
+  const recreated = await inner.create!('a/b', 'directory');
+  a.lists.length = 0;
+  s.applyChanges([{ type: 'created', path: 'a/b', actor: 'agent', entry: recreated }]);
+  await settle();
+  expect(a.lists).toEqual(['a']);
+  expect(entryAt(tree(s), 'a/b/c.txt')).toBeUndefined();
+});
+
+test("the echo of the store's own move does not apply the entry it carries", async () => {
+  const inner = seed();
+  let deliver!: (events: ChangeEvent[]) => void;
+  const s = createTreeStore({
+    ...inner,
+    watch: (listener) => {
+      deliver = listener;
+      return () => undefined;
+    },
+  });
+  s.subscribe(() => undefined);
+  await s.loadFolder('');
+  const confirmed = await s.rename('d.txt', 'e.txt');
+  const moves: string[] = [];
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  deliver([
+    {
+      type: 'moved',
+      oldPath: 'd.txt',
+      path: 'e.txt',
+      actor: 'user',
+      entry: { ...confirmed, size: 999, mtimeMs: 1 },
+    },
+  ]);
+  expect(entryAt(tree(s), 'e.txt')).toEqual(confirmed);
+  expect(moves).toEqual([]);
+});
+
+test('a moved event with an entry needs no destination listing', async () => {
+  const a = wrap(seed());
+  const s = createTreeStore(a, { fetchDepth: 1 });
+  await s.loadFolder('');
+  await s.loadFolder('dir');
+  a.lists.length = 0;
+  const moves: string[] = [];
+  s.onMove((from, to) => moves.push(`${from}->${to}`));
+  s.applyChanges([
+    {
+      type: 'moved',
+      oldPath: 'a/x.txt',
+      path: 'dir/x.txt',
+      actor: 'agent',
+      entry: fileEntry('dir/x.txt', 5),
+    },
+  ]);
+  await settle();
+  expect(a.lists).toEqual([]);
+  expect(entryAt(tree(s), 'dir/x.txt')?.size).toBe(5);
+  expect(s.getSnapshot().changed.has('dir/x.txt')).toBe(true);
+  expect(moves).toEqual(['a/x.txt->dir/x.txt']);
+});
+
+test('an updated event with an entry still re-issues an in-flight ancestor listing, so its stale answer cannot undo the upsert', async () => {
+  const h = heldListings({ 'dir/x.txt': '1' });
+  const s = createTreeStore(h.adapter, { fetchDepth: 2 });
+  await s.loadFolder('');
+  h.hold(true);
+  void s.loadFolder('', { force: true });
+  const staleRootListing = h.held.shift()!;
+  const entry = await h.inner.write!('dir/x.txt', 'fresh content', undefined);
+  s.applyChanges([{ type: 'updated', path: 'dir/x.txt', actor: 'agent', entry }]);
+  expect(entryAt(tree(s), 'dir/x.txt')?.size).toBe(13);
+  expect(h.held.map((request) => request.path)).toEqual(['']);
+  staleRootListing.release();
+  await settle();
+  expect(entryAt(tree(s), 'dir/x.txt')?.size).toBe(13);
+  h.hold(false);
+  for (const request of h.held.splice(0)) request.release();
+  await settle();
+  expect(entryAt(tree(s), 'dir/x.txt')?.size).toBe(13);
+  expect(h.held).toEqual([]);
 });

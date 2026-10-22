@@ -1,5 +1,6 @@
 export const treeRowRenders = { updates: 0, mounts: 0 };
 export const fileTabRenders = { updates: 0, mounts: 0 };
+export const fileViewerRenders = { updates: 0, mounts: 0 };
 
 const PERFORMED_WORK = 1;
 
@@ -14,6 +15,7 @@ interface Fiber {
 const countersByComponentName: Record<string, { updates: number; mounts: number }> = {
   TreeRow: treeRowRenders,
   FileTab: fileTabRenders,
+  FileViewer: fileViewerRenders,
 };
 
 const counterOf = (fiber: Fiber): { updates: number; mounts: number } | undefined =>

@@ -94,6 +94,14 @@ export interface FileSystemContext {
    */
   reveal: Reveal;
   notify: (notice: Notice) => void;
+  /**
+   * Whether any file has edits that are not saved, including files whose tab was closed. Use it to guard
+   * navigation in the app: ending the session (unmounting the provider, or a new adapter or root) drops
+   * edits that could not be saved, such as those in conflict, deleted or failing to save.
+   */
+  hasUnsavedEdits: () => boolean;
+  /** Calls `listener` whenever any file's edits or save status change. Returns the unsubscribe. */
+  subscribeToEdits: (listener: () => void) => () => void;
 }
 
 /**
@@ -109,6 +117,8 @@ export interface EntryState {
   status: FolderStatus;
   pending: boolean;
   changed: boolean;
+  /** Whether a path below this folder is in `changed`. */
+  changedBelow: boolean;
   error?: FsError;
 }
 
@@ -156,7 +166,16 @@ export function useTreeSnapshot(): TreeSnapshot {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
-const sameEntryFields = (a: Entry | undefined, b: Entry | undefined): boolean =>
+/**
+ * Whether two entries (or `undefined`) have equal fields: `meta` is compared by identity, the rest by value.
+ *
+ * @internal
+ * @example
+ * ```ts
+ * if (sameEntryFields(previous.entry, entry)) return previous;
+ * ```
+ */
+export const sameEntryFields = (a: Entry | undefined, b: Entry | undefined): boolean =>
   a === b ||
   (a !== undefined &&
     b !== undefined &&
@@ -168,9 +187,9 @@ const sameEntryFields = (a: Entry | undefined, b: Entry | undefined): boolean =>
     a.meta === b.meta);
 
 /**
- * One path's entry, folder status, pending/changed flags and load error. Re-renders only when one of those
- * changes, so a listing that rebuilds sibling entries with equal values does not re-render their rows. Entry
- * fields are compared one by one, and `meta` by identity.
+ * One path's entry, folder status, pending, changed and changed-below flags and load error. Re-renders only
+ * when one of those changes, so a listing that rebuilds sibling entries with equal values does not re-render
+ * their rows. Entry fields are compared one by one, and `meta` by identity.
  *
  * @example
  * ```tsx
@@ -186,6 +205,7 @@ export function useEntryState(path: string): EntryState {
     const status = statusOf(snapshot.tree, path);
     const pending = snapshot.pending.has(path);
     const changed = snapshot.changed.has(path);
+    const changedBelow = snapshot.changedBelow.has(path);
     const error = snapshot.errors.get(path);
     const previous = lastReturned.current;
     if (
@@ -194,11 +214,12 @@ export function useEntryState(path: string): EntryState {
       previous.status === status &&
       previous.pending === pending &&
       previous.changed === changed &&
+      previous.changedBelow === changedBelow &&
       previous.error === error
     ) {
       return previous;
     }
-    const next: EntryState = { status, pending, changed };
+    const next: EntryState = { status, pending, changed, changedBelow };
     if (entry) next.entry = entry;
     if (error) next.error = error;
     return (lastReturned.current = next);

@@ -1,4 +1,5 @@
 import { treeRowRenders } from './support/countComponentRenders';
+import { interactionSettled } from './support/interactionSettled';
 import { statusOf, type DropEntry, type FileSystemAdapter } from '@scope/core';
 import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
 import { useEffect } from 'react';
@@ -58,10 +59,11 @@ const mount = async (
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
-const settle = (milliseconds = 100): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
+const PAST_THE_HOVER_EXPAND_DELAY_MS = 500;
+const useFakeTimeouts = (): void => void vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[role=treeitem]')];
 const labelOf = (row: Element): string | null | undefined =>
   row.querySelector('[data-fs-part=tree-row-label]')?.textContent;
@@ -119,17 +121,38 @@ const dropOsFiles = (target: Element, dataTransfer: DataTransfer): DragEvent => 
   return fire(target, 'drop', dataTransfer);
 };
 
-const withUploadsTaking =
-  (milliseconds: number) =>
-  (memory: MemoryAdapter): FileSystemAdapter => ({
+function heldUploads(): { adapt: (memory: MemoryAdapter) => FileSystemAdapter; release: () => void } {
+  let release = (): void => undefined;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  return {
+    release,
+    adapt: (memory) => ({
+      ...memory,
+      upload: {
+        direct: async (path, file, options) => {
+          await released;
+          return memory.upload!.direct(path, file, options);
+        },
+      },
+    }),
+  };
+}
+
+const whenAborted = (signal: AbortSignal): Promise<void> =>
+  new Promise((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+
+const withOnlyTheFirstUploadFinishing = (memory: MemoryAdapter): FileSystemAdapter => {
+  let started = 0;
+  return {
     ...memory,
     upload: {
       direct: async (path, file, options) => {
-        await settle(milliseconds);
+        if (started++ > 0) await whenAborted(options.signal);
         return memory.upload!.direct(path, file, options);
       },
     },
-  });
+  };
+};
 
 const fileEntry = (fullPath: string): DropEntry => ({
   isFile: true,
@@ -182,17 +205,21 @@ test('Alt-drag copies', async () => {
 
 test('hovering a collapsed folder for 400 ms expands it', async () => {
   await mount({ 'a.txt': 'A', 'docs/readme.md': 'R', 'later/b.txt': 'B' });
+  useFakeTimeouts();
   const dataTransfer = startDragging('a.txt');
   fire(rowNamed('docs'), 'dragover', dataTransfer);
-  await settle(250);
+  await vi.advanceTimersByTimeAsync(250);
   fire(rowNamed('docs'), 'dragover', dataTransfer);
+  await vi.advanceTimersByTimeAsync(140);
   expect(rowNamed('docs').getAttribute('aria-expanded'), 'not yet').toBe('false');
+  await vi.advanceTimersByTimeAsync(20);
   await expect.poll(() => rowNamed('docs').getAttribute('aria-expanded')).toBe('true');
   await expect.poll(dropTargets).toEqual(['docs', 'readme.md']);
 
   fire(rowNamed('later'), 'dragover', dataTransfer);
   fire(viewport(), 'dragleave', dataTransfer, { relatedTarget: document.body });
-  await settle(500);
+  await vi.advanceTimersByTimeAsync(PAST_THE_HOVER_EXPAND_DELAY_MS);
+  await interactionSettled();
   expect(rowNamed('later').getAttribute('aria-expanded'), 'leaving the tree cancels the hover').toBe('false');
   expect(dropTargets()).toEqual([]);
 });
@@ -226,13 +253,14 @@ test('a foreign drop carrying the path type moves nothing', async () => {
   fire(viewport(), 'dragenter', filesTransfer([new File(['x'], 'x.txt')]));
   expect(foreignDrop('a.txt').defaultPrevented, 'a drag without the type entered since').toBe(false);
 
-  await settle();
+  await interactionSettled();
   for (const path of ['a.txt', 'b.txt', 'src/c.txt']) expect(await exists(adapter, path), path).toBe(true);
   expect(await exists(adapter, 'docs/a.txt')).toBe(false);
 });
 
 test('a cancelled drag (Esc, or leaving the window) clears the target and the hover timer', async () => {
   await mount({ 'a.txt': '', 'docs/readme.md': '' });
+  useFakeTimeouts();
   const dataTransfer = startDragging('a.txt');
   const docs = rowNamed('docs');
   const label = docs.querySelector('[data-fs-part=tree-row-label]')!;
@@ -241,7 +269,7 @@ test('a cancelled drag (Esc, or leaving the window) clears the target and the ho
   await expect.poll(dropTargets).toEqual(['docs']);
   fire(label, 'dragenter', dataTransfer);
   fire(docs, 'dragleave', dataTransfer, { relatedTarget: null });
-  await settle();
+  await interactionSettled();
   expect(dropTargets(), 'moving onto a child keeps the target').toEqual(['docs']);
 
   const rect = label.getBoundingClientRect();
@@ -249,12 +277,14 @@ test('a cancelled drag (Esc, or leaving the window) clears the target and the ho
   Object.defineProperty(cancel, 'dataTransfer', { value: dataTransfer });
   label.dispatchEvent(cancel);
   await expect.poll(dropTargets).toEqual([]);
-  await settle(500);
+  await vi.advanceTimersByTimeAsync(PAST_THE_HOVER_EXPAND_DELAY_MS);
+  await interactionSettled();
   expect(rowNamed('docs').getAttribute('aria-expanded'), 'the hover timer was cleared').toBe('false');
 });
 
 test('moving within one row keeps it the target; entering an outside element ends the drag', async () => {
   await mount({ 'a.txt': '', 'docs/readme.md': '' });
+  useFakeTimeouts();
   const dataTransfer = startDragging('a.txt');
   const docs = rowNamed('docs');
   const label = docs.querySelector('[data-fs-part=tree-row-label]')!;
@@ -267,7 +297,8 @@ test('moving within one row keeps it the target; entering an outside element end
   fire(label, 'dragover', dataTransfer);
   moveInto(docs, label);
   moveInto(label, docs);
-  await settle(450);
+  await vi.advanceTimersByTimeAsync(PAST_THE_HOVER_EXPAND_DELAY_MS);
+  await interactionSettled();
   expect(rowNamed('docs').getAttribute('aria-expanded'), 'the hover timer kept running').toBe('true');
   await expect.poll(dropTargets).toEqual(['docs', 'readme.md']);
 
@@ -281,6 +312,7 @@ test('moving within one row keeps it the target; entering an outside element end
 
 test('a drag whose row unmounted still clears the target and the hover timer when it ends', async () => {
   await mount({ 'src/c.txt': '', 'docs/readme.md': '' }, { expanded: ['src'] });
+  useFakeTimeouts();
   const sourceRow = rowNamed('c.txt');
   const dataTransfer = startDragging('c.txt');
   fire(rowNamed('docs'), 'dragover', dataTransfer);
@@ -289,7 +321,8 @@ test('a drag whose row unmounted still clears the target and the hover timer whe
   await expect.poll(() => sourceRow.isConnected).toBe(false);
   fire(sourceRow, 'dragend', dataTransfer);
   await expect.poll(dropTargets).toEqual([]);
-  await settle(450);
+  await vi.advanceTimersByTimeAsync(PAST_THE_HOVER_EXPAND_DELAY_MS);
+  await interactionSettled();
   expect(rowNamed('docs').getAttribute('aria-expanded')).toBe('false');
 });
 
@@ -315,7 +348,7 @@ test('dropping a folder into itself shows no target and does nothing', async () 
   );
   fire(viewport(), 'dragleave', fileDrag, { relatedTarget: document.body });
 
-  await settle();
+  await interactionSettled();
   expect(dropTargets()).toEqual([]);
   expect(await exists(adapter, 'src/sub/b.ts')).toBe(true);
   expect(await exists(adapter, 'src/a.ts')).toBe(true);
@@ -326,11 +359,11 @@ test('hovering a folder during a drag re-renders only the rows whose data-drop-t
   await mount({ 'a/1.txt': '', 'a/2.txt': '', 'b/1.txt': '', 'c.txt': '' }, { expanded: ['a', 'b'] });
   const dataTransfer = startDragging('c.txt');
   const measure = async (action: () => void): Promise<number> => {
-    await settle();
+    await interactionSettled();
     treeRowRenders.updates = 0;
     treeRowRenders.mounts = 0;
     action();
-    await settle();
+    await interactionSettled();
     expect(treeRowRenders.mounts).toBe(0);
     return treeRowRenders.updates;
   };
@@ -360,9 +393,10 @@ test('OS folder drop uploads into the target folder', async () => {
 });
 
 test('upload placeholders show progress and disappear when done', async () => {
+  const uploads = heldUploads();
   const { adapter } = await mount(
     { 'docs/readme.md': '', 'zed.txt': '' },
-    { expanded: ['docs'], adapt: withUploadsTaking(800) },
+    { expanded: ['docs'], adapt: uploads.adapt },
   );
   const dropped = filesTransfer([new File(['one'], 'one.txt'), new File(['two'], 'two.txt')]);
   dropOsFiles(rowNamed('readme.md'), dropped);
@@ -400,7 +434,8 @@ test('upload placeholders show progress and disappear when done', async () => {
   expect(viewport().hasAttribute('data-drop-target'), 'not the root').toBe(false);
   fire(viewport(), 'dragleave', osDrag);
 
-  await expect.poll(() => placeholders().length, { timeout: 3000 }).toBe(0);
+  uploads.release();
+  await expect.poll(() => placeholders().length).toBe(0);
   await expect.poll(summary).toBe('Uploaded 2 files to "docs".');
   expect(await exists(adapter, 'docs/one.txt')).toBe(true);
   await expect.poll(() => rowNamed('one.txt')).toBeDefined();
@@ -411,7 +446,8 @@ test('upload placeholders show progress and disappear when done', async () => {
 });
 
 test('arrow keys skip the placeholders and scroll to the first real child', async () => {
-  await mount({ 'docs/readme.md': '' }, { expanded: ['docs'], adapt: withUploadsTaking(1500) });
+  const uploads = heldUploads();
+  await mount({ 'docs/readme.md': '' }, { expanded: ['docs'], adapt: uploads.adapt });
   const files = Array.from({ length: 15 }, (_, at) => new File(['x'], `p${at}.txt`));
   dropOsFiles(rowNamed('docs'), filesTransfer(files));
   await expect.poll(() => placeholders().length).toBe(15);
@@ -422,16 +458,19 @@ test('arrow keys skip the placeholders and scroll to the first real child', asyn
   const view = viewport().getBoundingClientRect();
   expect(row.top >= view.top && row.bottom <= view.bottom, 'scrolled into view').toBe(true);
   expect(placeholders().length, 'still uploading').toBeGreaterThan(0);
+  uploads.release();
 });
 
 test('an upload into an empty root shows its placeholders, then focus moves to the new rows', async () => {
-  await mount({}, { adapt: withUploadsTaking(600) });
+  const uploads = heldUploads();
+  await mount({}, { adapt: uploads.adapt });
   const emptyState = document.querySelector<HTMLElement>('[data-fs-part=tree-empty]')!;
   emptyState.focus();
   dropOsFiles(viewport(), filesTransfer([new File(['1'], 'one.txt'), new File(['2'], 'two.txt')]));
   await expect.poll(() => placeholders().length).toBe(2);
   expect(document.querySelector('[data-fs-part=tree-empty]')).toBeNull();
-  await expect.poll(() => rows().map(labelOf), { timeout: 3000 }).toEqual(['one.txt', 'two.txt']);
+  uploads.release();
+  await expect.poll(() => rows().map(labelOf)).toEqual(['one.txt', 'two.txt']);
   await expect.poll(() => document.activeElement?.getAttribute('role')).toBe('treeitem');
 });
 
@@ -456,36 +495,42 @@ test('an upload progress tick re-renders no tree rows', async () => {
   );
   dropOsFiles(rowNamed('docs'), filesTransfer([new File(['0123456789'], 'ten.txt')]));
   await expect.poll(() => placeholders().length).toBe(1);
-  await settle();
+  await interactionSettled();
   treeRowRenders.updates = 0;
   treeRowRenders.mounts = 0;
   reportProgress(5);
   await expect.poll(() => placeholders()[0]?.textContent).toMatch(/50%/);
-  await settle();
+  await interactionSettled();
   expect({ ...treeRowRenders }).toEqual({ updates: 0, mounts: 0 });
   finishUpload();
   await expect.poll(() => placeholders().length).toBe(0);
 });
 
 test('placeholders stay until the reloaded folder shows the uploaded entries', async () => {
-  let listingIsSlow = false;
-  await mount(
+  let holdListings = false;
+  let releaseListings = (): void => undefined;
+  const listingsReleased = new Promise<void>((resolve) => (releaseListings = resolve));
+  const { adapter } = await mount(
     { 'docs/readme.md': '' },
     {
       expanded: ['docs'],
       adapt: (memory) => ({
-        ...withUploadsTaking(200)(memory),
+        ...memory,
         watch: undefined,
         list: async (path, options) => {
-          if (listingIsSlow) await settle(400);
+          if (holdListings) await listingsReleased;
           return memory.list(path, options);
         },
       }),
     },
   );
-  listingIsSlow = true;
+  holdListings = true;
   dropOsFiles(rowNamed('docs'), filesTransfer([new File(['1'], 'one.txt')]));
   await expect.poll(() => placeholders().length).toBe(1);
+  await expect.poll(() => exists(adapter, 'docs/one.txt')).toBe(true);
+  await interactionSettled();
+  expect(placeholders(), 'the upload landed but the folder has not reloaded yet').toHaveLength(1);
+  releaseListings();
   const firstFrameWithoutPlaceholders = async (): Promise<string> => {
     for (;;) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -496,7 +541,7 @@ test('placeholders stay until the reloaded folder shows the uploaded entries', a
 });
 
 test('cancel stops the run and leaves pre-existing files', async () => {
-  const { adapter } = await mount({ 'inbox/keep.txt': 'keep' }, { adapt: withUploadsTaking(400) });
+  const { adapter } = await mount({ 'inbox/keep.txt': 'keep' }, { adapt: withOnlyTheFirstUploadFinishing });
   const files = Array.from({ length: 9 }, (_, at) => new File([String(at)], `new${at}.txt`));
   dropOsFiles(rowNamed('inbox'), filesTransfer(files));
   await expect.poll(() => exists(adapter, 'inbox/new0.txt'), { timeout: 5000 }).toBe(true);
@@ -513,7 +558,7 @@ test('over-limit drop shows a notice and uploads nothing', async () => {
   const files = Array.from({ length: 501 }, (_, at) => new File(['x'], `f${at}.txt`));
   dropOsFiles(viewport(), filesTransfer(files));
   await expect.poll(() => notices.at(-1)?.message).toMatch(/more than 500 files/);
-  await settle();
+  await interactionSettled();
   expect(await exists(adapter, 'f0.txt')).toBe(false);
   expect(document.querySelectorAll('[data-fs-part=upload-run]')).toHaveLength(0);
 });
@@ -567,7 +612,7 @@ test('without adapter.upload, the upload actions are hidden and OS drops are ign
   await expect.poll(() => document.querySelector('[role=menu]')).toBeNull();
   const drop = dropOsFiles(rowNamed('docs'), filesTransfer([new File(['x'], 'x.txt')]));
   expect(drop.defaultPrevented).toBe(false);
-  await settle();
+  await interactionSettled();
   expect(await exists(adapter, 'docs/x.txt')).toBe(false);
   expect(document.querySelectorAll('input[type=file]')).toHaveLength(0);
   expect(notices).toEqual([]);

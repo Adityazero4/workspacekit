@@ -111,6 +111,46 @@ function normalizedPathBelowRoot(path: string, root: string): string {
   return normalized;
 }
 
+function hasChildOrThrowLoadError(store: TreeStore, folder: string, child: string): boolean {
+  const snapshot = store.getSnapshot();
+  const loadError = snapshot.errors.get(folder);
+  if (loadError) throw loadError;
+  return Boolean(entryAt(snapshot.tree, child));
+}
+
+async function loadFolderAndFind(
+  store: TreeStore,
+  folder: string,
+  child: string,
+  target: string,
+): Promise<void> {
+  const wasLoadedBefore = statusOf(store.getSnapshot().tree, folder) === 'loaded';
+  await store.loadFolder(folder);
+  if (hasChildOrThrowLoadError(store, folder, child)) return;
+  if (wasLoadedBefore) {
+    await store.loadFolder(folder, { force: true });
+    if (hasChildOrThrowLoadError(store, folder, child)) return;
+  }
+  throw notFound(target, child);
+}
+
+function showRevealed(
+  parts: RevealerParts,
+  host: RevealHost | undefined,
+  revealed: { target: string; folders: readonly string[]; opts: RevealOptions | undefined },
+): void {
+  const { store, expanded, selected } = parts;
+  const { target, folders, opts } = revealed;
+  const expandTargetToo =
+    opts?.expand === true && entryAt(store.getSnapshot().tree, target)?.kind === 'directory';
+  expanded.set((previous) =>
+    withMembership(previous, expandTargetToo ? [...folders, target] : folders, true),
+  );
+  selected.set(target);
+  store.markSeen(target);
+  host?.show(target, { flash: opts?.flash === true, focus: opts?.focus !== false });
+}
+
 /**
  * The provider's `reveal` and the registry of trees that show revealed rows (the first mounted one does).
  *
@@ -126,43 +166,10 @@ export function createRevealer(parts: RevealerParts): {
   isRevealing: () => boolean;
   attachHost: (host: RevealHost) => () => void;
 } {
-  const { store, root, expanded, selected } = parts;
+  const { store, root } = parts;
   const hosts: RevealHost[] = [];
   let latestReveal = 0;
   let latestRevealInFlight = false;
-
-  const hasChildOrThrowLoadError = (folder: string, child: string): boolean => {
-    const snapshot = store.getSnapshot();
-    const loadError = snapshot.errors.get(folder);
-    if (loadError) throw loadError;
-    return Boolean(entryAt(snapshot.tree, child));
-  };
-
-  const loadFolderAndFind = async (folder: string, child: string, target: string): Promise<void> => {
-    const wasLoadedBefore = statusOf(store.getSnapshot().tree, folder) === 'loaded';
-    await store.loadFolder(folder);
-    if (hasChildOrThrowLoadError(folder, child)) return;
-    if (wasLoadedBefore) {
-      await store.loadFolder(folder, { force: true });
-      if (hasChildOrThrowLoadError(folder, child)) return;
-    }
-    throw notFound(target, child);
-  };
-
-  const showRevealed = (
-    target: string,
-    folders: readonly string[],
-    opts: RevealOptions | undefined,
-  ): void => {
-    const expandTargetToo =
-      opts?.expand === true && entryAt(store.getSnapshot().tree, target)?.kind === 'directory';
-    expanded.set((previous) =>
-      withMembership(previous, expandTargetToo ? [...folders, target] : folders, true),
-    );
-    selected.set(target);
-    store.markSeen(target);
-    hosts[0]?.show(target, { flash: opts?.flash === true, focus: opts?.focus !== false });
-  };
 
   const revealInOrder = async (
     target: string,
@@ -173,12 +180,12 @@ export function createRevealer(parts: RevealerParts): {
     const folders = foldersBetween(root, target);
     const toLoad = [root, ...folders];
     for (const [step, folder] of toLoad.entries()) {
-      await loadFolderAndFind(folder, toLoad[step + 1] ?? target, target).catch((error: unknown) => {
+      await loadFolderAndFind(store, folder, toLoad[step + 1] ?? target, target).catch((error: unknown) => {
         throw isStillTheLatest() ? error : superseded(target);
       });
       if (!isStillTheLatest()) throw superseded(target);
     }
-    showRevealed(target, folders, opts);
+    showRevealed(parts, hosts[0], { target, folders, opts });
   };
 
   const reveal: Reveal = async (path, opts) => {
