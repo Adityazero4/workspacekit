@@ -1,8 +1,8 @@
 'use client';
 import { parentPath, toFsError, type Entry } from '@scope/core';
-import { defaultRangeExtractor, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { partProps } from '../cx';
+import { useListboxWindow, type ListboxWindow } from '../listboxWindow';
 import type { ClassNames } from '../parts';
 import { useFileSystem, type FileSystemContext } from '../provider/hooks';
 import { highlightRanges } from './highlight';
@@ -27,8 +27,6 @@ export interface FileSearchProps {
 }
 
 const ESTIMATED_OPTION_HEIGHT = 32;
-const OPTIONS_IN_FIRST_PAINT = 8;
-const OVERSCAN = 4;
 
 const announcementFor = (status: FileSearchStatus, count: number): string => {
   if (status === 'error') return 'Search failed';
@@ -42,6 +40,20 @@ function useAnnouncementKeptWhileSearching(status: FileSearchStatus, count: numb
   const [lastAnnounced, setLastAnnounced] = useState(announcement);
   if (status !== 'searching' && announcement !== lastAnnounced) setLastAnnounced(announcement);
   return status === 'searching' ? lastAnnounced : announcement;
+}
+
+function SearchStatus(props: {
+  status: FileSearchStatus;
+  count: number;
+  classNames?: ClassNames;
+}): React.JSX.Element {
+  const { status, count, classNames } = props;
+  const announcement = useAnnouncementKeptWhileSearching(status, count);
+  return (
+    <p {...partProps('search-status', classNames)} role="status" aria-live="polite">
+      {announcement}
+    </p>
+  );
 }
 
 function revealResult(fs: FileSystemContext, entry: Entry, onOpenFile: FileSearchProps['onOpenFile']): void {
@@ -89,21 +101,17 @@ export function FileSearch(props: FileSearchProps): React.JSX.Element | null {
   const search = useFileSearch();
   const { results } = search;
   const listboxId = useId();
-  const [active, setActive] = useState({ results, index: -1 });
-  const activeIndex = active.results === results ? active.index : -1;
+  const [activeIndex, setActiveIndex] = useActiveIndexResetByNewResults(results);
   const [inputHasFocus, setInputHasFocus] = useState(false);
-  const announcement = useAnnouncementKeptWhileSearching(search.status, results.length);
   const viewport = useRef<HTMLDivElement>(null);
-  const resultWindow = useResultWindow(results.length, activeIndex, viewport);
+  const resultWindow = useListboxWindow(results.length, activeIndex, viewport, ESTIMATED_OPTION_HEIGHT);
   if (search.status === 'unsupported') return null;
 
-  const optionId = (index: number): string => `${listboxId}-option-${index}`;
-  const hasResults = results.length > 0;
-  const isOpen = hasResults && inputHasFocus;
+  const isOpen = results.length > 0 && inputHasFocus;
   const moveActive = (step: 1 | -1): void => {
     if (!isOpen) return;
     const index = nextActiveIndex(activeIndex, step, results.length);
-    setActive({ results, index });
+    setActiveIndex(index);
     resultWindow.scrollToIndex(index);
   };
   const activeResult = isOpen ? results[activeIndex] : undefined;
@@ -114,7 +122,6 @@ export function FileSearch(props: FileSearchProps): React.JSX.Element | null {
     else return;
     event.preventDefault();
   };
-  const highlightQuery = search.query.trim();
 
   return (
     <div {...partProps('search', classNames, className)}>
@@ -125,7 +132,7 @@ export function FileSearch(props: FileSearchProps): React.JSX.Element | null {
         aria-autocomplete="list"
         aria-expanded={isOpen}
         aria-controls={listboxId}
-        aria-activedescendant={isOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+        aria-activedescendant={isOpen && activeIndex >= 0 ? optionIdOf(listboxId, activeIndex) : undefined}
         autoComplete="off"
         spellCheck={false}
         placeholder={props.placeholder ?? 'Search files'}
@@ -135,51 +142,82 @@ export function FileSearch(props: FileSearchProps): React.JSX.Element | null {
         onFocus={() => setInputHasFocus(true)}
         onBlur={() => setInputHasFocus(false)}
       />
-      <p {...partProps('search-status', classNames)} role="status" aria-live="polite">
-        {announcement}
-      </p>
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the mousedown only keeps focus in the combobox input; the options are reached through it */}
+      <SearchStatus status={search.status} count={results.length} classNames={classNames} />
+      <SearchResultList
+        viewport={viewport}
+        resultWindow={resultWindow}
+        results={results}
+        listbox={{ id: listboxId, isOpen, activeIndex }}
+        highlightQuery={search.query.trim()}
+        classNames={classNames}
+        onReveal={(entry) => revealResult(fs, entry, onOpenFile)}
+      />
+    </div>
+  );
+}
+
+const optionIdOf = (listboxId: string, index: number): string => `${listboxId}-option-${index}`;
+
+function useActiveIndexResetByNewResults(results: readonly Entry[]): [number, (index: number) => void] {
+  const [active, setActive] = useState({ results, index: -1 });
+  const activeIndex = active.results === results ? active.index : -1;
+  return [activeIndex, (index) => setActive({ results, index })];
+}
+
+interface SearchResultListProps {
+  viewport: RefObject<HTMLDivElement | null>;
+  resultWindow: ListboxWindow;
+  results: readonly Entry[];
+  listbox: { id: string; isOpen: boolean; activeIndex: number };
+  highlightQuery: string;
+  classNames?: ClassNames;
+  onReveal: (entry: Entry) => void;
+}
+
+function SearchResultList(props: SearchResultListProps): React.JSX.Element {
+  const { viewport, resultWindow, results, listbox, highlightQuery, classNames, onReveal } = props;
+  return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the mousedown only keeps focus in the combobox input; the options are reached through it
+    <div
+      ref={viewport}
+      {...partProps('search-viewport', classNames)}
+      hidden={!listbox.isOpen}
+      onMouseDown={(event) => event.preventDefault()}
+    >
       <div
-        ref={viewport}
-        {...partProps('search-viewport', classNames)}
-        hidden={!isOpen}
-        onMouseDown={(event) => event.preventDefault()}
+        {...partProps('search-results', classNames)}
+        id={listbox.id}
+        role="listbox"
+        aria-label="Search results"
+        style={{ height: resultWindow.totalSize }}
       >
-        <div
-          {...partProps('search-results', classNames)}
-          id={listboxId}
-          role="listbox"
-          aria-label="Search results"
-          style={{ height: resultWindow.totalSize }}
-        >
-          {resultWindow.items.map((item) => {
-            const entry = results[item.index]!;
-            const isActive = item.index === activeIndex;
-            return (
-              // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the combobox input handles the keys and points at the active option with aria-activedescendant
-              <div
-                key={entry.path}
-                ref={resultWindow.measureElement}
-                data-index={item.index}
-                {...partProps('search-result', classNames)}
-                id={optionId(item.index)}
-                role="option"
-                tabIndex={-1}
-                aria-selected={isActive}
-                aria-setsize={results.length}
-                aria-posinset={item.index + 1}
-                data-selected={isActive ? '' : undefined}
-                style={{ transform: `translateY(${item.start}px)` }}
-                onClick={() => revealResult(fs, entry, onOpenFile)}
-              >
-                <span {...partProps('search-result-name', classNames)}>
-                  <HighlightedName name={entry.name} query={highlightQuery} classNames={classNames} />
-                </span>
-                <span {...partProps('search-result-path', classNames)}>{parentPath(entry.path)}</span>
-              </div>
-            );
-          })}
-        </div>
+        {resultWindow.items.map((item) => {
+          const entry = results[item.index]!;
+          const isActive = item.index === listbox.activeIndex;
+          return (
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the combobox input handles the keys and points at the active option with aria-activedescendant
+            <div
+              key={entry.path}
+              ref={resultWindow.measureElement}
+              data-index={item.index}
+              {...partProps('search-result', classNames)}
+              id={optionIdOf(listbox.id, item.index)}
+              role="option"
+              tabIndex={-1}
+              aria-selected={isActive}
+              aria-setsize={results.length}
+              aria-posinset={item.index + 1}
+              data-selected={isActive ? '' : undefined}
+              style={{ transform: `translateY(${item.start}px)` }}
+              onClick={() => onReveal(entry)}
+            >
+              <span {...partProps('search-result-name', classNames)}>
+                <HighlightedName name={entry.name} query={highlightQuery} classNames={classNames} />
+              </span>
+              <span {...partProps('search-result-path', classNames)}>{parentPath(entry.path)}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -200,38 +238,4 @@ function HighlightedName(props: { name: string; query: string; classNames?: Clas
   }
   pieces.push(name.slice(shownUpTo));
   return pieces;
-}
-
-interface ResultWindow {
-  items: VirtualItem[];
-  totalSize: number;
-  scrollToIndex: (index: number) => void;
-  measureElement: (element: Element | null) => void;
-}
-
-function useResultWindow(
-  count: number,
-  activeIndex: number,
-  viewport: RefObject<HTMLElement | null>,
-): ResultWindow {
-  'use no memo';
-  // eslint-disable-next-line react-hooks/incompatible-library -- 'use no memo' keeps this hook uncompiled; it returns fresh values every render
-  const virtualizer = useVirtualizer({
-    count,
-    getScrollElement: () => viewport.current,
-    estimateSize: () => ESTIMATED_OPTION_HEIGHT,
-    overscan: OVERSCAN,
-    initialRect: { width: 0, height: OPTIONS_IN_FIRST_PAINT * ESTIMATED_OPTION_HEIGHT },
-    rangeExtractor: (range) => {
-      const indexes = defaultRangeExtractor(range);
-      if (activeIndex < 0 || indexes.includes(activeIndex)) return indexes;
-      return [...indexes, activeIndex].sort((a, b) => a - b);
-    },
-  });
-  return {
-    items: virtualizer.getVirtualItems(),
-    totalSize: virtualizer.getTotalSize(),
-    scrollToIndex: (index) => virtualizer.scrollToIndex(index),
-    measureElement: virtualizer.measureElement,
-  };
 }

@@ -2,7 +2,7 @@ import axe from 'axe-core';
 import { FsError, statusOf, type Entry, type FileSystemAdapter } from '@scope/core';
 import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
 import { useEffect, type CSSProperties, type ReactNode } from 'react';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { commands, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import '../src/styles.css';
@@ -11,6 +11,7 @@ import { useFileSystem, type FileSystemContext, type Notice } from '../src/provi
 import { FileSearch } from '../src/search/FileSearch';
 import { useFileSearch, type FileSearchState } from '../src/search/useFileSearch';
 import { FileTree } from '../src/tree/FileTree';
+import { animationFrames } from './support/animationFrames';
 
 const ROW_HEIGHT = 24;
 
@@ -54,7 +55,16 @@ const mount = async (
   return { fs: captured!, notices, opened, unmount: () => screen.unmount() };
 };
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+interface Held {
+  wait: Promise<void>;
+  release: () => void;
+}
+
+function held(): Held {
+  let release = (): void => {};
+  const wait = new Promise<void>((resolve) => (release = resolve));
+  return { wait, release };
+}
 const input = (): HTMLInputElement => document.querySelector<HTMLInputElement>('[role=combobox]')!;
 const optionLabels = (): string[] =>
   [...document.querySelectorAll('[role=option] [data-fs-part=search-result-name]')].map(
@@ -67,6 +77,7 @@ const rowNamed = (name: string): HTMLElement | undefined =>
   rows().find((row) => row.querySelector('[data-fs-part=tree-row-label]')?.textContent === name);
 
 afterEach(async () => {
+  vi.useRealTimers();
   await commands.emulateMedia({ colorScheme: null });
 });
 
@@ -104,19 +115,24 @@ test('typing searches after 200 ms and aborts the previous request', async () =>
 
 test('stale results are never displayed', async () => {
   const memory = createMemoryAdapter({ files: { 'alpha.txt': '', 'abc.txt': '' } });
+  const answerForA = held();
+  let slowAnswer: Promise<Entry[]> | undefined;
   const slowFirstFastSecond: FileSystemAdapter = {
     ...memory,
-    search: async (query) => {
-      await sleep(query === 'a' ? 600 : 20);
-      return memory.search!(query);
+    search: (query) => {
+      if (query !== 'a') return memory.search!(query);
+      slowAnswer = answerForA.wait.then(() => memory.search!(query));
+      return slowAnswer;
     },
   };
   await mount(slowFirstFastSecond);
   await userEvent.fill(input(), 'a');
-  await sleep(300);
+  await expect.poll(() => slowAnswer !== undefined).toBe(true);
   await userEvent.fill(input(), 'ab');
   await expect.poll(optionLabels).toEqual(['abc.txt']);
-  await sleep(700);
+  answerForA.release();
+  await slowAnswer;
+  await animationFrames(2);
   expect(optionLabels(), 'the slow answer for "a" arrived after "ab" and was ignored').toEqual(['abc.txt']);
 });
 
@@ -232,29 +248,40 @@ test('unsupported adapter renders nothing', async () => {
 
 test('a failed search reports the error; an aborted one does not', async () => {
   const memory = createMemoryAdapter({ files: { 'a.txt': '' } });
+  const slowAnswer = held();
+  let slowSearch: { signal: AbortSignal; settled: Promise<unknown> } | undefined;
   const failing: FileSystemAdapter = {
     ...memory,
     search: async (query, opts) => {
       if (query === 'slow') {
-        await sleep(300);
-        if (opts?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+        const answer = slowAnswer.wait.then(() => {
+          if (opts?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+          throw new FsError('network', 'The search service is down.');
+        });
+        slowSearch = { signal: opts!.signal!, settled: answer.catch(() => undefined) };
+        return answer;
       }
-      if (query === 'bad' || query === 'slow') throw new FsError('network', 'The search service is down.');
+      if (query === 'bad') throw new FsError('network', 'The search service is down.');
       return [];
     },
   };
   const { notices } = await mount(failing);
   await userEvent.fill(input(), 'slow');
-  await sleep(250);
+  await expect.poll(() => slowSearch).toBeDefined();
   await userEvent.fill(input(), '');
-  await sleep(400);
+  await expect.poll(() => slowSearch!.signal.aborted).toBe(true);
+  slowAnswer.release();
+  await slowSearch!.settled;
+  await animationFrames(2);
   expect(notices, 'the aborted request reports nothing').toEqual([]);
   expect(liveRegion()!.textContent).toBe('');
   await userEvent.fill(input(), 'bad');
   await expect.poll(() => notices.length).toBe(1);
   expect(notices[0]).toMatchObject({ kind: 'error', error: { kind: 'network' } });
   expect(notices[0]!.message).toBe('Search failed: The search service is down. Try again.');
-  expect(liveRegion()!.textContent).toBe('Search failed');
+  await expect
+    .poll(() => liveRegion()!.textContent, { message: 'announced once the failed state renders' })
+    .toBe('Search failed');
 });
 
 test('reveal of a missing path rejects with an actionable not_found error', async () => {
@@ -270,11 +297,15 @@ test('concurrent reveals: the latest wins and the earlier one cannot steal focus
   const memory = createMemoryAdapter({
     files: { 'slow/x/first.txt': '', 'fast/second.txt': '', 'top.txt': '' },
   });
+  const slowListing = held();
+  let slowListingAnswered: Promise<unknown> | undefined;
   const slowFolder: FileSystemAdapter = {
     ...memory,
     list: async (path, opts) => {
-      if (path === 'slow/x') await sleep(400);
-      return memory.list(path, opts);
+      if (path !== 'slow/x') return memory.list(path, opts);
+      const answer = slowListing.wait.then(() => memory.list(path, opts));
+      slowListingAnswered = answer;
+      return answer;
     },
   };
   const { fs } = await mount(slowFolder, { fetchDepth: 1 });
@@ -283,7 +314,9 @@ test('concurrent reveals: the latest wins and the earlier one cannot steal focus
   await expect(second).resolves.toBeUndefined();
   await expect(first).rejects.toMatchObject({ kind: 'cancelled' });
   await expect.poll(() => document.activeElement).toBe(rowNamed('second.txt'));
-  await sleep(500);
+  slowListing.release();
+  await slowListingAnswered;
+  await animationFrames(2);
   expect(document.activeElement).toBe(rowNamed('second.txt'));
   expect(fs.selected.get()).toBe('fast/second.txt');
 });
@@ -318,37 +351,57 @@ const isRendered = (element: HTMLElement): boolean => {
   return style.display !== 'none' && style.visibility !== 'hidden';
 };
 
+function holdingSearchesFor(
+  memory: MemoryAdapter,
+  heldQuery: string,
+): FileSystemAdapter & Held & { asked: () => boolean } {
+  const answer = held();
+  let asked = false;
+  return {
+    ...memory,
+    ...answer,
+    asked: () => asked,
+    search: (query, opts) => {
+      if (query !== heldQuery) return memory.search!(query, opts);
+      asked = true;
+      return answer.wait.then(() => memory.search!(query, opts));
+    },
+  };
+}
+
 test('the live region stays in the accessibility tree and keeps its last announcement while searching', async () => {
-  const memory = createMemoryAdapter({ files: { 'one.txt': '', 'two.txt': '' }, latencyMs: 300 });
-  await mount(memory);
+  const adapter = holdingSearchesFor(createMemoryAdapter({ files: { 'one.txt': '', 'two.txt': '' } }), 'one');
+  await mount(adapter);
   const region = liveRegion()!;
   expect(isRendered(region), 'empty and idle').toBe(true);
   await userEvent.fill(input(), 'txt');
   expect(isRendered(region), 'searching').toBe(true);
   await expect.poll(() => region.textContent).toBe('2 results');
   await userEvent.fill(input(), 'one');
-  await sleep(250);
+  await expect.poll(adapter.asked).toBe(true);
   expect(region.textContent, 'the last announcement stays while the next search runs').toBe('2 results');
   expect(isRendered(region)).toBe(true);
+  adapter.release();
   await expect.poll(() => region.textContent).toBe('1 result');
 });
 
 test('the previous results stay, marked searching, until the next answer lands', async () => {
-  const memory = createMemoryAdapter({ files: { 'n1.txt': '', 'n2.txt': '' }, latencyMs: 300 });
-  await mount(memory);
+  const adapter = holdingSearchesFor(createMemoryAdapter({ files: { 'n1.txt': '', 'n2.txt': '' } }), 'n1');
+  await mount(adapter);
   await userEvent.fill(input(), 'n');
   await expect.poll(optionLabels).toEqual(['n1.txt', 'n2.txt']);
   await userEvent.fill(input(), 'n1');
-  await sleep(100);
+  await expect.poll(adapter.asked).toBe(true);
   expect(input().getAttribute('aria-expanded'), 'the listbox does not collapse on every keystroke').toBe(
     'true',
   );
   expect(optionLabels()).toEqual(['n1.txt', 'n2.txt']);
+  adapter.release();
   await expect.poll(optionLabels).toEqual(['n1.txt']);
 });
 
 function SearchProbe({ onState }: { onState: (state: FileSearchState) => void }): null {
-  const state = useFileSearch();
+  const state = useFileSearch({ debounceMs: 0 });
   useEffect(() => {
     onState(state);
   });
@@ -356,16 +409,31 @@ function SearchProbe({ onState }: { onState: (state: FileSearchState) => void })
 }
 
 test('the status is not done while a request for the same text is in flight', async () => {
-  const memory = createMemoryAdapter({ files: { 'a.txt': '', 'ab.txt': '' }, latencyMs: 300 });
+  const memory = createMemoryAdapter({ files: { 'a.txt': '', 'ab.txt': '' } });
+  const answers: Held[] = [];
+  const asked: string[] = [];
+  const answeringWhenReleased: FileSystemAdapter = {
+    ...memory,
+    search: (query, opts) => {
+      asked.push(query);
+      const answer = held();
+      answers.push(answer);
+      return answer.wait.then(() => memory.search!(query, opts));
+    },
+  };
   let latest: FileSearchState | undefined;
-  await mount(memory, { search: <SearchProbe onState={(state) => (latest = state)} /> });
+  await mount(answeringWhenReleased, { search: <SearchProbe onState={(state) => (latest = state)} /> });
   latest!.setQuery('a');
+  await expect.poll(() => asked).toEqual(['a']);
+  answers[0]!.release();
   await expect.poll(() => latest!.status).toBe('done');
   latest!.setQuery('ab');
-  await sleep(250);
+  await expect.poll(() => asked).toEqual(['a', 'ab']);
   latest!.setQuery('a');
-  await expect.poll(() => latest!.query).toBe('a');
+  await expect.poll(() => asked).toEqual(['a', 'ab', 'a']);
+  expect(latest!.query).toBe('a');
   expect(latest!.status, 'a new request for "a" is pending').toBe('searching');
+  answers[2]!.release();
   await expect.poll(() => latest!.status).toBe('done');
 });
 
@@ -409,10 +477,9 @@ test('a reveal under a hidden name expands and selects, and never takes focus la
   expect(fs.expanded.get().has('.git')).toBe(true);
   expect(fs.selected.get()).toBe('.git/config');
   expect(fs.showHidden.get(), 'reveal never turns Show hidden on').toBe(false);
-  await sleep(100);
   fs.showHidden.set(true);
   await expect.poll(() => rowNamed('config')).toBeDefined();
-  await sleep(100);
+  await animationFrames(2);
   expect(document.activeElement).toBe(outside);
 });
 
@@ -436,8 +503,9 @@ test('the flash lasts as long as --fs-flash-duration says', async () => {
   await fs.reveal('a.txt', { flash: true });
   const row = rowNamed('a.txt')!;
   expect(row.hasAttribute('data-flash')).toBe(true);
-  await sleep(500);
-  expect(row.hasAttribute('data-flash')).toBe(false);
+  await expect
+    .poll(() => row.hasAttribute('data-flash'), { timeout: 1000, message: 'well before the default 1.5 s' })
+    .toBe(false);
 });
 
 test('reveal with expand opens a folder target too', async () => {
@@ -471,16 +539,18 @@ test('reveal marks the entry seen even with no tree mounted', async () => {
 
 test('an invalid reveal does not cancel a valid one in flight', async () => {
   const memory = createMemoryAdapter({ files: { 'slow/a.txt': '' } });
+  const slowListing = held();
   const slowFolder: FileSystemAdapter = {
     ...memory,
     list: async (path, opts) => {
-      if (path === 'slow') await sleep(200);
+      if (path === 'slow') await slowListing.wait;
       return memory.list(path, opts);
     },
   };
   const { fs } = await mount(slowFolder, { fetchDepth: 1 });
   const valid = fs.reveal('slow/a.txt');
   await expect(fs.reveal('')).rejects.toMatchObject({ kind: 'invalid' });
+  slowListing.release();
   await expect(valid).resolves.toBeUndefined();
 });
 
@@ -489,16 +559,17 @@ test('larger fonts grow the result rows instead of overlapping them', async () =
   document.querySelector<HTMLElement>('[data-fs-part=search]')!.style.setProperty('--fs-font-size', '40px');
   await userEvent.fill(input(), 'big');
   await expect.poll(optionLabels).toEqual(['big1.txt', 'big2.txt', 'big3.txt']);
-  await sleep(100);
-  const options = [...document.querySelectorAll<HTMLElement>('[role=option]')];
-  for (const [at, option] of options.entries()) {
-    expect(option.scrollHeight, `option ${at} holds its text`).toBeLessThanOrEqual(option.clientHeight);
-    const nextTop = options[at + 1]?.getBoundingClientRect().top ?? Infinity;
-    expect(
-      option.getBoundingClientRect().bottom,
-      `option ${at} ends before the next one`,
-    ).toBeLessThanOrEqual(nextTop + 0.5);
-  }
+  const crowdedOptions = (): string[] => {
+    const options = [...document.querySelectorAll<HTMLElement>('[role=option]')];
+    return options.flatMap((option, at) => {
+      const nextTop = options[at + 1]?.getBoundingClientRect().top ?? Infinity;
+      return [
+        ...(option.scrollHeight > option.clientHeight ? [`option ${at} cuts off its text`] : []),
+        ...(option.getBoundingClientRect().bottom > nextTop + 0.5 ? [`option ${at} overlaps the next`] : []),
+      ];
+    });
+  };
+  await expect.poll(crowdedOptions, { message: 'once the rows are measured' }).toEqual([]);
 });
 
 test('turning Show hidden off hides hidden results at once, without a new request', async () => {
@@ -509,9 +580,10 @@ test('turning Show hidden off hides hidden results at once, without a new reques
   await userEvent.fill(input(), 'config');
   await expect.poll(optionLabels).toEqual(['config.js', 'config.ts']);
   const requestsSoFar = calls.length;
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   fs.showHidden.set(false);
-  await expect.poll(optionLabels, { timeout: 150 }).toEqual(['config.ts']);
-  await sleep(400);
+  await expect.poll(optionLabels).toEqual(['config.ts']);
+  await vi.advanceTimersByTimeAsync(1000);
   expect(calls, 'the filter runs on the answer already there').toHaveLength(requestsSoFar);
 });
 
@@ -522,8 +594,10 @@ test('toggling Show hidden with no hidden results keeps the active option', asyn
   await userEvent.keyboard('{ArrowDown}');
   const active = input().getAttribute('aria-activedescendant');
   expect(active).not.toBeNull();
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   fs.showHidden.set(true);
-  await sleep(400);
+  await vi.advanceTimersByTimeAsync(1000);
+  await animationFrames(2);
   expect(input().getAttribute('aria-activedescendant')).toBe(active);
 });
 
@@ -540,14 +614,12 @@ test('re-revealing the flashing row restarts its animation', async () => {
     const animation = row.getAnimations().find((each) => (each as CSSAnimation).animationName === 'fs-flash');
     return Number(animation?.currentTime ?? Infinity);
   };
-  await sleep(400);
+  await expect.poll(flashAnimationTime).toBeGreaterThanOrEqual(300);
   const beforeReplay = flashAnimationTime();
-  expect(beforeReplay).toBeGreaterThanOrEqual(300);
   await fs.reveal('b.txt', { flash: true });
-  await sleep(50);
-  expect(flashAnimationTime(), 'the replayed flash starts over instead of running on').toBeLessThan(
-    beforeReplay,
-  );
+  await expect
+    .poll(flashAnimationTime, { message: 'the replayed flash starts over instead of running on' })
+    .toBeLessThan(beforeReplay);
   await expect.poll(() => flashStarts.filter((target) => target === row).length).toBe(2);
   document.removeEventListener('animationstart', countFlashStarts, true);
 });

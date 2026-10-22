@@ -10,6 +10,7 @@ import { FileSystemProvider } from '../src/provider/FileSystemProvider';
 import { useFileSystem, useTreeSnapshot, type FileSystemContext } from '../src/provider/hooks';
 import { FileTree, type FileTreeProps } from '../src/tree/FileTree';
 import { TreeRow } from '../src/tree/TreeRow';
+import { cssTransitionsToSettle } from './support/cssTransitionsToSettle';
 
 const ROW_HEIGHT = 24;
 const VIEWPORT_ROWS = 10;
@@ -114,12 +115,6 @@ function withSlowAndBrokenFolders(memory: MemoryAdapter): FileSystemAdapter {
   };
 }
 const SLOW_AND_BROKEN_FILES = { 'slow/a.txt': '', 'broken/b.txt': '', 'ok/c.txt': '', 'z.txt': '' };
-
-const themeTransitionsToFinish = async (): Promise<void> => {
-  await new Promise(requestAnimationFrame);
-  const transitions = document.getAnimations().filter((animation) => animation instanceof CSSTransition);
-  await Promise.all(transitions.map((transition) => transition.finished));
-};
 
 afterEach(async () => {
   await commands.emulateMedia({ colorScheme: null });
@@ -257,10 +252,17 @@ test('loading and error rows show status with an accessible description', async 
 });
 
 test('a row is marked pending while a mutation is in flight', async () => {
-  const adapter = createMemoryAdapter({ files: { 'a.txt': '' }, latencyMs: 100 });
+  const memory = createMemoryAdapter({ files: { 'a.txt': '' } });
+  let releaseCreate = (): void => undefined;
+  const createHeld = new Promise<void>((resolve) => (releaseCreate = resolve));
+  const adapter: FileSystemAdapter = {
+    ...memory,
+    create: (...args) => createHeld.then(() => memory.create!(...args)),
+  };
   const fs = await mount({}, { adapter });
   const creation = fs.store.create('', 'b.txt', 'file');
   await expect.poll(() => rowNamed('b.txt')?.hasAttribute('data-pending')).toBe(true);
+  releaseCreate();
   await creation;
   await expect.poll(() => rowNamed('b.txt').hasAttribute('data-pending')).toBe(false);
 });
@@ -395,7 +397,7 @@ test('axe: no violations with expanded, selected, changed, loading and error row
   expect(rowNamed('z.txt').getAttribute('aria-selected')).toBe('true');
   for (const colorScheme of ['light', 'dark'] as const) {
     await commands.emulateMedia({ colorScheme });
-    await themeTransitionsToFinish();
+    await cssTransitionsToSettle();
     const results = await axe.run(viewport());
     expect(
       results.violations.map((violation) => `${colorScheme} ${violation.id}: ${violation.help}`),

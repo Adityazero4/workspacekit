@@ -211,6 +211,136 @@ function finishedNotice(run: UploadRun, result: UploadResult): Notice {
   return { kind: 'success', message: `Uploaded ${countOfFiles(result.uploaded.length)} to ${target}.` };
 }
 
+interface UploadRunList {
+  runs: UiStore<readonly UploadRun[]>;
+  add: (run: UploadRun) => UploadRun;
+  update: (id: string, change: Partial<UploadRun>) => void;
+  withId: (id: string) => UploadRun;
+  dismiss: (id: string) => void;
+}
+
+function createUploadRunList(): UploadRunList {
+  const runs = createUiStore<readonly UploadRun[]>([]);
+  return {
+    runs,
+    add: (run) => {
+      runs.set((previous) => [...previous, run]);
+      return run;
+    },
+    update: (id, change) =>
+      runs.set((previous) => previous.map((run) => (run.id === id ? { ...run, ...change } : run))),
+    withId: (id) => runs.get().find((run) => run.id === id)!,
+    dismiss: (id) =>
+      runs.set((previous) => previous.filter((run) => run.id !== id || run.status === 'running')),
+  };
+}
+
+function newUploadRun(id: string, items: UploadItem[], targetDir: string, abort: AbortController): UploadRun {
+  return {
+    id,
+    targetDir,
+    topLevelNames: [...new Set(items.map(topLevelNameOf))],
+    progress: {
+      loadedBytes: 0,
+      totalBytes: items.reduce((sum, item) => sum + item.file.size, 0),
+      done: 0,
+      total: items.length,
+    },
+    status: 'running',
+    cancel: () => abort.abort(),
+  };
+}
+
+function conflictHandlerFor(
+  options: UploadsOptions,
+  run: Pick<ConflictRun, 'signal' | 'fileCount' | 'filesNotDone'>,
+): UploadOptions['onConflict'] {
+  const { adapter, conflicts, notify } = options;
+  return options.conflictPolicy() ?? askOncePerRun({ adapter, conflicts, notify, ...run });
+}
+
+function uploadFailedEntirely(targetDir: string, error: unknown, aborted: boolean): UploadResult {
+  return { ...NOTHING_UPLOADED, failed: [{ path: targetDir, error: toFsError(error) }], cancelled: aborted };
+}
+
+function outcomeWhenNothingCanUpload(expanded: {
+  items: readonly UploadItem[];
+  overLimit: boolean;
+  skipped: string[];
+}): { result: UploadResult; notice?: Notice } | null {
+  if (expanded.overLimit) {
+    return {
+      result: NOTHING_UPLOADED,
+      notice: {
+        kind: 'error',
+        message: `That is more than ${MAX_FILES_PER_UPLOAD} files, so nothing was uploaded. Upload fewer files at a time.`,
+      },
+    };
+  }
+  if (expanded.items.length > 0) return null;
+  return {
+    result: { ...NOTHING_UPLOADED, skipped: expanded.skipped },
+    notice: expanded.skipped.length > 0 ? nothingToUploadNotice(expanded.skipped) : undefined,
+  };
+}
+
+interface UploadSession {
+  readonly options: UploadsOptions;
+  readonly runList: UploadRunList;
+  readonly announcement: UiStore<string>;
+  readonly controllers: Set<AbortController>;
+  lastRunNumber: number;
+  ended: boolean;
+}
+
+function announce(session: UploadSession, notice: Notice): void {
+  session.announcement.set(notice.message);
+  session.options.notify(notice);
+}
+
+async function finishRun(session: UploadSession, id: string, result: UploadResult): Promise<void> {
+  const { runList, options } = session;
+  const finished = { status: finishedStatus(result), result };
+  if (!session.ended) {
+    await options.store.loadFolder(runList.withId(id).targetDir, { force: true }).catch(ignoreFailure);
+  }
+  runList.update(id, finished);
+  if (session.ended) return;
+  announce(session, finishedNotice(runList.withId(id), result));
+  for (const failure of result.failed) options.report(failure.error);
+}
+
+async function uploadExpanded(
+  session: UploadSession,
+  uploader: Uploader,
+  items: UploadItem[],
+  targetDir: string,
+): Promise<UploadResult> {
+  const { runList, controllers } = session;
+  const abort = new AbortController();
+  controllers.add(abort);
+  const { id } = runList.add(newUploadRun(`upload-${++session.lastRunNumber}`, items, targetDir, abort));
+  session.announcement.set(`Uploading ${countOfFiles(items.length)} to ${folderLabel(targetDir)}.`);
+  const filesNotDone = (): number => {
+    const { total, done } = runList.withId(id).progress;
+    return total - done;
+  };
+  const result = await uploader
+    .upload(items, targetDir, {
+      onConflict: conflictHandlerFor(session.options, {
+        signal: abort.signal,
+        fileCount: items.length,
+        filesNotDone,
+      }),
+      signal: abort.signal,
+      onProgress: (progress) => runList.update(id, { progress }),
+    })
+    .catch((error: unknown) => uploadFailedEntirely(targetDir, error, abort.signal.aborted));
+  controllers.delete(abort);
+  await finishRun(session, id, result);
+  return result;
+}
+
 /**
  * The upload state of one workspace session: an uploader over `adapter.upload`, the runs with their progress,
  * and the announcements. A finished run reloads its target folder before it stops counting as running, so its
@@ -226,91 +356,18 @@ function finishedNotice(run: UploadRun, result: UploadResult): Notice {
  * ```
  */
 export function createUploads(options: UploadsOptions): UploadsController {
-  const { adapter, store, notify, report } = options;
-  const uploader = uploaderFor(adapter);
-  const runs = createUiStore<readonly UploadRun[]>([]);
-  const announcement = createUiStore('');
-  const controllers = new Set<AbortController>();
-  let lastRunNumber = 0;
-  let sessionEnded = false;
-
-  const updateRun = (id: string, change: Partial<UploadRun>): void =>
-    runs.set((previous) => previous.map((run) => (run.id === id ? { ...run, ...change } : run)));
-  const runWithId = (id: string): UploadRun => runs.get().find((run) => run.id === id)!;
-
-  const startRun = (items: UploadItem[], targetDir: string, abort: AbortController): UploadRun => {
-    const run: UploadRun = {
-      id: `upload-${++lastRunNumber}`,
-      targetDir,
-      topLevelNames: [...new Set(items.map(topLevelNameOf))],
-      progress: {
-        loadedBytes: 0,
-        totalBytes: items.reduce((sum, item) => sum + item.file.size, 0),
-        done: 0,
-        total: items.length,
-      },
-      status: 'running',
-      cancel: () => abort.abort(),
-    };
-    runs.set((previous) => [...previous, run]);
-    announcement.set(`Uploading ${countOfFiles(items.length)} to ${folderLabel(targetDir)}.`);
-    return run;
+  const uploader = uploaderFor(options.adapter);
+  const session: UploadSession = {
+    options,
+    runList: createUploadRunList(),
+    announcement: createUiStore(''),
+    controllers: new Set(),
+    lastRunNumber: 0,
+    ended: false,
   };
-
-  const announce = (notice: Notice): void => {
-    announcement.set(notice.message);
-    notify(notice);
-  };
-
-  const finishRun = async (id: string, result: UploadResult): Promise<void> => {
-    const finished = { status: finishedStatus(result), result };
-    if (!sessionEnded) await store.loadFolder(runWithId(id).targetDir, { force: true }).catch(ignoreFailure);
-    updateRun(id, finished);
-    if (sessionEnded) return;
-    announce(finishedNotice(runWithId(id), result));
-    for (const failure of result.failed) report(failure.error);
-  };
-
-  const uploadExpanded = async (
-    activeUploader: Uploader,
-    items: UploadItem[],
-    targetDir: string,
-  ): Promise<UploadResult> => {
-    const abort = new AbortController();
-    controllers.add(abort);
-    const { id } = startRun(items, targetDir, abort);
-    const filesNotDone = (): number => {
-      const { total, done } = runWithId(id).progress;
-      return total - done;
-    };
-    const result = await activeUploader
-      .upload(items, targetDir, {
-        onConflict:
-          options.conflictPolicy() ??
-          askOncePerRun({
-            adapter,
-            conflicts: options.conflicts,
-            notify,
-            signal: abort.signal,
-            fileCount: items.length,
-            filesNotDone,
-          }),
-        signal: abort.signal,
-        onProgress: (progress) => updateRun(id, { progress }),
-      })
-      .catch((error: unknown): UploadResult => ({
-        ...NOTHING_UPLOADED,
-        failed: [{ path: targetDir, error: toFsError(error) }],
-        cancelled: abort.signal.aborted,
-      }));
-    controllers.delete(abort);
-    await finishRun(id, result);
-    return result;
-  };
-
   return {
-    runs,
-    announcement,
+    runs: session.runList.runs,
+    announcement: session.announcement,
     upload: async (items, targetDir) => {
       if (!uploader) {
         throw new FsError(
@@ -319,24 +376,15 @@ export function createUploads(options: UploadsOptions): UploadsController {
         );
       }
       const expanded = await expandDropped(items, { maxFiles: MAX_FILES_PER_UPLOAD });
-      if (expanded.overLimit) {
-        announce({
-          kind: 'error',
-          message: `That is more than ${MAX_FILES_PER_UPLOAD} files, so nothing was uploaded. Upload fewer files at a time.`,
-        });
-        return NOTHING_UPLOADED;
-      }
-      if (expanded.items.length === 0) {
-        if (expanded.skipped.length > 0) announce(nothingToUploadNotice(expanded.skipped));
-        return { ...NOTHING_UPLOADED, skipped: expanded.skipped };
-      }
-      return uploadExpanded(uploader, expanded.items, targetDir);
+      const empty = outcomeWhenNothingCanUpload(expanded);
+      if (!empty) return uploadExpanded(session, uploader, expanded.items, targetDir);
+      if (empty.notice) announce(session, empty.notice);
+      return empty.result;
     },
-    dismiss: (id) =>
-      runs.set((previous) => previous.filter((run) => run.id !== id || run.status === 'running')),
+    dismiss: session.runList.dismiss,
     cancelAll: () => {
-      sessionEnded = true;
-      for (const abort of controllers) abort.abort();
+      session.ended = true;
+      for (const abort of session.controllers) abort.abort();
     },
   };
 }

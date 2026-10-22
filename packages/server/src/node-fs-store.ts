@@ -539,7 +539,7 @@ class NodeFsStore implements FileStore {
     const linkStats = await nullIfMissing(lstat(abs));
     if (!linkStats) return null;
     const entry = await this.#entryAt(rootReal, abs, rel);
-    return entry ? { mtimeMs: entry.mtimeMs ?? 0, birthMs: linkStats.birthtimeMs } : undefined;
+    return entry ? { birthMs: linkStats.birthtimeMs, entry } : undefined;
   }
 }
 

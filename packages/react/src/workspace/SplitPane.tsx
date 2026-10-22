@@ -95,6 +95,60 @@ function largestFirstPaneSize(
   return Math.max(min, Math.min(largest, containerWidth - ROOM_KEPT_FOR_THE_SECOND_PANE_PX));
 }
 
+interface SeparatorPointerDrag {
+  dragging: boolean;
+  handlers: {
+    onPointerDown: (event: PointerEvent<HTMLElement>) => void;
+    onPointerMove: (event: PointerEvent<HTMLElement>) => void;
+    onPointerUp: () => void;
+    onPointerCancel: () => void;
+    onLostPointerCapture: () => void;
+  };
+}
+
+function useSeparatorPointerDrag(
+  sizeStore: UiStore<number>,
+  bounds: { size: number; min: number; max: number },
+): SeparatorPointerDrag {
+  const { size, min, max } = bounds;
+  const drag = useRef<PointerDrag | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const endDrag = (): void => {
+    const session = drag.current;
+    if (!session) return;
+    if (session.frame !== null) cancelAnimationFrame(session.frame);
+    sizeStore.set(session.latestSize);
+    drag.current = null;
+    setDragging(false);
+  };
+  const onPointerDown = (event: PointerEvent<HTMLElement>): void => {
+    if (event.button !== PRIMARY_BUTTON) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { startX: event.clientX, startSize: size, latestSize: size, frame: null };
+    setDragging(true);
+  };
+  const onPointerMove = (event: PointerEvent<HTMLElement>): void => {
+    const session = drag.current;
+    if (!session) return;
+    session.latestSize = clamp(session.startSize + event.clientX - session.startX, min, max);
+    if (session.frame !== null) return;
+    session.frame = requestAnimationFrame(() => {
+      session.frame = null;
+      sizeStore.set(session.latestSize);
+    });
+  };
+  return {
+    dragging,
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: endDrag,
+      onPointerCancel: endDrag,
+      onLostPointerCapture: endDrag,
+    },
+  };
+}
+
 function applyDefaultsOutsideParametersForReactCompiler(props: SplitPaneProps) {
   return {
     ...props,
@@ -138,33 +192,7 @@ export function SplitPane(props: SplitPaneProps): React.JSX.Element {
   useSizeRestoredAndPersisted(storageKey, sizeStore);
   const size = clamp(useUiValue(sizeStore), min, max);
   const firstPaneId = useId();
-  const drag = useRef<PointerDrag | null>(null);
-  const [dragging, setDragging] = useState(false);
-
-  const endDrag = (): void => {
-    const session = drag.current;
-    if (!session) return;
-    if (session.frame !== null) cancelAnimationFrame(session.frame);
-    sizeStore.set(session.latestSize);
-    drag.current = null;
-    setDragging(false);
-  };
-  const onPointerDown = (event: PointerEvent<HTMLElement>): void => {
-    if (event.button !== PRIMARY_BUTTON) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { startX: event.clientX, startSize: size, latestSize: size, frame: null };
-    setDragging(true);
-  };
-  const onPointerMove = (event: PointerEvent<HTMLElement>): void => {
-    const session = drag.current;
-    if (!session) return;
-    session.latestSize = clamp(session.startSize + event.clientX - session.startX, min, max);
-    if (session.frame !== null) return;
-    session.frame = requestAnimationFrame(() => {
-      session.frame = null;
-      sizeStore.set(session.latestSize);
-    });
-  };
+  const drag = useSeparatorPointerDrag(sizeStore, { size, min, max });
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     const next = sizeForKey(event.key, size, min, max);
     if (next === undefined) return;
@@ -194,13 +222,9 @@ export function SplitPane(props: SplitPaneProps): React.JSX.Element {
           aria-valuemin={min}
           aria-valuemax={max}
           {...partProps('workspace-separator', classNames)}
-          data-dragging={dragging ? '' : undefined}
+          data-dragging={drag.dragging ? '' : undefined}
           onKeyDown={onKeyDown}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          onLostPointerCapture={endDrag}
+          {...drag.handlers}
         />
       )}
       <div {...partProps('workspace-pane', classNames)}>{second}</div>

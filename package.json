@@ -11,6 +11,7 @@
     "test:perf": "vitest run --config vitest.perf.config.ts --no-file-parallelism",
     "test:perf:react": "vitest run --config packages/react/vitest.perf.config.ts --no-file-parallelism",
     "test:browser": "vitest run --project 'react:browser*'",
+    "size": "pnpm --filter @scope/core exec size-limit && pnpm --filter @scope/react exec size-limit",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "check:forbidden": "node scripts/check-forbidden.mjs",
@@ -19,7 +20,7 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:comments && node --test scripts/check-forbidden.test.mjs scripts/check-comments.test.mjs && pnpm build && pnpm vitest run && pnpm test:perf && pnpm test:perf:react && pnpm -r lint:pkg && pnpm --filter @scope/core exec size-limit && pnpm check:forbidden && ! grep -q \"node:\" packages/core/dist/index.js && pnpm --filter @scope/server smoke:dist"
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:comments && node --test scripts/check-forbidden.test.mjs scripts/check-comments.test.mjs && pnpm build && pnpm vitest run && pnpm test:perf && pnpm test:perf:react && pnpm -r lint:pkg && pnpm size && pnpm check:forbidden && ! grep -q \"node:\" packages/core/dist/index.js && pnpm --filter @scope/server smoke:dist"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

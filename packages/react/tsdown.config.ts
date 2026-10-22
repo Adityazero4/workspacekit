@@ -4,7 +4,7 @@ import { defineConfig } from 'tsdown';
 const useClientBannerReplacesDroppedModuleDirectives = { js: "'use client';" };
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: { index: 'src/index.ts', 'renderers/index': 'src/renderers/index.ts' },
   format: 'esm',
   dts: true,
   platform: 'browser',

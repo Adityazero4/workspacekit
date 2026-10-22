@@ -148,117 +148,150 @@ function treeAroundRows(mountedRows: ReadonlyMap<string, HTMLElement>): Element 
   return anyRow?.closest('[role=tree]') ?? null;
 }
 
+interface RovingFocusState {
+  readonly mountedRows: Map<string, HTMLElement>;
+  readonly setFocusedPath: (path: string) => void;
+  readonly setTreeHasFocus: (hasFocus: boolean) => void;
+  pathToFocusOnMount: string | null;
+  focusOnceVisible: { path: string; fromOutsideTheTree: boolean } | null;
+  pathToScrollToAfterRender: string | null;
+  scrollToIndex: ((rowIndex: number) => void) | null;
+  committedIndexOrNullOnceUnmounted: VisibleRowIndex | null;
+  lastCommittedIndex: VisibleRowIndex | null;
+}
+
+function focusPathIn(state: RovingFocusState, index: VisibleRowIndex, path: string): void {
+  state.pathToFocusOnMount = null;
+  state.focusOnceVisible = null;
+  const rowIndex = index.indexOf(path);
+  if (rowIndex < 0) return;
+  state.setFocusedPath(path);
+  state.scrollToIndex?.(rowIndex);
+  const element = state.mountedRows.get(path);
+  if (element) element.focus();
+  else state.pathToFocusOnMount = path;
+}
+
+function keepFocusAfterRemoval(state: RovingFocusState, removedRowIndex: number): void {
+  const index = state.committedIndexOrNullOnceUnmounted;
+  const mountTarget = state.pathToFocusOnMount;
+  if (mountTarget !== null && index && index.indexOf(mountTarget) >= 0) return;
+  state.pathToFocusOnMount = null;
+  if (!index || index.count === 0 || !focusFellToBody()) {
+    state.setTreeHasFocus(false);
+    return;
+  }
+  focusPathIn(state, index, index.rowAt(Math.min(Math.max(removedRowIndex, 0), index.count - 1)).path);
+}
+
+function fallBackWhenTheMountTargetLeft(
+  state: RovingFocusState,
+  index: VisibleRowIndex,
+  previous: VisibleRowIndex | null,
+): void {
+  const mountTarget = state.pathToFocusOnMount;
+  if (mountTarget === null || index.indexOf(mountTarget) >= 0) return;
+  state.pathToFocusOnMount = null;
+  if (focusFellToBody()) keepFocusAfterRemoval(state, previous?.indexOf(mountTarget) ?? -1);
+}
+
+function deliverOrDropTheFocusWaitingToBeVisible(state: RovingFocusState, index: VisibleRowIndex): void {
+  const request = state.focusOnceVisible;
+  state.focusOnceVisible = null;
+  if (request === null || index.indexOf(request.path) < 0) return;
+  const mayTakeFocus =
+    request.fromOutsideTheTree || focusIsInsideOrNowhere(treeAroundRows(state.mountedRows));
+  if (mayTakeFocus) focusPathIn(state, index, request.path);
+}
+
+function setCommittedIndex(state: RovingFocusState, index: VisibleRowIndex | null): void {
+  state.committedIndexOrNullOnceUnmounted = index;
+  if (!index) return;
+  const previous = state.lastCommittedIndex;
+  state.lastCommittedIndex = index;
+  fallBackWhenTheMountTargetLeft(state, index, previous);
+  deliverOrDropTheFocusWaitingToBeVisible(state, index);
+}
+
+function createRowBindings(state: RovingFocusState, rowIdPrefix: string): TreeRowBindings {
+  const { mountedRows } = state;
+  return {
+    rowId: (rowIndex) => `${rowIdPrefix}-row-${rowIndex}`,
+    registerRow: (path, element) => {
+      mountedRows.set(path, element);
+      if (state.pathToFocusOnMount === path) element.focus();
+      return () => {
+        if (mountedRows.get(path) === element) mountedRows.delete(path);
+        const removedRowIndex = state.committedIndexOrNullOnceUnmounted?.indexOf(path) ?? -1;
+        whenRemovedWhileFocused(element, mountedRows, () => keepFocusAfterRemoval(state, removedRowIndex));
+      };
+    },
+    rowFocused: (path) => {
+      state.pathToFocusOnMount = null;
+      state.focusOnceVisible = null;
+      state.setFocusedPath(path);
+    },
+  };
+}
+
+function createController(state: RovingFocusState, rowIdPrefix: string): RovingFocusController {
+  return {
+    bindings: createRowBindings(state, rowIdPrefix),
+    focusPathIn: (index, path) => focusPathIn(state, index, path),
+    focusPathOnceVisible: (path, opts) => {
+      const index = state.committedIndexOrNullOnceUnmounted;
+      if (index && index.indexOf(path) >= 0) {
+        focusPathIn(state, index, path);
+        return;
+      }
+      state.pathToFocusOnMount = null;
+      state.focusOnceVisible = { path, fromOutsideTheTree: opts?.fromOutsideTheTree === true };
+    },
+    settleFocusWaitingToBeVisible: () => {
+      const index = state.committedIndexOrNullOnceUnmounted;
+      if (index) deliverOrDropTheFocusWaitingToBeVisible(state, index);
+    },
+    treeElement: () => treeAroundRows(state.mountedRows),
+    scrollPathIntoViewAfterRender: (path) => {
+      state.pathToScrollToAfterRender = path;
+    },
+    cancelFocusRequest: (path) => {
+      if (state.pathToFocusOnMount === path) state.pathToFocusOnMount = null;
+      if (state.focusOnceVisible?.path === path) state.focusOnceVisible = null;
+    },
+    rowIndexOfElement: (index, target) => {
+      for (const [path, element] of state.mountedRows) if (element === target) return index.indexOf(path);
+      return -1;
+    },
+    setScrollToIndex: (scroll) => {
+      state.scrollToIndex = scroll;
+      const path = state.pathToScrollToAfterRender;
+      state.pathToScrollToAfterRender = null;
+      const rowIndex = path === null ? -1 : (state.committedIndexOrNullOnceUnmounted?.indexOf(path) ?? -1);
+      if (rowIndex >= 0) scroll(rowIndex);
+    },
+  };
+}
+
 function createRovingFocusController(
   rowIdPrefix: string,
   setFocusedPath: (path: string) => void,
   setTreeHasFocus: (hasFocus: boolean) => void,
 ): { controller: RovingFocusController; setCommittedIndex: (index: VisibleRowIndex | null) => void } {
-  const mountedRows = new Map<string, HTMLElement>();
-  let pathToFocusOnMount: string | null = null;
-  let focusOnceVisible: { path: string; fromOutsideTheTree: boolean } | null = null;
-  let pathToScrollToAfterRender: string | null = null;
-  let scrollToIndex: ((rowIndex: number) => void) | null = null;
-  let committedIndexOrNullOnceUnmounted: VisibleRowIndex | null = null;
-  let lastCommittedIndex: VisibleRowIndex | null = null;
-
-  const focusPathIn = (index: VisibleRowIndex, path: string): void => {
-    pathToFocusOnMount = null;
-    focusOnceVisible = null;
-    const rowIndex = index.indexOf(path);
-    if (rowIndex < 0) return;
-    setFocusedPath(path);
-    scrollToIndex?.(rowIndex);
-    const element = mountedRows.get(path);
-    if (element) element.focus();
-    else pathToFocusOnMount = path;
-  };
-  const keepFocusAfterRemoval = (removedRowIndex: number): void => {
-    const index = committedIndexOrNullOnceUnmounted;
-    const mountTarget = pathToFocusOnMount;
-    if (mountTarget !== null && index && index.indexOf(mountTarget) >= 0) return;
-    pathToFocusOnMount = null;
-    if (!index || index.count === 0 || !focusFellToBody()) {
-      setTreeHasFocus(false);
-      return;
-    }
-    focusPathIn(index, index.rowAt(Math.min(Math.max(removedRowIndex, 0), index.count - 1)).path);
-  };
-  const fallBackWhenTheMountTargetLeft = (index: VisibleRowIndex, previous: VisibleRowIndex | null): void => {
-    const mountTarget = pathToFocusOnMount;
-    if (mountTarget === null || index.indexOf(mountTarget) >= 0) return;
-    pathToFocusOnMount = null;
-    if (focusFellToBody()) keepFocusAfterRemoval(previous?.indexOf(mountTarget) ?? -1);
-  };
-  const deliverOrDropTheFocusWaitingToBeVisible = (index: VisibleRowIndex): void => {
-    const request = focusOnceVisible;
-    focusOnceVisible = null;
-    if (request === null || index.indexOf(request.path) < 0) return;
-    const mayTakeFocus = request.fromOutsideTheTree || focusIsInsideOrNowhere(treeAroundRows(mountedRows));
-    if (mayTakeFocus) focusPathIn(index, request.path);
-  };
-
-  const bindings: TreeRowBindings = {
-    rowId: (rowIndex) => `${rowIdPrefix}-row-${rowIndex}`,
-    registerRow: (path, element) => {
-      mountedRows.set(path, element);
-      if (pathToFocusOnMount === path) element.focus();
-      return () => {
-        if (mountedRows.get(path) === element) mountedRows.delete(path);
-        const removedRowIndex = committedIndexOrNullOnceUnmounted?.indexOf(path) ?? -1;
-        whenRemovedWhileFocused(element, mountedRows, () => keepFocusAfterRemoval(removedRowIndex));
-      };
-    },
-    rowFocused: (path) => {
-      pathToFocusOnMount = null;
-      focusOnceVisible = null;
-      setFocusedPath(path);
-    },
+  const state: RovingFocusState = {
+    mountedRows: new Map(),
+    setFocusedPath,
+    setTreeHasFocus,
+    pathToFocusOnMount: null,
+    focusOnceVisible: null,
+    pathToScrollToAfterRender: null,
+    scrollToIndex: null,
+    committedIndexOrNullOnceUnmounted: null,
+    lastCommittedIndex: null,
   };
   return {
-    controller: {
-      bindings,
-      focusPathIn,
-      focusPathOnceVisible: (path, opts) => {
-        const index = committedIndexOrNullOnceUnmounted;
-        if (index && index.indexOf(path) >= 0) {
-          focusPathIn(index, path);
-          return;
-        }
-        pathToFocusOnMount = null;
-        focusOnceVisible = { path, fromOutsideTheTree: opts?.fromOutsideTheTree === true };
-      },
-      settleFocusWaitingToBeVisible: () => {
-        const index = committedIndexOrNullOnceUnmounted;
-        if (index) deliverOrDropTheFocusWaitingToBeVisible(index);
-      },
-      treeElement: () => treeAroundRows(mountedRows),
-      scrollPathIntoViewAfterRender: (path) => {
-        pathToScrollToAfterRender = path;
-      },
-      cancelFocusRequest: (path) => {
-        if (pathToFocusOnMount === path) pathToFocusOnMount = null;
-        if (focusOnceVisible?.path === path) focusOnceVisible = null;
-      },
-      rowIndexOfElement: (index, target) => {
-        for (const [path, element] of mountedRows) if (element === target) return index.indexOf(path);
-        return -1;
-      },
-      setScrollToIndex: (scroll) => {
-        scrollToIndex = scroll;
-        const path = pathToScrollToAfterRender;
-        pathToScrollToAfterRender = null;
-        const rowIndex = path === null ? -1 : (committedIndexOrNullOnceUnmounted?.indexOf(path) ?? -1);
-        if (rowIndex >= 0) scroll(rowIndex);
-      },
-    },
-    setCommittedIndex: (index) => {
-      committedIndexOrNullOnceUnmounted = index;
-      if (!index) return;
-      const previous = lastCommittedIndex;
-      lastCommittedIndex = index;
-      fallBackWhenTheMountTargetLeft(index, previous);
-      deliverOrDropTheFocusWaitingToBeVisible(index);
-    },
+    controller: createController(state, rowIdPrefix),
+    setCommittedIndex: (index) => setCommittedIndex(state, index),
   };
 }
 

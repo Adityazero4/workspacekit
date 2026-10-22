@@ -1,24 +1,37 @@
 'use client';
 import { captureDataTransfer } from '@scope/core';
-import { useId, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
+import {
+  memo,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import type { Action, CanPerform } from '../actions/actions';
-import { createTreeCommandsHost, TreeCommandsContext } from '../actions/treeCommands';
 import type { Components } from '../components';
 import { partProps } from '../cx';
 import type { ClassNames } from '../parts';
 import { FileSystemProvider, type FileSystemProviderProps } from '../provider/FileSystemProvider';
 import { useFileSystem } from '../provider/hooks';
+import { useFileSystemInternals } from '../provider/internals';
 import { FileSearch } from '../search/FileSearch';
-import { FileTabs } from '../tabs/FileTabs';
-import { useTabs } from '../tabs/useTabs';
+import { FileTabs, type TabPanelIds } from '../tabs/FileTabs';
+import { useTabs, type TabsApi } from '../tabs/useTabs';
 import { FileTree } from '../tree/FileTree';
 import { UploadStatus } from '../uploads/UploadStatus';
 import { useUploads } from '../uploads/uploads';
+import { FileViewer } from '../viewer/FileViewer';
+import { lightRenderers } from '../viewer/lightRenderers';
+import type { Renderer } from '../viewer/registry';
 import { SplitPane } from './SplitPane';
 import { Toolbar } from './Toolbar';
 import { useElementWidth } from './useElementWidth';
 import { useFollow } from './useFollow';
-import { ViewerPlaceholder } from './ViewerPlaceholder';
+import { useWorkspace, type WorkspaceController } from './useWorkspace';
 
 /**
  * Props of `Workspace`: the provider's props plus the shell's.
@@ -29,7 +42,7 @@ import { ViewerPlaceholder } from './ViewerPlaceholder';
  *   adapter,
  *   storageKey: 'my-app',
  *   theme: 'dark',
- *   renderViewer: (path) => <Viewer path={path} />,
+ *   renderers: [markdownRenderer, ...lightRenderers],
  * };
  * ```
  */
@@ -41,8 +54,13 @@ export interface WorkspaceProps extends Omit<FileSystemProviderProps, 'children'
   style?: CSSProperties;
   /** Sets `data-theme` on the root; `'system'` (the default) follows `prefers-color-scheme`. */
   theme?: 'light' | 'dark' | 'system';
-  /** Renders the active tab's file; without it, a placeholder says the file has no viewer yet. */
-  renderViewer?: (path: string) => ReactNode;
+  /**
+   * Renders one open tab's file; default: a `FileViewer` with `renderers`. Every open tab stays mounted,
+   * hidden while in the background, with `isActive` false.
+   */
+  renderViewer?: (path: string, isActive: boolean) => ReactNode;
+  /** The viewers' renderers, used by the default `renderViewer`. Default `lightRenderers`. */
+  renderers?: readonly Renderer[];
   /** Extra tree actions, after the built-in ones the adapter supports. */
   actions?: Action[];
   /** Policy: return `false` to hide an action for an entry, in the tree's menus and in the toolbar. */
@@ -58,12 +76,16 @@ export interface WorkspaceProps extends Omit<FileSystemProviderProps, 'children'
   /** Follow mode at mount when uncontrolled. Default `false`. */
   defaultFollow?: boolean;
   onFollowChange?: (follow: boolean) => void;
+  /** Receives the same controller `useWorkspace` returns, to drive the workspace from outside it. */
+  ref?: Ref<WorkspaceController>;
 }
 
 const STACKED_BELOW_PX = 640;
 const TREE_VIEWPORT = '[data-fs-part=tree-viewport]';
 
-function useFollowState(props: WorkspaceProps): [boolean, (follow: boolean) => void] {
+function useFollowState(
+  props: Pick<WorkspaceProps, 'follow' | 'defaultFollow' | 'onFollowChange'>,
+): [boolean, (follow: boolean) => void] {
   const [uncontrolledFollow, setUncontrolledFollow] = useState(props.defaultFollow ?? false);
   const isControlled = props.follow !== undefined;
   const setFollow = (follow: boolean): void => {
@@ -116,94 +138,191 @@ function useDropIntoTheRoot(): {
   };
 }
 
-function WorkspaceShell(props: WorkspaceProps): React.JSX.Element {
-  const { className, classNames, style, theme, renderViewer, actions, canPerform, components, storageKey } =
-    props;
-  const tabs = useTabs();
+interface FilesPaneProps extends Pick<
+  WorkspaceProps,
+  'classNames' | 'actions' | 'canPerform' | 'components'
+> {
+  stacked: boolean;
+  showSearch: boolean;
+  openTab: TabsApi['open'];
+}
+
+function FilesPane(props: FilesPaneProps): React.JSX.Element {
+  const { stacked, showSearch, openTab, classNames, actions, canPerform, components } = props;
+  const [filesCollapsed, setFilesCollapsed] = useState(false);
+  const filesId = useId();
+  return (
+    <>
+      {stacked && (
+        <button
+          type="button"
+          {...partProps('workspace-files-toggle', classNames)}
+          aria-expanded={!filesCollapsed}
+          aria-controls={filesId}
+          onClick={() => setFilesCollapsed((collapsed) => !collapsed)}
+        >
+          Files
+        </button>
+      )}
+      <div id={filesId} {...partProps('workspace-files', classNames)} hidden={stacked && filesCollapsed}>
+        {showSearch && <FileSearch classNames={classNames} onOpenFile={(entry) => openTab(entry.path)} />}
+        <FileTree
+          classNames={classNames}
+          actions={actions}
+          canPerform={canPerform}
+          components={components}
+          onOpenFile={(entry, how) => openTab(entry.path, how)}
+        />
+        <UploadStatus classNames={classNames} />
+      </div>
+    </>
+  );
+}
+
+interface ViewerPaneProps extends Pick<
+  WorkspaceProps,
+  'classNames' | 'components' | 'renderViewer' | 'renderers'
+> {
+  openTab: TabsApi['open'];
+}
+
+interface ViewerTabProps extends Pick<WorkspaceProps, 'classNames'>, TabPanelIds {
+  path: string;
+  isActive: boolean;
+  renderViewer: NonNullable<WorkspaceProps['renderViewer']>;
+}
+
+const ViewerTab = memo(function ViewerTab(props: ViewerTabProps): React.JSX.Element {
+  const { path, isActive, tabId, panelId, renderViewer, classNames } = props;
+  return (
+    <div
+      role="tabpanel"
+      id={panelId}
+      aria-labelledby={tabId}
+      hidden={!isActive}
+      {...partProps('workspace-viewer-tab', classNames)}
+    >
+      {renderViewer(path, isActive)}
+    </div>
+  );
+});
+
+function useTabPanelIds(): (path: string) => TabPanelIds {
+  const idPrefix = useId();
+  const { tabIds } = useFileSystemInternals();
+  return (path) => {
+    const id = tabIds.idOf(path);
+    return { tabId: `${idPrefix}tab-${id}`, panelId: `${idPrefix}panel-${id}` };
+  };
+}
+
+function ViewerPane(props: ViewerPaneProps): React.JSX.Element {
+  const { openTab, classNames, components } = props;
+  const { tabs, active } = useTabs();
+  const tabPanelIds = useTabPanelIds();
+  const renderers = props.renderers ?? lightRenderers;
+  const renderViewer =
+    props.renderViewer ??
+    ((path: string, isActive: boolean) => (
+      <FileViewer
+        path={path}
+        isActive={isActive}
+        renderers={renderers}
+        onOpenEntry={(entryPath) => openTab(entryPath, 'preview')}
+        classNames={classNames}
+        components={components}
+      />
+    ));
+  return (
+    <>
+      <FileTabs classNames={classNames} components={components} tabPanelIds={tabPanelIds} />
+      <div {...partProps('workspace-viewer', classNames)}>
+        {active === null && <p {...partProps('viewer-placeholder', classNames)}>Select a file to open it.</p>}
+        {tabs.map(({ path }) => {
+          const ids = tabPanelIds(path);
+          return (
+            <ViewerTab
+              key={ids.panelId}
+              path={path}
+              isActive={path === active}
+              tabId={ids.tabId}
+              panelId={ids.panelId}
+              renderViewer={renderViewer}
+              classNames={classNames}
+            />
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+interface WorkspaceShellProps extends Omit<WorkspaceProps, 'ref'> {
+  controllerRef: WorkspaceProps['ref'];
+}
+
+function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
+  const { className, classNames, style, theme, actions, canPerform, components, storageKey } = props;
+  const workspace = useWorkspace();
+  useImperativeHandle(props.controllerRef, () => workspace, [workspace]);
   const [follow, setFollow] = useFollowState(props);
   useFollow(follow);
   const root = useRef<HTMLDivElement>(null);
   const width = useElementWidth(root);
   const stacked = width > 0 && width < STACKED_BELOW_PX;
-  const [filesCollapsed, setFilesCollapsed] = useState(false);
-  const [treeCommands] = useState(createTreeCommandsHost);
-  const filesId = useId();
+  const { treeCommands } = useFileSystemInternals();
   const drop = useDropIntoTheRoot();
-  const active = tabs.active;
   return (
-    <TreeCommandsContext value={treeCommands}>
-      <div
-        ref={root}
-        {...partProps('workspace', classNames, className)}
-        style={style}
-        data-theme={theme === 'light' || theme === 'dark' ? theme : undefined}
-        {...drop.handlers}
-      >
-        {(props.showToolbar ?? true) && (
-          <Toolbar
-            classNames={classNames}
-            treeCommands={treeCommands}
-            follow={follow}
-            onFollowChange={setFollow}
-          />
-        )}
-        <SplitPane storageKey={storageKey} stacked={stacked} classNames={classNames}>
-          <>
-            {stacked && (
-              <button
-                type="button"
-                {...partProps('workspace-files-toggle', classNames)}
-                aria-expanded={!filesCollapsed}
-                aria-controls={filesId}
-                onClick={() => setFilesCollapsed((collapsed) => !collapsed)}
-              >
-                Files
-              </button>
-            )}
-            <div
-              id={filesId}
-              {...partProps('workspace-files', classNames)}
-              hidden={stacked && filesCollapsed}
-            >
-              {(props.showSearch ?? true) && (
-                <FileSearch classNames={classNames} onOpenFile={(entry) => tabs.open(entry.path)} />
-              )}
-              <FileTree
-                classNames={classNames}
-                actions={actions}
-                canPerform={canPerform}
-                components={components}
-                onOpenFile={(entry, how) => tabs.open(entry.path, how)}
-              />
-              <UploadStatus classNames={classNames} />
-            </div>
-          </>
-          <>
-            <FileTabs classNames={classNames} components={components} />
-            <div {...partProps('workspace-viewer', classNames)}>
-              {active === null ? (
-                <ViewerPlaceholder classNames={classNames} />
-              ) : (
-                (renderViewer?.(active) ?? <ViewerPlaceholder path={active} classNames={classNames} />)
-              )}
-            </div>
-          </>
-        </SplitPane>
-        {drop.showOverlay && (
-          <div {...partProps('drop-overlay', classNames)} aria-hidden="true">
-            Drop files to upload them here
-          </div>
-        )}
-      </div>
-    </TreeCommandsContext>
+    <div
+      ref={root}
+      {...partProps('workspace', classNames, className)}
+      style={style}
+      data-theme={theme === 'light' || theme === 'dark' ? theme : undefined}
+      {...drop.handlers}
+    >
+      {(props.showToolbar ?? true) && (
+        <Toolbar
+          classNames={classNames}
+          treeCommands={treeCommands}
+          follow={follow}
+          onFollowChange={setFollow}
+        />
+      )}
+      <SplitPane storageKey={storageKey} stacked={stacked} classNames={classNames}>
+        <FilesPane
+          stacked={stacked}
+          showSearch={props.showSearch ?? true}
+          openTab={workspace.open}
+          classNames={classNames}
+          actions={actions}
+          canPerform={canPerform}
+          components={components}
+        />
+        <ViewerPane
+          openTab={workspace.open}
+          renderViewer={props.renderViewer}
+          renderers={props.renderers}
+          classNames={classNames}
+          components={components}
+        />
+      </SplitPane>
+      {drop.showOverlay && (
+        <div {...partProps('drop-overlay', classNames)} aria-hidden="true">
+          Drop files to upload them here
+        </div>
+      )}
+    </div>
   );
 }
 
 /**
  * The drop-in file workspace: a `FileSystemProvider` around a toolbar, the search box and the file tree on
  * one side of a resizable split, and the open-file tabs with the active file's viewer on the other. A click
- * on a file previews it in a tab, a double click or Enter pins it; `renderViewer` renders the active file.
- * The split's width is persisted under `storageKey` with the provider's other UI state.
+ * on a file previews it in a tab, a double click or Enter pins it. Each open tab gets a `FileViewer` (with
+ * `renderers`) or `renderViewer`'s output; background tabs stay mounted, hidden and with `isActive` false,
+ * and closing a tab unmounts its viewer. A directory viewer's row opens in a preview tab. Components inside
+ * drive the workspace with `useWorkspace`, and code outside it through `ref`. The split's width is
+ * persisted under `storageKey` with the provider's other UI state.
  *
  * When the workspace itself (not the window: it is often embedded in a sidebar) is narrower than 640 px, the
  * panes stack and a Files toggle button (`aria-expanded`) collapses the tree pane. Files dropped onto the
@@ -220,16 +339,21 @@ function WorkspaceShell(props: WorkspaceProps): React.JSX.Element {
  *
  * @example
  * ```tsx
+ * const [adapter] = useState(() => httpAdapter('/api/fs'));
+ * const workspace = useRef<WorkspaceController>(null);
  * <Workspace
- *   adapter={httpAdapter('/api/fs')}
+ *   ref={workspace}
+ *   adapter={adapter}
  *   storageKey={`my-app:${workspaceId}`}
  *   style={{ height: '100vh' }}
- *   renderViewer={(path) => <MyViewer path={path} />}
+ *   renderers={[markdownRenderer, ...lightRenderers]}
  * />
+ * <button onClick={() => workspace.current?.open('README.md', 'pin')}>Open the README</button>
  * ```
  */
 export function Workspace(props: WorkspaceProps): React.JSX.Element {
-  const { adapter, root, fetchDepth, storageKey, hidden, onNotify, onError, onUploadConflict } = props;
+  const { ref, ...shellProps } = props;
+  const { adapter, root, fetchDepth, storageKey, hidden, onNotify, onError, onUploadConflict } = shellProps;
   return (
     <FileSystemProvider
       adapter={adapter}
@@ -241,7 +365,7 @@ export function Workspace(props: WorkspaceProps): React.JSX.Element {
       onError={onError}
       onUploadConflict={onUploadConflict}
     >
-      <WorkspaceShell {...props} />
+      <WorkspaceShell {...shellProps} controllerRef={ref} />
     </FileSystemProvider>
   );
 }

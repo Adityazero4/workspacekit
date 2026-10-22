@@ -44,6 +44,11 @@ export interface ChangeEvent {
   oldPath?: string;
   mtimeMs?: number;
   actor?: string;
+  /**
+   * created, updated, moved: the entry as it now exists; the store upserts it instead of reloading the
+   * parent.
+   */
+  entry?: Entry;
 }
 /**
  * Options every read accepts: an `AbortSignal` that cancels the request.

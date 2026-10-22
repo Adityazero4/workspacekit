@@ -1,4 +1,5 @@
 import type { MemoryAdapter } from '@scope/core/memory';
+import { createMemoryAdapter } from '@scope/core/memory';
 import { afterEach, describe, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
 import {
@@ -7,41 +8,80 @@ import {
   BURST_SETTLE_MS,
   BURST_SIZE,
   createBenchAdapter,
-  expandAndCollapseMedians,
+  expandAndCollapseSamples,
   expandFolder,
-  expandThatFetchesMedian,
+  expandThatFetchesSamples,
   firstChildName,
   framesWhileSettling,
+  largeTextOpenToEditableMs,
+  manyPageTiff,
   MEDIAN_RUNS,
   median,
-  medianFrameStats,
-  medianOf,
+  MIXED_FILES_OPENED,
+  mixedFiles,
+  mountControlledWorkspace,
   mountWorkspace,
   MOVE_ROUND_TRIP_MS,
+  openAndCloseEach,
+  PAGE_COUNT,
+  PAGES_OVERSCAN,
   renameEntry,
+  samplesOf,
   scrollViewports,
+  scrollVirtualPagesEndToEnd,
   SCROLLED_VIEWPORTS,
+  settledHeapMb,
+  TIFF_HEAP_CHECKPOINT_PAGE,
+  tiffHeapWhileScrolling,
   usedHeapMb,
+  WARM_UP_RUNS,
+  type ControlledWorkspace,
   type FrameStats,
   type MountedWorkspace,
 } from '../bench/scenarios';
 
 const MILLION = 1_000_000;
 const SCALE_TIMEOUT_MS = 900_000;
+const HEAP_DRIFT_ALLOWED = 0.1;
 
-let mounted: MountedWorkspace | undefined;
+let mounted: MountedWorkspace | ControlledWorkspace | undefined;
 afterEach(() => {
   mounted?.unmount();
   mounted = undefined;
 });
 
-async function coldFirstRenderMedian(shape: 'wide' | 'chains64'): Promise<number> {
-  const runs: number[] = [];
-  for (let run = 0; run < MEDIAN_RUNS; run++) {
-    runs.push(await commands.firstRenderInAFreshPage(shape, MILLION));
-  }
-  return median(runs);
+function reportSamples(line: string): void {
+  // eslint-disable-next-line no-console -- the perf project prints every budget's raw samples (Ruling P3-20)
+  console.info(`[perf] ${line}`);
 }
+
+const formatted = (samples: readonly number[]): string =>
+  samples.map((sample) => (Number.isInteger(sample) ? String(sample) : sample.toFixed(3))).join(', ');
+
+function expectMedianAtMost(samples: number[], budget: number, label: string): void {
+  const message = `${label}: median of [${formatted(samples)}]`;
+  reportSamples(`${message} = ${formatted([median(samples)])}, budget ≤ ${budget}`);
+  expect.soft(median(samples), message).toBeLessThanOrEqual(budget);
+}
+
+function expectNoFrameOver50Ms(samples: FrameStats[], label: string): void {
+  expectMedianAtMost(
+    samples.map((stats) => stats.longestFrameMs),
+    50,
+    `${label}: longest frame (ms)`,
+  );
+}
+
+function expectSmoothScrolling(samples: FrameStats[], label: string): void {
+  expectNoFrameOver50Ms(samples, label);
+  const shares = samples.map((stats) => stats.shareOfFramesOver25Ms);
+  const message = `${label}: share of frames over 25 ms, median of [${formatted(shares)}]`;
+  reportSamples(`${message}, budget < 0.1`);
+  expect.soft(median(shares), message).toBeLessThan(0.1);
+}
+
+const coldFirstRenderSamples = (shape: 'wide' | 'chains64'): Promise<number[]> =>
+  samplesOf(() => commands.firstRenderInAFreshPage(shape, MILLION));
 
 async function heapHeldByAMountedWorkspace(adapter: MemoryAdapter): Promise<number> {
   const heapBeforeMount = usedHeapMb();
@@ -49,92 +89,149 @@ async function heapHeldByAMountedWorkspace(adapter: MemoryAdapter): Promise<numb
   return usedHeapMb() - heapBeforeMount;
 }
 
-function expectNoFrameOver50Ms(stats: FrameStats, label: string): void {
-  expect.soft(stats.longestFrameMs, `${label}: longest frame (ms)`).toBeLessThanOrEqual(50);
-}
+describe.skipIf(process.env.CI_SLOW)(
+  `scale budgets in Chromium, each the median of ${MEDIAN_RUNS} runs after ${WARM_UP_RUNS} warm-up`,
+  () => {
+    test.each(['wide', 'chains64'] as const)(
+      '1M %s: cold first render ≤ 500 ms, ≤ 150 MB heap after it, smooth scrolling over 50 viewports',
+      async (shape) => {
+        expectMedianAtMost(await coldFirstRenderSamples(shape), 500, `1M ${shape} cold first render (ms)`);
+        const { adapter } = createBenchAdapter(shape, MILLION);
+        const heldMb = await heapHeldByAMountedWorkspace(adapter);
+        reportSamples(`1M ${shape} heap held by the workspace (MB) = ${heldMb.toFixed(1)}, budget ≤ 150`);
+        expect.soft(heldMb, 'heap held by the workspace (MB)').toBeLessThanOrEqual(150);
+        await expandFolder(mounted as MountedWorkspace, shape === 'wide' ? 'wide' : 'c0');
+        expectSmoothScrolling(
+          await samplesOf(() => scrollViewports(mounted as MountedWorkspace, SCROLLED_VIEWPORTS)),
+          `1M ${shape} scroll`,
+        );
+      },
+      SCALE_TIMEOUT_MS,
+    );
 
-function expectSmoothScrolling(stats: FrameStats, label: string): void {
-  expectNoFrameOver50Ms(stats, label);
-  expect.soft(stats.shareOfFramesOver25Ms, `${label}: share of frames over 25 ms`).toBeLessThan(0.1);
-}
+    test(
+      '1M 10x100k: expanding a 100k-child folder that must be fetched (fetchDepth 1, a fresh tree per run) ≤ 250 ms',
+      async () => {
+        const { adapter } = createBenchAdapter('10x100k', MILLION);
+        expectMedianAtMost(
+          await expandThatFetchesSamples(adapter, 'd0'),
+          250,
+          'list, merge, sort and paint 100k entries (ms)',
+        );
+      },
+      SCALE_TIMEOUT_MS,
+    );
 
-describe.skipIf(process.env.CI_SLOW)('scale budgets in Chromium, each the median of 3 runs', () => {
-  test.each(['wide', 'chains64'] as const)(
-    '1M %s: cold first render ≤ 500 ms, ≤ 150 MB heap after it, smooth scrolling over 50 viewports',
-    async (shape) => {
-      expect.soft(await coldFirstRenderMedian(shape), 'cold first render (ms)').toBeLessThanOrEqual(500);
-      const { adapter } = createBenchAdapter(shape, MILLION);
-      expect
-        .soft(await heapHeldByAMountedWorkspace(adapter), 'heap held by the workspace (MB)')
-        .toBeLessThanOrEqual(150);
-      await expandFolder(mounted!, shape === 'wide' ? 'wide' : 'c0');
-      expectSmoothScrolling(
-        await medianFrameStats(() => scrollViewports(mounted!, SCROLLED_VIEWPORTS)),
-        `1M ${shape} scroll`,
-      );
-    },
-    SCALE_TIMEOUT_MS,
-  );
+    test(
+      '1M 10x100k: expand a loaded 100k-child folder ≤ 150 ms, collapse ≤ 50 ms, smooth scrolling, rename on screen ≤ 100 ms',
+      async () => {
+        const { adapter } = createBenchAdapter('10x100k', MILLION);
+        const workspace = await mountWorkspace(answeringMovesAfter(adapter, MOVE_ROUND_TRIP_MS));
+        mounted = workspace;
+        const { expands, collapses } = await expandAndCollapseSamples(workspace, 'd0');
+        expectMedianAtMost(expands, 150, 'expand of a loaded folder (ms)');
+        expectMedianAtMost(collapses, 50, 'collapse (ms)');
 
-  test(
-    '1M 10x100k: expanding a 100k-child folder that must be fetched (fetchDepth 1, a fresh tree per run) ≤ 250 ms',
-    async () => {
-      const { adapter } = createBenchAdapter('10x100k', MILLION);
-      expect(
-        await expandThatFetchesMedian(adapter, 'd0'),
-        'list, merge, sort and paint 100k entries (ms)',
-      ).toBeLessThanOrEqual(250);
-    },
-    SCALE_TIMEOUT_MS,
-  );
+        await expandFolder(workspace, 'd0');
+        expectSmoothScrolling(
+          await samplesOf(() => scrollViewports(workspace, SCROLLED_VIEWPORTS)),
+          '1M 10x100k scroll',
+        );
 
-  test(
-    '1M 10x100k: expand a loaded 100k-child folder ≤ 150 ms, collapse ≤ 50 ms, smooth scrolling, rename on screen ≤ 100 ms',
-    async () => {
-      const { adapter } = createBenchAdapter('10x100k', MILLION);
-      mounted = await mountWorkspace(answeringMovesAfter(adapter, MOVE_ROUND_TRIP_MS));
-      const workspace = mounted;
-      const { expandMs, collapseMs } = await expandAndCollapseMedians(workspace, 'd0');
-      expect.soft(expandMs, 'expand of a loaded folder (ms)').toBeLessThanOrEqual(150);
-      expect.soft(collapseMs, 'collapse (ms)').toBeLessThanOrEqual(50);
+        const renames = await samplesOf((attempt) =>
+          renameEntry(workspace, firstChildName(workspace, 'd0'), `0-renamed-${attempt}.txt`),
+        );
+        expectMedianAtMost(renames, 100, 'rename: new name on screen (ms)');
+      },
+      SCALE_TIMEOUT_MS,
+    );
 
+    async function burstIntoAnOpenFolder(files: number): Promise<FrameStats[]> {
+      const { adapter, paths } = createBenchAdapter('10x100k', files);
+      const workspace = await mountWorkspace(adapter);
+      mounted = workspace;
       await expandFolder(workspace, 'd0');
-      expectSmoothScrolling(
-        await medianFrameStats(() => scrollViewports(workspace, SCROLLED_VIEWPORTS)),
-        '1M 10x100k scroll',
-      );
+      const burst = agentUpdatesUnder(paths, 'd0');
+      return samplesOf(() => framesWhileSettling(BURST_SETTLE_MS, () => adapter.emit(burst)));
+    }
 
-      const renameMs = await medianOf((attempt) =>
-        renameEntry(workspace, firstChildName(workspace, 'd0'), `0-renamed-${attempt}.txt`),
-      );
-      expect.soft(renameMs, 'rename: new name on screen (ms)').toBeLessThanOrEqual(100);
-    },
-    SCALE_TIMEOUT_MS,
-  );
+    test(
+      `${BURST_SIZE} agent events into an open 10k-child folder (100k 10x100k): no frame over 50 ms`,
+      async () => {
+        expectNoFrameOver50Ms(await burstIntoAnOpenFolder(100_000), 'burst');
+      },
+      SCALE_TIMEOUT_MS,
+    );
 
-  async function burstIntoAnOpenFolder(files: number): Promise<FrameStats> {
-    const { adapter, paths } = createBenchAdapter('10x100k', files);
-    mounted = await mountWorkspace(adapter);
-    await expandFolder(mounted, 'd0');
-    const burst = agentUpdatesUnder(paths, 'd0');
-    return medianFrameStats(() => framesWhileSettling(BURST_SETTLE_MS, () => adapter.emit(burst)));
-  }
+    test(
+      `${BURST_SIZE}-event burst into a 100k-child folder (1M 10x100k), events carrying entries: no frame over 50 ms`,
+      async () => {
+        expectNoFrameOver50Ms(await burstIntoAnOpenFolder(MILLION), 'burst into 100k');
+      },
+      SCALE_TIMEOUT_MS,
+    );
 
-  test(
-    `${BURST_SIZE} agent events into an open 10k-child folder (100k 10x100k): no frame over 50 ms`,
-    async () => {
-      expectNoFrameOver50Ms(await burstIntoAnOpenFolder(100_000), 'burst');
-    },
-    SCALE_TIMEOUT_MS,
-  );
+    test(
+      `${PAGE_COUNT}-page VirtualPages scrolled end to end: no frame over 50 ms, mounted pages ≤ visible + 2 × overscan`,
+      async () => {
+        const scrolls = await samplesOf(scrollVirtualPagesEndToEnd);
+        expectNoFrameOver50Ms(
+          scrolls.map((scroll) => scroll.frames),
+          `${PAGE_COUNT}-page scroll`,
+        );
+        const beyondVisible = scrolls.map((scroll) => scroll.mostPagesMountedBeyondTheVisible);
+        reportSamples(`pages mounted beyond the visible, per run: [${formatted(beyondVisible)}]`);
+        expect(
+          Math.max(...beyondVisible),
+          `pages mounted beyond the visible: [${formatted(beyondVisible)}]`,
+        ).toBeLessThanOrEqual(2 * PAGES_OVERSCAN);
+      },
+      SCALE_TIMEOUT_MS,
+    );
 
-  test(
-    `known limitation until watch events carry entries: ${BURST_SIZE} agent events into an open 100k-child folder ` +
-      '(1M 10x100k) have a frame over 50 ms, because the store reloads and merges the whole listing in one task',
-    async () => {
-      const { longestFrameMs } = await burstIntoAnOpenFolder(MILLION);
-      expect(longestFrameMs, 'longest frame (ms); a fix turns this red').toBeGreaterThan(50);
-    },
-    SCALE_TIMEOUT_MS,
-  );
-});
+    test(
+      `heap after opening and closing ${MIXED_FILES_OPENED} files of mixed kinds is back to its baseline ±10%`,
+      async () => {
+        const { files, opened } = await mixedFiles();
+        const workspace = await mountControlledWorkspace(createMemoryAdapter({ files }));
+        mounted = workspace;
+        const drifts = await samplesOf(async () => {
+          const baselineMb = await settledHeapMb();
+          await openAndCloseEach(workspace, opened);
+          return Math.abs((await settledHeapMb()) - baselineMb) / baselineMb;
+        });
+        expectMedianAtMost(drifts, HEAP_DRIFT_ALLOWED, 'heap drift from the baseline (share)');
+      },
+      SCALE_TIMEOUT_MS,
+    );
+
+    test(
+      `heap while scrolling a ${PAGE_COUNT}-page TIFF end to end stays within 10% of the heap at page ${TIFF_HEAP_CHECKPOINT_PAGE}`,
+      async () => {
+        const data = manyPageTiff();
+        const drifts = await samplesOf(async () => {
+          const { atTheCheckpointMb, atTheEndMb } = await tiffHeapWhileScrolling(data);
+          return Math.abs(atTheEndMb - atTheCheckpointMb) / atTheCheckpointMb;
+        });
+        expectMedianAtMost(
+          drifts,
+          HEAP_DRIFT_ALLOWED,
+          `heap drift from page ${TIFF_HEAP_CHECKPOINT_PAGE} (share)`,
+        );
+      },
+      SCALE_TIMEOUT_MS,
+    );
+
+    test(
+      'a 1 MiB text file is editable ≤ 200 ms after its bytes arrive',
+      async () => {
+        expectMedianAtMost(
+          await samplesOf(largeTextOpenToEditableMs),
+          200,
+          '1 MiB text: bytes to editable (ms)',
+        );
+      },
+      SCALE_TIMEOUT_MS,
+    );
+  },
+);

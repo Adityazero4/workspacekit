@@ -3,7 +3,7 @@ import {
   agentUpdatesUnder,
   answeringMovesAfter,
   BURST_SETTLE_MS,
-  collectGarbageWhenExposed,
+  collectGarbage,
   createBenchAdapter,
   dragFirstChildToTheRootAndBack,
   expandAndCollapseMedians,
@@ -99,7 +99,7 @@ async function interactions(): Promise<Interactions> {
 const page: BenchPage = {
   setupMs,
   firstRenderMs: async () => {
-    collectGarbageWhenExposed();
+    collectGarbage();
     const workspace = await mountWorkspace(adapter);
     workspace.unmount();
     return workspace.firstRenderMs;

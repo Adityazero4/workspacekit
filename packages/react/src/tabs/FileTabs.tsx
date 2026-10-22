@@ -17,11 +17,17 @@ import {
 } from 'react';
 import type { Components } from '../components';
 import { partProps } from '../cx';
-import { ConfirmDialog } from '../dialogs/ConfirmDialog';
 import { DefaultDialog } from '../dialogs/Dialog';
+import type { EditBufferState } from '../editing/editBuffer';
 import { Icons } from '../icons';
 import type { ClassNames } from '../parts';
-import { useEntryState, useFileSystem, useUiValue, type FileSystemContext } from '../provider/hooks';
+import {
+  failureMessage,
+  useEntryState,
+  useFileSystem,
+  useUiValue,
+  type FileSystemContext,
+} from '../provider/hooks';
 import { internalsOf } from '../provider/internals';
 import { horizontalRovingIndex } from '../rovingIndex';
 import { focusIsInsideOrNowhere } from '../tree/rovingFocus';
@@ -63,6 +69,24 @@ export interface FileTabsProps {
   renderLabel?: (tab: Tab, entry?: Entry) => ReactNode;
   /** Replaces the default (Radix) dialog that confirms closing a tab with unsaved changes. */
   components?: Pick<Components, 'Dialog'>;
+  /**
+   * For a `role="tabpanel"` rendered per tab: the tab element gets `tabId` as its id (for the panel's
+   * `aria-labelledby`) and `aria-controls` set to `panelId`.
+   */
+  tabPanelIds?: (path: string) => TabPanelIds;
+}
+
+/**
+ * The element ids that link a tab to its panel.
+ *
+ * @example
+ * ```ts
+ * const ids: TabPanelIds = { tabId: 'files-tab-1', panelId: 'files-panel-1' };
+ * ```
+ */
+export interface TabPanelIds {
+  tabId: string;
+  panelId: string;
 }
 
 interface ControlledTabs extends TabsHolder {
@@ -164,6 +188,7 @@ const preventMiddleClickAutoscroll = (event: MouseEvent): void => {
 interface FileTabShared {
   classNames?: ClassNames;
   renderLabel?: FileTabsProps['renderLabel'];
+  tabPanelIds?: FileTabsProps['tabPanelIds'];
   activate: (path: string) => void;
   pin: (path: string) => void;
   requestClose: (path: string) => void;
@@ -198,6 +223,9 @@ function describeTab(tab: Tab, changed: boolean, deleted: boolean): string {
 
 const marker = (on: boolean): '' | undefined => (on ? '' : undefined);
 
+const linkToPanel = (ids: TabPanelIds | undefined): { id?: string; 'aria-controls'?: string } =>
+  ids ? { id: ids.tabId, 'aria-controls': ids.panelId } : {};
+
 interface FileTabViewProps {
   tab: Tab;
   isActive: boolean;
@@ -218,6 +246,7 @@ const FileTab = memo(function FileTab(props: FileTabViewProps) {
   return (
     <div
       role="tab"
+      {...linkToPanel(shared.tabPanelIds?.(path))}
       aria-selected={isActive}
       aria-labelledby={labelId}
       aria-describedby={description ? descriptionId : undefined}
@@ -263,6 +292,157 @@ const FileTab = memo(function FileTab(props: FileTabViewProps) {
   );
 });
 
+function useControlledOrProviderTabs(
+  fs: FileSystemContext,
+  tabs: TabsState | undefined,
+  onTabsChange: ((state: TabsState) => void) | undefined,
+): { holder: TabsHolder; state: TabsState } {
+  const providerState = useUiValue(fs.tabs);
+  const [controlledTabs] = useState(createControlledTabs);
+  useLayoutEffect(() => controlledTabs.sync(tabs, onTabsChange));
+  const isControlled = tabs !== undefined;
+  useControlledTabsFollowingTheTree(fs, isControlled ? controlledTabs : null);
+  return { holder: isControlled ? controlledTabs : fs.tabs, state: tabs ?? providerState };
+}
+
+type CloseAnswer = 'save' | 'discard' | 'cancel';
+
+interface TabClosing {
+  confirmingClose: string | null;
+  saving: boolean;
+  saveFailure: string | null;
+  requestClose: (path: string) => void;
+  answer: (answer: CloseAnswer) => void;
+}
+
+function whyItWasNotSaved(path: string, buffer: EditBufferState | undefined): string {
+  const failure = `Couldn't save "${basename(path)}"`;
+  if (buffer?.status === 'conflict') return `${failure}: someone else changed it. Open it to pick a version.`;
+  if (buffer?.status === 'deleted') return `${failure}: it was deleted. Open it to save it again.`;
+  return buffer?.error ? failureMessage(failure, buffer.error) : `${failure}. Try again.`;
+}
+
+function useTabClosingThatConfirmsUnsavedChanges(
+  fs: FileSystemContext,
+  holder: TabsHolder,
+  strip: RefObject<HTMLElement | null>,
+  onCancel: (path: string | null) => void,
+): TabClosing {
+  const [confirmingClose, setConfirmingClose] = useConfirmingClose(fs);
+  const [saveFailure, setSaveFailure] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const { editBuffers } = internalsOf(fs);
+  const focusTheTabStopAfterRender = useFocusTheTabStopAfterRender(strip);
+  const close = (path: string, focusEvenIfElsewhere: boolean): void => {
+    setConfirmingClose(null);
+    setSaveFailure(null);
+    holder.set((current) => closeTab(current, path));
+    focusTheTabStopAfterRender(focusEvenIfElsewhere);
+  };
+  const saveThenClose = async (path: string): Promise<void> => {
+    setSaving(true);
+    await editBuffers.flush(path);
+    setSaving(false);
+    if (editBuffers.isDirty(path)) {
+      setSaveFailure(whyItWasNotSaved(path, editBuffers.get(path)));
+      return;
+    }
+    editBuffers.discard(path);
+    close(path, true);
+  };
+  return {
+    confirmingClose,
+    saving,
+    saveFailure,
+    requestClose: (path) => {
+      if (holder.get().tabs.find((tab) => tab.path === path)?.dirty) setConfirmingClose(path);
+      else close(path, false);
+    },
+    answer: (answer) => {
+      const path = confirmingClose;
+      if (saving) return;
+      if (path === null || answer === 'cancel') {
+        onCancel(path);
+        setConfirmingClose(null);
+        setSaveFailure(null);
+        focusTheTabStopAfterRender(true);
+      } else if (answer === 'discard') {
+        editBuffers.discard(path);
+        close(path, true);
+      } else void saveThenClose(path);
+    },
+  };
+}
+
+function runTabKey(
+  event: KeyboardEvent<HTMLElement>,
+  strip: HTMLElement | null,
+  path: string,
+  commands: { activate: (path: string) => void; requestClose: (path: string) => void },
+): boolean {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+  const elements = tabElementsIn(strip);
+  const current = elements.indexOf(event.currentTarget);
+  const target = horizontalRovingIndex(event.key, current, elements.length);
+  if (target !== undefined) focusWithinStrip(strip, elements[target]);
+  else if (event.key === 'Enter' || event.key === ' ') commands.activate(path);
+  else if (event.key === 'Delete' || event.key === 'Backspace') commands.requestClose(path);
+  else return false;
+  return true;
+}
+
+function ConfirmCloseUnsavedTab(props: {
+  path: string;
+  saving: boolean;
+  saveFailure: string | null;
+  Dialog: NonNullable<Components['Dialog']>;
+  classNames?: ClassNames;
+  onAnswer: (answer: CloseAnswer) => void;
+}): React.JSX.Element {
+  const { path, saving, saveFailure, Dialog, classNames, onAnswer } = props;
+  return (
+    <Dialog
+      role="alertdialog"
+      title={`Close "${basename(path)}"?`}
+      description="It has unsaved changes."
+      classNames={classNames}
+      onClose={() => onAnswer('cancel')}
+    >
+      {saveFailure && (
+        <p role="alert" {...partProps('dialog-message', classNames)}>
+          {saveFailure}
+        </p>
+      )}
+      <div {...partProps('dialog-actions', classNames)} aria-busy={saving || undefined}>
+        <button
+          type="button"
+          {...partProps('dialog-button', classNames)}
+          aria-disabled={saving || undefined}
+          onClick={() => onAnswer('cancel')}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          {...partProps('dialog-button-danger', classNames)}
+          aria-disabled={saving || undefined}
+          onClick={() => onAnswer('discard')}
+        >
+          Discard
+        </button>
+        <button
+          type="button"
+          {...partProps('dialog-button', classNames)}
+          aria-disabled={saving || undefined}
+          onClick={() => onAnswer('save')}
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
 /**
  * The open-file tab strip: a WAI-ARIA tab list over the provider's tabs (see `useTabs`), or over `tabs` when
  * controlled. Preview tabs are marked `data-preview` (italic), dirty ones `data-dirty` (a dot instead of the
@@ -275,9 +455,12 @@ const FileTab = memo(function FileTab(props: FileTabViewProps) {
  * arrowing past files never opens them), and Delete or Backspace closes it. A click activates a tab, a double
  * click pins a preview tab, and a middle click or the close icon closes one. The close icon is for the mouse
  * only (hidden from assistive technology and never focused): keyboard and screen reader users close the
- * focused tab with Delete. Closing a dirty tab asks first, in the `Dialog` slot; focus then returns to the
- * strip. The active tab is scrolled into view within the strip only, never the page. There is no tab panel:
- * render the viewer for the active path.
+ * focused tab with Delete. Closing a dirty tab asks first, in the `Dialog` slot: Save (saves the file's
+ * edit buffer, then closes; while it saves the buttons are `aria-disabled` and Save reads "Saving…"; if
+ * the save fails the tab stays open and the dialog says why), Discard (drops
+ * the edits and closes) or Cancel; focus then returns to the strip. The active tab is scrolled into view
+ * within the strip only, never the page. The strip renders no tab panel: render the viewer for the active
+ * path, or a `role="tabpanel"` per tab linked with `tabPanelIds`.
  *
  * Controlled mode: with `tabs`, the strip renders those tabs and never touches the provider's state, so
  * `useTabs()` keeps returning the provider's (uncontrolled) tabs. Every change the strip makes is reported
@@ -295,50 +478,30 @@ const FileTab = memo(function FileTab(props: FileTabViewProps) {
  * ```
  */
 export function FileTabs(props: FileTabsProps): React.JSX.Element {
-  const { className, classNames, renderLabel, components } = props;
+  const { className, classNames, renderLabel, components, tabPanelIds } = props;
   const fs = useFileSystem();
-  const providerState = useUiValue(fs.tabs);
-  const [controlledTabs] = useState(createControlledTabs);
-  useLayoutEffect(() => controlledTabs.sync(props.tabs, props.onTabsChange));
-  const isControlled = props.tabs !== undefined;
-  useControlledTabsFollowingTheTree(fs, isControlled ? controlledTabs : null);
-  const holder: TabsHolder = isControlled ? controlledTabs : fs.tabs;
-  const state = props.tabs ?? providerState;
+  const { holder, state } = useControlledOrProviderTabs(fs, props.tabs, props.onTabsChange);
   const strip = useRef<HTMLDivElement>(null);
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
-  const [confirmingClose, setConfirmingClose] = useConfirmingClose(fs);
-  const focusTheTabStopAfterRender = useFocusTheTabStopAfterRender(strip);
+  const closing = useTabClosingThatConfirmsUnsavedChanges(fs, holder, strip, setFocusedPath);
   useActiveTabScrolledIntoStrip(strip, state.active);
 
   const tabStop = state.tabs.some((tab) => tab.path === focusedPath)
     ? focusedPath
     : (state.active ?? state.tabs[0]?.path ?? null);
   const activate = (path: string): void => holder.set((current) => activateTab(current, path));
-  const requestClose = (path: string): void => {
-    if (holder.get().tabs.find((tab) => tab.path === path)?.dirty) {
-      setConfirmingClose(path);
-      return;
-    }
-    holder.set((current) => closeTab(current, path));
-    focusTheTabStopAfterRender(false);
-  };
   const shared: FileTabShared = {
     classNames,
     renderLabel,
+    tabPanelIds,
     activate,
     pin: (path) => holder.set((current) => pinTab(current, path)),
-    requestClose,
+    requestClose: closing.requestClose,
     noteFocus: setFocusedPath,
     onKeyDown: (event, path) => {
-      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      const elements = tabElementsIn(strip.current);
-      const current = elements.indexOf(event.currentTarget);
-      const target = horizontalRovingIndex(event.key, current, elements.length);
-      if (target !== undefined) focusWithinStrip(strip.current, elements[target]);
-      else if (event.key === 'Enter' || event.key === ' ') activate(path);
-      else if (event.key === 'Delete' || event.key === 'Backspace') requestClose(path);
-      else return;
-      event.preventDefault();
+      if (runTabKey(event, strip.current, path, { activate, requestClose: closing.requestClose })) {
+        event.preventDefault();
+      }
     },
   };
 
@@ -362,22 +525,14 @@ export function FileTabs(props: FileTabsProps): React.JSX.Element {
           />
         ))}
       </div>
-      {confirmingClose !== null && (
-        <ConfirmDialog
-          request={{
-            title: `Close "${basename(confirmingClose)}"?`,
-            description: 'It has unsaved changes, which will be lost.',
-            confirmLabel: 'Close without saving',
-            danger: true,
-          }}
+      {closing.confirmingClose !== null && (
+        <ConfirmCloseUnsavedTab
+          path={closing.confirmingClose}
+          saving={closing.saving}
+          saveFailure={closing.saveFailure}
           Dialog={components?.Dialog ?? DefaultDialog}
           classNames={classNames}
-          onAnswer={(confirmed) => {
-            setConfirmingClose(null);
-            if (confirmed) holder.set((current) => closeTab(current, confirmingClose));
-            else setFocusedPath(confirmingClose);
-            focusTheTabStopAfterRender(true);
-          }}
+          onAnswer={closing.answer}
         />
       )}
     </FileTabContext>

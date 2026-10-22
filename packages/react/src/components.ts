@@ -92,6 +92,22 @@ export interface DialogSlotProps {
 }
 
 /**
+ * Props of the `Loader` slot: what a viewer shows while it loads a file or its renderer. The viewer wraps it
+ * in a `role="status"` element named by `label`, so the slot only draws.
+ *
+ * @example
+ * ```tsx
+ * function Spinner({ label }: LoaderSlotProps) {
+ *   return <span className="spinner" title={label} />;
+ * }
+ * ```
+ */
+export interface LoaderSlotProps {
+  /** `Loading <file name>`. */
+  label: string;
+}
+
+/**
  * Component slots (spec layer 5); defaults are Radix-based.
  *
  * The default menu and dialog render in place, inside the tree, so a `data-theme` on an ancestor applies to
@@ -113,4 +129,6 @@ export interface Components {
   Dialog?: ComponentType<DialogSlotProps>;
   /** Wraps `emptyState` inside the tree's empty-state container. */
   EmptyState?: ComponentType<{ children?: ReactNode }>;
+  /** Replaces the viewer's loading text; see `LoaderSlotProps`. */
+  Loader?: ComponentType<LoaderSlotProps>;
 }

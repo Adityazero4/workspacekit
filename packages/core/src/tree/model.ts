@@ -121,7 +121,13 @@ class CopyOnWriteMap<V> implements ReadonlyMap<string, V> {
     return new CopyOnWriteMap(this.#base, new Map(this.#overlay), this.#size);
   }
   compactIfOverlayOutgrown(): CopyOnWriteMap<V> {
-    return this.#overlay.size > maxOverlaySize(this.#base.size) ? new CopyOnWriteMap(new Map(this)) : this;
+    if (this.#overlay.size <= maxOverlaySize(this.#base.size)) return this;
+    const merged = new Map(this.#base);
+    for (const [key, value] of this.#overlay) {
+      if (value === DELETED) merged.delete(key);
+      else merged.set(key, value);
+    }
+    return new CopyOnWriteMap(merged);
   }
   set(key: string, value: V): void {
     if (!this.has(key)) this.#size++;
@@ -214,14 +220,27 @@ function groupListedEntriesByParent(
   relativeDepth: (path: string) => number,
 ): ListedChildren {
   const childrenByParent: ListedChildren = new Map();
-  for (const entry of entries) {
-    if (entry.path === folder) continue;
-    const parent = parentPath(entry.path);
+  const childrenOf = (parent: string): Map<string, Entry> | undefined => {
     const entryDepth = relativeDepth(parent) + 1;
-    if (entryDepth < 1 || entryDepth > depth) continue;
+    if (entryDepth < 1 || entryDepth > depth) return undefined;
     let children = childrenByParent.get(parent);
     if (!children) childrenByParent.set(parent, (children = new Map<string, Entry>()));
-    children.set(basename(entry.path), entry);
+    return children;
+  };
+  let previous: { parent: string; children: Map<string, Entry> | undefined } | undefined;
+  for (const entry of entries) {
+    if (entry.path === folder) continue;
+    const separator = entry.path.lastIndexOf('/');
+    const parentLength = Math.max(0, separator);
+    const hasThePreviousParent =
+      previous !== undefined &&
+      previous.parent.length === parentLength &&
+      entry.path.startsWith(previous.parent);
+    if (!hasThePreviousParent) {
+      const parent = entry.path.slice(0, parentLength);
+      previous = { parent, children: childrenOf(parent) };
+    }
+    previous!.children?.set(entry.path.slice(separator + 1), entry);
   }
   return childrenByParent;
 }
@@ -290,7 +309,9 @@ class TreeBatch {
     if (!this.#batchCopy) return this.#originalTree;
     for (const node of this.#ownedNodes) {
       const draft = node as DraftFolder;
-      draft.children = draft.children.compactIfOverlayOutgrown();
+      const compacted = draft.children.compactIfOverlayOutgrown();
+      if (compacted !== draft.children) carrySortedOrders(draft.children, compacted);
+      draft.children = compacted;
     }
     const folders = this.#batchCopy.compactIfOverlayOutgrown();
     if (this.#ancestorsOfDetached || detachedPathsCache.has(this.#originalTree.folders)) {
@@ -625,8 +646,11 @@ const sortedChildrenCache = new WeakMap<ReadonlyMap<string, Entry>, Map<string, 
 /**
  * `node`'s children in display order, memoized until the node's children change. The memo is keyed by the
  * children map, which a node shares with its status-only successors, so a status change never re-sorts. An
- * edited folder's order is derived from the order of the listing it was edited from: the changed children are
- * binary-searched into it, so renaming one child of a 100k-child folder does not re-sort the other 99,999.
+ * edited folder's order is derived from the order of the listing it was edited from: a changed child that
+ * sorts the same as before keeps its place, the others are binary-searched into it, so renaming one child of
+ * a 100k-child folder does not re-sort the other 99,999. A folder whose edits are folded into a fresh map
+ * (see `applyBatch`) carries every order computed so far over to it the same way, so a burst of thousands of
+ * updates does not re-sort the whole folder either.
  *
  * @example
  * ```ts
@@ -659,12 +683,34 @@ function sortReusingTheBaseOrder(children: CopyOnWriteMap<Entry>, sort: SortSpec
   const changes = children.changesOverBase;
   if (changes.size === 0) return baseOrder;
   const compare = (a: Entry, b: Entry): number => compareEntries(a, b, sort);
-  const replacedOrDeleted = new Set<Entry | undefined>(
-    [...changes.keys()].map((key) => children.base.get(key)),
-  );
-  const unchanged = baseOrder.filter((entry) => !replacedOrDeleted.has(entry));
-  const changed = [...changes.values()].filter((entry): entry is Entry => entry !== DELETED).sort(compare);
-  return insertSorted(unchanged, changed, compare);
+  const replacements = new Map<Entry, Entry | typeof DELETED>();
+  const repositioned: Entry[] = [];
+  for (const [key, entry] of changes) {
+    const previous = children.base.get(key);
+    const keepsItsPosition = previous !== undefined && entry !== DELETED && compare(previous, entry) === 0;
+    if (previous !== undefined) replacements.set(previous, keepsItsPosition ? entry : DELETED);
+    if (entry !== DELETED && !keepsItsPosition) repositioned.push(entry);
+  }
+  const updatedInPlace: Entry[] = [];
+  for (const entry of baseOrder) {
+    const replacement = replacements.get(entry);
+    if (replacement === undefined) updatedInPlace.push(entry);
+    else if (replacement !== DELETED) updatedInPlace.push(replacement);
+  }
+  return repositioned.length === 0
+    ? updatedInPlace
+    : insertSorted(updatedInPlace, repositioned.sort(compare), compare);
+}
+
+function carrySortedOrders(edited: CopyOnWriteMap<Entry>, compacted: CopyOnWriteMap<Entry>): void {
+  const baseOrders = sortedChildrenCache.get(edited.base);
+  if (!baseOrders) return;
+  const carried = new Map<string, readonly Entry[]>();
+  for (const sortKey of baseOrders.keys()) {
+    const [by, direction] = sortKey.split(':') as [SortSpec['by'], SortSpec['direction']];
+    carried.set(sortKey, sortReusingTheBaseOrder(edited, { by, direction }));
+  }
+  sortedChildrenCache.set(compacted.base, carried);
 }
 
 function insertSorted(

@@ -14,18 +14,27 @@ it('seeds from options.files and applies latency', async () => {
   expect((await fs.list('', { depth: 1 })).map((e) => e.path).sort()).toEqual(['a', 'bin']);
 });
 
-it('own mutations emit batches with actor user; emit passes external events through', async () => {
+it('own mutations emit batches with actor user and entries; emit adds the entry when the path exists', async () => {
   const fs = createMemoryAdapter();
   const batches: ChangeEvent[][] = [];
   fs.watch!((b) => batches.push(b));
-  await fs.write!('x/y.txt', 'v');
-  expect(batches.flat().map((e) => [e.type, e.path, e.actor])).toEqual([
-    ['created', 'x', 'user'],
-    ['created', 'x/y.txt', 'user'],
+  const written = await fs.write!('x/y.txt', 'v');
+  expect(batches.flat().map((e) => [e.type, e.path, e.actor, e.entry?.kind])).toEqual([
+    ['created', 'x', 'user', 'directory'],
+    ['created', 'x/y.txt', 'user', 'file'],
   ]);
   expect(batches).toHaveLength(1);
-  fs.emit([{ type: 'updated', path: 'x/y.txt', actor: 'external' }]);
-  expect(batches[1]).toEqual([{ type: 'updated', path: 'x/y.txt', actor: 'external' }]);
+  expect(batches[0]![1]!.entry).toEqual(written);
+  fs.emit([
+    { type: 'updated', path: '/x/y.txt', actor: 'external' },
+    { type: 'created', path: 'missing.txt', actor: 'external' },
+    { type: 'deleted', path: 'x/y.txt', actor: 'external' },
+  ]);
+  expect(batches[1]).toEqual([
+    { type: 'updated', path: '/x/y.txt', actor: 'external', entry: written },
+    { type: 'created', path: 'missing.txt', actor: 'external' },
+    { type: 'deleted', path: 'x/y.txt', actor: 'external' },
+  ]);
 });
 
 it('mtime is strictly increasing even within one millisecond', async () => {

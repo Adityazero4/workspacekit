@@ -1,6 +1,6 @@
 'use client';
 import { isSameOrDescendant, normalizePath } from '@scope/core';
-import { useFileSystem, useUiValue } from '../provider/hooks';
+import { useFileSystem, useUiValue, type FileSystemContext } from '../provider/hooks';
 import {
   activateTab,
   closeOtherTabs,
@@ -30,8 +30,31 @@ export interface TabsApi extends TabsState {
   close: (path: string) => void;
   closeOthers: (path: string) => void;
   activate: (path: string) => void;
-  /** Editors call this when their buffer gains or loses unsaved changes; a dirty tab is pinned. */
+  /**
+   * Marks the tab's dirty indicator (a dirty tab is pinned). It only mirrors: `FileViewer`'s edit buffers
+   * set it themselves and own whether edits are unsaved (`useFileSystem().hasUnsavedEdits`), so call it
+   * only for a custom editor that keeps its own unsaved state.
+   */
   setDirty: (path: string, dirty: boolean) => void;
+}
+
+/**
+ * `TabsApi.open` without subscribing to the tabs: opens and activates `path` in the provider's tabs, unless
+ * it is the store root or outside it.
+ *
+ * @example
+ * ```ts
+ * openProviderTab(useFileSystem(), 'src/index.ts', 'pin');
+ * ```
+ */
+export function openProviderTab(
+  fs: Pick<FileSystemContext, 'tabs' | 'root'>,
+  path: string,
+  how?: 'preview' | 'pin',
+): void {
+  const normalized = normalizePath(path);
+  if (normalized === fs.root || !isSameOrDescendant(normalized, fs.root)) return;
+  fs.tabs.set((current) => openTab(current, normalized, how));
 }
 
 /**
@@ -49,15 +72,12 @@ export interface TabsApi extends TabsState {
  * ```
  */
 export function useTabs(): TabsApi {
-  const { tabs, root } = useFileSystem();
+  const fs = useFileSystem();
+  const { tabs } = fs;
   const state = useUiValue(tabs);
   return {
     ...state,
-    open: (path, how) => {
-      const normalized = normalizePath(path);
-      if (normalized === root || !isSameOrDescendant(normalized, root)) return;
-      tabs.set((current) => openTab(current, normalized, how));
-    },
+    open: (path, how) => openProviderTab(fs, path, how),
     pin: (path) => tabs.set((current) => pinTab(current, normalizePath(path))),
     close: (path) => tabs.set((current) => closeTab(current, normalizePath(path))),
     closeOthers: (path) => tabs.set((current) => closeOtherTabs(current, normalizePath(path))),

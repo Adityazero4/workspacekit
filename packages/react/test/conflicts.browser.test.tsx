@@ -12,6 +12,7 @@ import { useFileSystem, type FileSystemContext, type Notice } from '../src/provi
 import { internalsOf } from '../src/provider/internals';
 import { FileTree } from '../src/tree/FileTree';
 import { UploadStatus } from '../src/uploads/UploadStatus';
+import { interactionSettled } from './support/interactionSettled';
 
 const ROW_HEIGHT = 24;
 
@@ -114,7 +115,6 @@ const choose = async (row: string, label: string): Promise<void> => {
   await userEvent.click(item);
   await expect.poll(menu).toBeNull();
 };
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 100));
 const expandAll = async (fs: FileSystemContext, paths: string[]): Promise<void> => {
   fs.expanded.set((previous) => new Set([...previous, ...paths]));
   for (const path of paths) {
@@ -309,7 +309,7 @@ test('Replace onto a folder warns that it deletes the folder and its contents, a
   await expect.poll(dialogTitle).toBe('"dir/src" already exists');
   expect(description()).toContain('Replace deletes the existing folder "src" and everything in it.');
   expect(buttonIn(dialog()!, 'Replace').getAttribute('data-fs-part')).toBe('dialog-button-danger');
-  await settle();
+  await interactionSettled();
   expect(await listing(adapter, 'dir/src'), 'nothing is deleted before the answer').toEqual(['sub']);
 
   await answer('Replace');
@@ -478,7 +478,7 @@ test('Replace overwrites nothing while the listings of its folder are still in f
   await expect.poll(() => notices.at(-1)?.message).toMatch(/changed while the dialog was open/);
   holdingDir = false;
   for (const release of held.splice(0)) release();
-  await settle();
+  await interactionSettled();
   expect(await adapter.read('dir/a.txt', 'text')).toBe('changed elsewhere');
 });
 
@@ -508,12 +508,12 @@ test('Replace overwrites nothing when a stale ancestor listing lands right after
   void fs.store.loadFolder('', { force: true });
   await adapter.write!('dir/a.txt', 'changed elsewhere');
   await answer('Replace');
-  await settle();
+  await interactionSettled();
   const dirFirstThenTheStaleRoot = [...held].sort((first) => (first.path === 'dir' ? -1 : 1));
   for (const request of dirFirstThenTheStaleRoot) request.release();
   holding = false;
   await expect.poll(() => notices.at(-1)?.message).toMatch(/changed while the dialog was open/);
-  await settle();
+  await interactionSettled();
   expect(await adapter.read('dir/a.txt', 'text')).toBe('changed elsewhere');
 });
 
@@ -554,7 +554,7 @@ test.each([0, 2, 4, 6, 8, 12])(
     for (const release of held.splice(0)) release();
     await answered;
     await expect.poll(() => notices.at(-1)?.message).toMatch(/changed while the dialog was open/);
-    await settle();
+    await interactionSettled();
     expect(await adapter.read('dir/a.txt', 'text')).toBe('changed elsewhere');
   },
 );
@@ -651,7 +651,7 @@ test('with two trees, no conflict dialog opens while either tree has a menu open
   await userEvent.click(secondTreeRow, { button: 'right' });
   await expect.poll(menu).not.toBeNull();
   const answered = resolve('copy', 'a.txt');
-  await settle();
+  await interactionSettled();
   expect(dialog(), 'the menu keeps the conflict waiting').toBeNull();
   await userEvent.keyboard('{Escape}');
   await expect.poll(menu).toBeNull();

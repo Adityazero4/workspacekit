@@ -100,6 +100,72 @@ function SortRadioGroup<Value extends string>(props: {
   );
 }
 
+function toolbarButtonLabels(treeActionButtons: readonly TreeActionButton[], hasTree: boolean): string[] {
+  return [
+    ...treeActionButtons.map(({ label }) => label),
+    ...(hasTree ? ['Collapse all folders'] : []),
+    'Sort',
+    'Show hidden files',
+    'Follow agent changes',
+  ];
+}
+
+type ToolbarButtonProps = ReturnType<typeof partProps> & {
+  type: 'button';
+  'aria-label': string;
+  title: string;
+  tabIndex: number;
+  onFocus: () => void;
+};
+
+function useToolbarButtonsWithOneTabStop(
+  labels: readonly string[],
+  classNames: ClassNames | undefined,
+): (label: string) => ToolbarButtonProps {
+  const [lastFocused, setLastFocused] = useState<string | null>(null);
+  const tabStop = lastFocused !== null && labels.includes(lastFocused) ? lastFocused : labels[0];
+  return (label) => ({
+    type: 'button',
+    'aria-label': label,
+    title: label,
+    tabIndex: label === tabStop ? 0 : -1,
+    onFocus: () => setLastFocused(label),
+    ...partProps('toolbar-button', classNames),
+  });
+}
+
+function SortMenu(props: { triggerProps: ToolbarButtonProps; classNames?: ClassNames }): React.JSX.Element {
+  const { triggerProps, classNames } = props;
+  const fs = useFileSystem();
+  const sort = useUiValue(fs.sort);
+  return (
+    <RadixMenu.Root modal={false}>
+      <RadixMenu.Trigger asChild>
+        <button {...triggerProps}>
+          <Icons.Sort />
+        </button>
+      </RadixMenu.Trigger>
+      <RadixMenu.Content {...partProps('menu', classNames)} aria-label="Sort" align="start" sideOffset={4}>
+        <SortRadioGroup
+          label="Sort by"
+          value={sort.by}
+          options={SORT_FIELDS}
+          classNames={classNames}
+          onChange={(by) => fs.sort.set((current) => ({ ...current, by }))}
+        />
+        <RadixMenu.Separator {...partProps('menu-separator', classNames)} />
+        <SortRadioGroup
+          label="Order"
+          value={sort.direction}
+          options={SORT_DIRECTIONS}
+          classNames={classNames}
+          onChange={(direction) => fs.sort.set((current) => ({ ...current, direction }))}
+        />
+      </RadixMenu.Content>
+    </RadixMenu.Root>
+  );
+}
+
 /**
  * The workspace toolbar: New file, New folder and Upload files (into the selected folder, or the selected
  * file's folder, else the root), Collapse all, a Sort menu, Show hidden and Follow. Each is an icon button
@@ -121,27 +187,13 @@ export function Toolbar(props: ToolbarProps): React.JSX.Element {
   const fs = useFileSystem();
   const target = useSelectedEntryOrRoot(fs);
   const showHidden = useUiValue(fs.showHidden);
-  const sort = useUiValue(fs.sort);
   const tree = useUiValue(treeCommands.current);
   const supported = new Set(builtinActions(fs.adapter).map((action) => action.id));
   const treeActionButtons = tree ? TREE_ACTION_BUTTONS.filter(({ actionId }) => supported.has(actionId)) : [];
-  const labels = [
-    ...treeActionButtons.map(({ label }) => label),
-    ...(tree ? ['Collapse all folders'] : []),
-    'Sort',
-    'Show hidden files',
-    'Follow agent changes',
-  ];
-  const [lastFocused, setLastFocused] = useState<string | null>(null);
-  const tabStop = lastFocused !== null && labels.includes(lastFocused) ? lastFocused : labels[0];
-  const buttonProps = (label: string) => ({
-    type: 'button' as const,
-    'aria-label': label,
-    title: label,
-    tabIndex: label === tabStop ? 0 : -1,
-    onFocus: () => setLastFocused(label),
-    ...partProps('toolbar-button', classNames),
-  });
+  const buttonProps = useToolbarButtonsWithOneTabStop(
+    toolbarButtonLabels(treeActionButtons, tree !== null),
+    classNames,
+  );
 
   return (
     <div
@@ -171,30 +223,7 @@ export function Toolbar(props: ToolbarProps): React.JSX.Element {
           <Icons.CollapseAll />
         </button>
       )}
-      <RadixMenu.Root modal={false}>
-        <RadixMenu.Trigger asChild>
-          <button {...buttonProps('Sort')}>
-            <Icons.Sort />
-          </button>
-        </RadixMenu.Trigger>
-        <RadixMenu.Content {...partProps('menu', classNames)} aria-label="Sort" align="start" sideOffset={4}>
-          <SortRadioGroup
-            label="Sort by"
-            value={sort.by}
-            options={SORT_FIELDS}
-            classNames={classNames}
-            onChange={(by) => fs.sort.set((current) => ({ ...current, by }))}
-          />
-          <RadixMenu.Separator {...partProps('menu-separator', classNames)} />
-          <SortRadioGroup
-            label="Order"
-            value={sort.direction}
-            options={SORT_DIRECTIONS}
-            classNames={classNames}
-            onChange={(direction) => fs.sort.set((current) => ({ ...current, direction }))}
-          />
-        </RadixMenu.Content>
-      </RadixMenu.Root>
+      <SortMenu triggerProps={buttonProps('Sort')} classNames={classNames} />
       <button
         {...buttonProps('Show hidden files')}
         aria-pressed={showHidden}

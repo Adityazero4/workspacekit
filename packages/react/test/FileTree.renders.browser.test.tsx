@@ -2,13 +2,15 @@ import { treeRowRenders } from './support/countComponentRenders';
 import { statusOf } from '@scope/core';
 import { createMemoryAdapter } from '@scope/core/memory';
 import { useEffect } from 'react';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import '../src/styles.css';
 import { FileSystemProvider } from '../src/provider/FileSystemProvider';
 import { useFileSystem, type FileSystemContext } from '../src/provider/hooks';
 import { internalsOf } from '../src/provider/internals';
 import { FileTree } from '../src/tree/FileTree';
+import { animationFrames } from './support/animationFrames';
+import { interactionSettled } from './support/interactionSettled';
 
 const ROW_HEIGHT = 24;
 const FILES = Object.fromEntries(
@@ -23,7 +25,7 @@ function CaptureContext({ onContext }: { onContext: (fs: FileSystemContext) => v
   return null;
 }
 
-const waitForScrollingToSettle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 250));
+const PAST_THE_VIRTUALIZERS_SCROLL_RESET_MS = 1000;
 const rowCount = (): number => document.querySelectorAll('[role=treeitem]').length;
 
 const mount = async (): Promise<{
@@ -40,7 +42,7 @@ const mount = async (): Promise<{
   );
   await expect.poll(() => captured && statusOf(captured.store.getSnapshot().tree, '')).toBe('loaded');
   await expect.poll(rowCount).toBeGreaterThan(0);
-  await waitForScrollingToSettle();
+  await interactionSettled();
   return { fs: captured!, adapter };
 };
 
@@ -48,15 +50,28 @@ const measure = async (action: () => void): Promise<{ updates: number; mounts: n
   treeRowRenders.updates = 0;
   treeRowRenders.mounts = 0;
   action();
-  await waitForScrollingToSettle();
+  await interactionSettled();
   return { ...treeRowRenders };
 };
 
 test('scrolling by 3 rows renders only the entering rows', async () => {
   await mount();
   const scroller = document.querySelector<HTMLElement>('[data-fs-part=tree-viewport]')!;
-  const renders = await measure(() => (scroller.scrollTop = 3 * ROW_HEIGHT));
-  expect(renders).toEqual({ updates: 0, mounts: 3 });
+  treeRowRenders.updates = 0;
+  treeRowRenders.mounts = 0;
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    scroller.scrollTop = 3 * ROW_HEIGHT;
+    await animationFrames(2);
+    await vi.advanceTimersByTimeAsync(PAST_THE_VIRTUALIZERS_SCROLL_RESET_MS);
+  } finally {
+    vi.useRealTimers();
+  }
+  await interactionSettled();
+  expect(treeRowRenders, 'also after the end of scrolling re-renders the tree').toEqual({
+    updates: 0,
+    mounts: 3,
+  });
 });
 
 test('an unrelated off-screen change renders no rows', async () => {
@@ -131,7 +146,7 @@ test('starting and cancelling a rename renders only the renamed row', async () =
   await mount();
   const row = document.querySelector<HTMLElement>('[role=treeitem]:nth-child(4)')!;
   row.focus();
-  await waitForScrollingToSettle();
+  await interactionSettled();
   const started = await measure(() =>
     row.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true })),
   );
@@ -157,7 +172,7 @@ test('a reveal renders only the rows whose state changes, and the flash ending o
   });
   treeRowRenders.updates = 0;
   await expect.poll(() => row.hasAttribute('data-flash'), { timeout: 3000 }).toBe(false);
-  await waitForScrollingToSettle();
+  await interactionSettled();
   expect(treeRowRenders, 'only the revealed row re-renders when its flash ends').toEqual({
     updates: 1,
     mounts: 0,

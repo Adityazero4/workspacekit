@@ -104,113 +104,145 @@ async function transferDropped(
   }
 }
 
-function createTreeDragAndDrop(): TreeDragAndDrop {
-  let options: TreeDndOptions | null = null;
+interface DraggedRow {
+  path: () => string | null;
+  remember: (path: string, source: EventTarget) => void;
+  forget: () => void;
+}
+
+function trackDraggedRow(onDragFinished: () => void): DraggedRow {
   let draggedPath: string | null = null;
   let stopWatchingTheDragEnd: (() => void) | null = null;
-  let hoverExpand: { path: string; timer: ReturnType<typeof setTimeout> } | null = null;
-  let lastEnteredElement: EventTarget | null = null;
-  const dropTarget = createUiStore<string | null>(null);
-
-  const forgetDraggedRow = (): void => {
+  const forget = (): void => {
     draggedPath = null;
     stopWatchingTheDragEnd?.();
     stopWatchingTheDragEnd = null;
   };
-  const rememberDraggedRow = (path: string, source: EventTarget): void => {
-    forgetDraggedRow();
-    draggedPath = path;
-    source.addEventListener('dragend', finishDrag);
-    document.addEventListener('drop', finishDrag);
-    stopWatchingTheDragEnd = () => {
-      source.removeEventListener('dragend', finishDrag);
-      document.removeEventListener('drop', finishDrag);
-    };
+  return {
+    path: () => draggedPath,
+    remember: (path, source) => {
+      forget();
+      draggedPath = path;
+      source.addEventListener('dragend', onDragFinished);
+      document.addEventListener('drop', onDragFinished);
+      stopWatchingTheDragEnd = () => {
+        source.removeEventListener('dragend', onDragFinished);
+        document.removeEventListener('drop', onDragFinished);
+      };
+    },
+    forget,
   };
+}
 
-  const cancelHoverExpand = (): void => {
+interface FolderHoverExpander {
+  hover: (folder: Entry, options: TreeDndOptions | null) => void;
+  cancel: () => void;
+}
+
+function createFolderHoverExpander(): FolderHoverExpander {
+  let hoverExpand: { path: string; timer: ReturnType<typeof setTimeout> } | null = null;
+  const cancel = (): void => {
     if (hoverExpand) clearTimeout(hoverExpand.timer);
     hoverExpand = null;
   };
-  const expandAfterHovering = (folder: Entry): void => {
-    if (hoverExpand?.path === folder.path) return;
-    cancelHoverExpand();
-    if (!options || options.fs.expanded.get().has(folder.path)) return;
-    const { tree } = options;
-    hoverExpand = {
-      path: folder.path,
-      timer: setTimeout(() => {
-        hoverExpand = null;
-        tree.expand(folder.path);
-      }, HOVER_EXPAND_DELAY_MS),
-    };
+  return {
+    hover: (folder, options) => {
+      if (hoverExpand?.path === folder.path) return;
+      cancel();
+      if (!options || options.fs.expanded.get().has(folder.path)) return;
+      const { tree } = options;
+      hoverExpand = {
+        path: folder.path,
+        timer: setTimeout(() => {
+          hoverExpand = null;
+          tree.expand(folder.path);
+        }, HOVER_EXPAND_DELAY_MS),
+      };
+    },
+    cancel,
   };
+}
+
+function planDrop(
+  event: DragEvent,
+  entry: Entry | null,
+  fs: FileSystemContext,
+  draggedPath: string | null,
+): DropPlan | null {
+  const types = Array.from(event.dataTransfer.types);
+  const folder = folderUnder(entry, fs.root);
+  if (types.includes(FS_PATH_MIME) && draggedPath !== null) {
+    const op = event.altKey ? 'copy' : 'move';
+    const valid = adapterCan(fs, op) && validateTransfer(op, draggedPath, folder) === null;
+    return valid ? { kind: 'transfer', folder, op, path: draggedPath } : null;
+  }
+  if (types.includes('Files') && fs.adapter.upload) return { kind: 'upload', folder };
+  return null;
+}
+
+const carriesTheDraggedRow = (event: DragEvent, fs: FileSystemContext, path: string): boolean =>
+  event.dataTransfer.getData(FS_PATH_MIME) === path &&
+  entryAt(fs.store.getSnapshot().tree, path) !== undefined;
+
+function applyDropPlan(event: DragEvent, plan: DropPlan, options: TreeDndOptions): void {
+  event.preventDefault();
+  if (plan.kind === 'upload') options.startUpload(captureDataTransfer(event.dataTransfer), plan.folder);
+  else if (carriesTheDraggedRow(event, options.fs, plan.path)) void transferDropped(options.fs, plan);
+}
+
+function startDraggingRow(event: DragEvent, entry: Entry, draggedRow: DraggedRow): void {
+  draggedRow.remember(entry.path, event.currentTarget);
+  event.dataTransfer.setData(FS_PATH_MIME, entry.path);
+  event.dataTransfer.setData('text/plain', entry.path);
+  event.dataTransfer.effectAllowed = 'copyMove';
+}
+
+function createTreeDragAndDrop(): TreeDragAndDrop {
+  let options: TreeDndOptions | null = null;
+  let lastEnteredElement: EventTarget | null = null;
+  const dropTarget = createUiStore<string | null>(null);
+  const hoverExpander = createFolderHoverExpander();
+  const draggedRow = trackDraggedRow(() => finishDrag());
   const endDrag = (): void => {
-    cancelHoverExpand();
+    hoverExpander.cancel();
     lastEnteredElement = null;
     dropTarget.set(null);
   };
   const finishDrag = (): void => {
-    forgetDraggedRow();
+    draggedRow.forget();
     endDrag();
   };
-
-  const planFor = (event: DragEvent, entry: Entry | null): DropPlan | null => {
-    if (!options) return null;
-    const { fs } = options;
-    const types = Array.from(event.dataTransfer.types);
-    const folder = folderUnder(entry, fs.root);
-    if (types.includes(FS_PATH_MIME) && draggedPath !== null) {
-      const op = event.altKey ? 'copy' : 'move';
-      const valid = adapterCan(fs, op) && validateTransfer(op, draggedPath, folder) === null;
-      return valid ? { kind: 'transfer', folder, op, path: draggedPath } : null;
-    }
-    if (types.includes('Files') && fs.adapter.upload) return { kind: 'upload', folder };
-    return null;
-  };
+  const planFor = (event: DragEvent, entry: Entry | null): DropPlan | null =>
+    options && planDrop(event, entry, options.fs, draggedRow.path());
 
   const dragOver = (event: DragEvent, entry: Entry | null): void => {
     event.stopPropagation();
     const plan = planFor(event, entry);
-    if (plan && entry?.kind === 'directory') expandAfterHovering(entry);
-    else cancelHoverExpand();
+    if (plan && entry?.kind === 'directory') hoverExpander.hover(entry, options);
+    else hoverExpander.cancel();
     dropTarget.set(plan?.folder ?? null);
     if (!plan) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = plan.kind === 'upload' ? 'copy' : plan.op;
   };
-
-  const carriesTheDraggedRow = (event: DragEvent, fs: FileSystemContext, path: string): boolean =>
-    event.dataTransfer.getData(FS_PATH_MIME) === path &&
-    entryAt(fs.store.getSnapshot().tree, path) !== undefined;
-
   const drop = (event: DragEvent, entry: Entry | null): void => {
     event.stopPropagation();
     const plan = planFor(event, entry);
     finishDrag();
-    if (!plan || !options) return;
-    event.preventDefault();
-    if (plan.kind === 'transfer' && !carriesTheDraggedRow(event, options.fs, plan.path)) return;
-    if (plan.kind === 'transfer') void transferDropped(options.fs, plan);
-    else options.startUpload(captureDataTransfer(event.dataTransfer), plan.folder);
+    if (plan && options) applyDropPlan(event, plan, options);
   };
 
   return {
     handlers: {
       dropTarget,
-      dragStart: (event, entry) => {
-        rememberDraggedRow(entry.path, event.currentTarget);
-        event.dataTransfer.setData(FS_PATH_MIME, entry.path);
-        event.dataTransfer.setData('text/plain', entry.path);
-        event.dataTransfer.effectAllowed = 'copyMove';
-      },
+      dragStart: (event, entry) => startDraggingRow(event, entry, draggedRow),
       dragOver,
       drop,
     },
     viewportProps: {
       onDragEnter: (event) => {
         lastEnteredElement = event.target;
-        if (!Array.from(event.dataTransfer.types).includes(FS_PATH_MIME)) forgetDraggedRow();
+        if (!Array.from(event.dataTransfer.types).includes(FS_PATH_MIME)) draggedRow.forget();
       },
       onDragOver: (event) => dragOver(event, null),
       onDrop: (event) => drop(event, null),

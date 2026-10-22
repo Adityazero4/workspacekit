@@ -4,7 +4,7 @@ import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
 import axe from 'axe-core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { expect, test, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { commands, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import '../src/styles.css';
 import { followMove } from '../src/actions/followMove';
@@ -14,6 +14,8 @@ import { FileTabs, type FileTabsProps } from '../src/tabs/FileTabs';
 import type { TabsState } from '../src/tabs/tabs-store';
 import { useTabs, type TabsApi } from '../src/tabs/useTabs';
 import { FileTree } from '../src/tree/FileTree';
+import { cssTransitionsToSettle } from './support/cssTransitionsToSettle';
+import { interactionSettled } from './support/interactionSettled';
 
 interface Mounted {
   fs: FileSystemContext;
@@ -268,20 +270,19 @@ test('opening and activating tabs re-renders no tree rows and only the tabs that
   );
   await expect.poll(() => document.querySelectorAll('[role=treeitem]').length).toBeGreaterThan(0);
   await openPinned(tabs, 'a.txt', 'b.txt', 'c.txt');
-  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 100));
-  await settle();
+  await interactionSettled();
   treeRowRenders.updates = treeRowRenders.mounts = 0;
   fileTabRenders.updates = fileTabRenders.mounts = 0;
 
   tabs().activate('a.txt');
   await expect.poll(activeName).toBe('a.txt');
-  await settle();
+  await interactionSettled();
   expect(fileTabRenders, 'the previously and newly active tabs').toEqual({ updates: 2, mounts: 0 });
 
   fileTabRenders.updates = fileTabRenders.mounts = 0;
   tabs().open('src/two.ts');
   await expect.poll(activeName).toBe('two.ts');
-  await settle();
+  await interactionSettled();
   expect(treeRowRenders).toEqual({ updates: 0, mounts: 0 });
   expect(fileTabRenders, 'the previously active tab and the new one').toEqual({ updates: 1, mounts: 1 });
 });
@@ -321,6 +322,29 @@ test('axe: no violations in the tab strip with active, preview, dirty, changed a
   expect(fs.store.getSnapshot().changed.has('b.txt')).toBe(true);
   const results = await axe.run(document.querySelector<HTMLElement>('[role=tablist]')!);
   expect(results.violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([]);
+});
+
+test('axe: a deleted or changed tab stays readable while it is the active one, light and dark', async () => {
+  const { tabs, adapter } = await mount(<FileTabs />);
+  await openPinned(tabs, 'a.txt', 'b.txt');
+  tabs().setDirty('a.txt', true);
+  adapter.emit([{ type: 'updated', path: 'b.txt', actor: 'agent' }]);
+  await adapter.delete!('a.txt');
+  await expect.poll(() => tabNamed('a.txt').hasAttribute('data-deleted')).toBe(true);
+  await expect.poll(() => tabNamed('b.txt').hasAttribute('data-changed')).toBe(true);
+  const violations: string[] = [];
+  for (const active of ['a.txt', 'b.txt']) {
+    tabs().activate(active);
+    await expect.poll(() => tabNamed(active).getAttribute('aria-selected')).toBe('true');
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await commands.emulateMedia({ colorScheme });
+      await cssTransitionsToSettle();
+      const results = await axe.run(document.querySelector<HTMLElement>('[role=tablist]')!);
+      violations.push(...results.violations.map((violation) => `${active} ${colorScheme}: ${violation.id}`));
+    }
+  }
+  await commands.emulateMedia({ colorScheme: null });
+  expect(violations).toEqual([]);
 });
 
 function TreeOpeningTabs(): React.JSX.Element {
@@ -384,7 +408,7 @@ test('a controlled strip keeps a clean tab open while a failed followMove of its
   const failing: FileSystemAdapter = {
     ...memory,
     move: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise(requestAnimationFrame);
       throw new FsError('unknown', 'the server refused');
     },
   };
@@ -401,7 +425,7 @@ test('a controlled strip keeps a clean tab open while a failed followMove of its
   );
   await expect.poll(() => fs && statusOf(fs.store.getSnapshot().tree, '')).toBe('loaded');
   await followMove(fs!, 'a.txt', 'z.txt', () => fs!.store.rename('a.txt', 'z.txt')).catch(() => undefined);
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await interactionSettled();
   expect(tabNames()).toEqual(['a.txt']);
   expect(onChange).not.toHaveBeenCalled();
 });

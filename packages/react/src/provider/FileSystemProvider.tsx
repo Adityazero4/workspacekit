@@ -4,9 +4,11 @@ import {
   entryAt,
   isSameOrDescendant,
   normalizePath,
+  parentPath,
   remapPrefix,
   statusOf,
   toFsError,
+  withPolling,
   type FileSystemAdapter,
   type FsError,
   type SortSpec,
@@ -16,11 +18,15 @@ import {
 } from '@scope/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ClipboardItem } from '../actions/clipboard';
+import { createTreeCommandsHost, type TreeCommandsHost } from '../actions/treeCommands';
 import { forgetStateOfTheReplacedEntry, type FollowedMove } from '../actions/followMove';
 import { createConflictQueue, type ConflictQueue } from '../dialogs/conflicts';
+import { createEditBuffers, type EditBuffers } from '../editing/buffers';
 import { closeTabsOfDeletedFiles } from '../tabs/followTree';
+import { createTabIds, type TabIds } from '../tabs/tabIds';
 import { NO_TABS, remapTabs, type Tab, type TabsState } from '../tabs/tabs-store';
 import { createUploads, type UploadsController } from '../uploads/uploads';
+import { createViewModes, remapViewModes, type ViewModes } from '../viewer/viewModes';
 import { FsContext, type FileSystemContext, type Notice } from './hooks';
 import { registerInternals } from './internals';
 import { createPersister, readPersisted } from './persist';
@@ -40,6 +46,11 @@ import { createUiStore, type UiStore } from './ui-store';
  * ```
  */
 export interface FileSystemProviderProps {
+  /**
+   * Where the files live. A new adapter identity starts a new session (a fresh tree, UI state and edit
+   * buffers), so create it once: at module scope, or with `useState(() => httpAdapter(url))`, never inline
+   * in render.
+   */
   adapter: FileSystemAdapter;
   /** Mount a subtree (store root). */
   root?: string;
@@ -144,8 +155,117 @@ interface Session {
   restoredAwaitingFirstLoad: Set<string>;
   expandedFoldersSeenByTheLoader: ReadonlySet<string>;
   remapMovedPaths: (from: string, to: string) => void;
+  movedPathsListeners: Set<MovedPathsListener>;
+  onMovedPaths: (listener: MovedPathsListener) => () => void;
+  editBuffers: EditBuffers;
+  viewModes: ViewModes;
+  treeCommands: TreeCommandsHost;
+  tabIds: TabIds;
   report: (error: FsError) => void;
   notify: (notice: Notice) => void;
+}
+
+interface SessionReporting {
+  report: (error: FsError) => void;
+  notify: (notice: Notice) => void;
+}
+
+function createSessionReporting(callbacks: () => Callbacks): SessionReporting {
+  const alreadyReported = new WeakSet<FsError>();
+  const report = (error: FsError): void => {
+    if (error.kind === 'cancelled' || alreadyReported.has(error)) return;
+    alreadyReported.add(error);
+    callbacks().onError?.(error);
+  };
+  const notify = (notice: Notice): void => {
+    callbacks().onNotify?.(notice);
+    if (notice.error) report(notice.error);
+  };
+  return { report, notify };
+}
+
+function forgetVanishedRestoredFolder(session: Session, error: FsError): boolean {
+  if (error.kind !== 'not_found' && error.kind !== 'invalid') return false;
+  for (const path of session.restoredAwaitingFirstLoad) {
+    if (session.store.getSnapshot().errors.get(path) !== error) continue;
+    session.restoredAwaitingFirstLoad.delete(path);
+    session.expanded.set(
+      (previous) => new Set([...previous].filter((expandedPath) => expandedPath !== path)),
+    );
+    return true;
+  }
+  return false;
+}
+
+function foldersToPoll(session: Session): string[] {
+  const { tabs, active } = session.tabs.get();
+  const activeTabFolder = active === null ? [] : [parentPath(active)];
+  const tabFolders = tabs.map((tab) => parentPath(tab.path));
+  const mostRecentlyExpandedFirst = [...session.expanded.get()].reverse();
+  return [...activeTabFolder, normalizePath(session.root), ...tabFolders, ...mostRecentlyExpandedFirst];
+}
+
+const resumeOnVisibilityChange = (poll: () => void): (() => void) => {
+  document.addEventListener('visibilitychange', poll);
+  return () => document.removeEventListener('visibilitychange', poll);
+};
+
+function watchableAdapter(adapter: FileSystemAdapter, session: () => Session): FileSystemAdapter {
+  if (adapter.watch) return adapter;
+  return withPolling(adapter, {
+    paths: () => foldersToPoll(session()),
+    isPaused: () => document.hidden,
+    resumeSignal: resumeOnVisibilityChange,
+  });
+}
+
+type MovedPathsListener = (from: string, to: string) => void;
+
+function createMovedPathsSignal(): Pick<Session, 'movedPathsListeners' | 'onMovedPaths'> {
+  const movedPathsListeners = new Set<MovedPathsListener>();
+  return {
+    movedPathsListeners,
+    onMovedPaths: (listener) => {
+      movedPathsListeners.add(listener);
+      return () => void movedPathsListeners.delete(listener);
+    },
+  };
+}
+
+function createUiStateStores(): Pick<
+  Session,
+  'sort' | 'showHidden' | 'clipboard' | 'tabs' | 'tabIds' | 'followedMoves'
+> {
+  const tabs = createUiStore(NO_TABS);
+  return {
+    sort: createUiStore(DEFAULT_SORT),
+    showHidden: createUiStore(false),
+    clipboard: createUiStore<ClipboardItem | null>(null),
+    tabs,
+    tabIds: createTabIds(tabs),
+    followedMoves: createUiStore<ReadonlySet<FollowedMove>>(new Set()),
+  };
+}
+
+type UiStateWithEditBuffers = ReturnType<typeof createUiStateStores> &
+  ReturnType<typeof createMovedPathsSignal> &
+  Pick<Session, 'editBuffers'>;
+
+function createUiStateWithEditBuffers(
+  liveAdapter: FileSystemAdapter,
+  store: TreeStore,
+  root: string,
+): UiStateWithEditBuffers {
+  const uiState = createUiStateStores();
+  const movedPaths = createMovedPathsSignal();
+  const editBuffers = createEditBuffers({
+    adapter: liveAdapter,
+    store,
+    root: normalizePath(root),
+    ...uiState,
+    ...movedPaths,
+  });
+  return { ...uiState, ...movedPaths, editBuffers };
 }
 
 function createSession(
@@ -156,33 +276,14 @@ function createSession(
   initialCallbacks: Callbacks,
 ): Session {
   let callbacks = initialCallbacks;
-  const alreadyReported = new WeakSet<FsError>();
-  const report = (error: FsError): void => {
-    if (error.kind === 'cancelled' || alreadyReported.has(error)) return;
-    alreadyReported.add(error);
-    callbacks.onError?.(error);
-  };
-  const restoredAwaitingFirstLoad = new Set<string>();
+  const { report, notify } = createSessionReporting(() => callbacks);
   const expanded = createUiStore<ReadonlySet<string>>(new Set());
-  const forgetVanishedRestoredFolder = (error: FsError): boolean => {
-    if (error.kind !== 'not_found' && error.kind !== 'invalid') return false;
-    for (const path of restoredAwaitingFirstLoad) {
-      if (session.store.getSnapshot().errors.get(path) !== error) continue;
-      restoredAwaitingFirstLoad.delete(path);
-      expanded.set((previous) => new Set([...previous].filter((expandedPath) => expandedPath !== path)));
-      return true;
-    }
-    return false;
-  };
-  const notify = (notice: Notice): void => {
-    callbacks.onNotify?.(notice);
-    if (notice.error) report(notice.error);
-  };
-  const store = createTreeStore(adapter, {
+  const liveAdapter = watchableAdapter(adapter, () => session);
+  const store = createTreeStore(liveAdapter, {
     root,
     fetchDepth,
     onError: (error) => {
-      if (!forgetVanishedRestoredFolder(error)) report(error);
+      if (!forgetVanishedRestoredFolder(session, error)) report(error);
     },
   });
   const conflicts = createConflictQueue();
@@ -196,13 +297,9 @@ function createSession(
     store,
     expanded,
     selected,
-    sort: createUiStore(DEFAULT_SORT),
-    showHidden: createUiStore(false),
-    clipboard: createUiStore<ClipboardItem | null>(null),
-    tabs: createUiStore(NO_TABS),
-    followedMoves: createUiStore<ReadonlySet<FollowedMove>>(new Set()),
+    ...createUiStateWithEditBuffers(liveAdapter, store, root),
     uploads: createUploads({
-      adapter,
+      adapter: liveAdapter,
       store,
       notify,
       report,
@@ -215,9 +312,11 @@ function createSession(
     attachRevealHost: revealer.attachHost,
     updateCallbacks: (latest) => void (callbacks = latest),
     recreate: () => createSession(adapter, root, fetchDepth, storageKey, callbacks),
-    restoredAwaitingFirstLoad,
+    restoredAwaitingFirstLoad: new Set(),
     expandedFoldersSeenByTheLoader: new Set(),
     remapMovedPaths: (from, to) => remapMovedPathsInSession(session, from, to),
+    viewModes: createViewModes(),
+    treeCommands: createTreeCommandsHost(),
     report,
     notify,
   };
@@ -245,7 +344,10 @@ function remapMovedPathsInSession(session: Session, from: string, to: string): v
     const path = remapPrefix(item.path, from, to);
     return path === item.path ? item : { ...item, path };
   });
+  session.tabIds.remap(from, to);
   session.tabs.set((state) => remapTabs(state, from, to));
+  session.viewModes.set((modes) => remapViewModes(modes, from, to));
+  for (const listener of [...session.movedPathsListeners]) listener(from, to);
 }
 
 function followCommittedMove(session: Session, from: string, to: string): void {
@@ -375,7 +477,9 @@ function startSession(session: Session, replace: () => void): (() => void) | und
     session.followedMoves,
   );
   const stopLoading = loadExpandedFoldersAfterRoot(session);
+  const stopEditing = session.editBuffers.connect();
   return () => {
+    stopEditing();
     stopLoading();
     stopClosingDeletedTabs();
     stopFollowingMoves();
@@ -417,7 +521,17 @@ function applyDefaultsOutsideParametersForReactCompiler(props: FileSystemProvide
  * folder is loaded unless it already is; the first pass waits for the root listing, which usually covers the
  * first levels. An expanded folder whose load was discarded (it was renamed or moved mid-load) is loaded
  * again once the move settles. The session also owns the uploader (see `useUploads`); ending the session
- * cancels its running uploads.
+ * cancels its running uploads. It owns the edit buffers too (the unsaved text `FileViewer` edits, kept per
+ * path and following moves): `pagehide` flushes them, `beforeunload` asks before leaving while any has
+ * unsaved edits, and ending the session flushes them one last time and then drops them, so edits that
+ * cannot be saved then (in conflict, deleted, or failing to save) are lost. Guard in-app navigation with
+ * `useFileSystem().hasUnsavedEdits` (and `subscribeToEdits` to follow it).
+ *
+ * An adapter without `watch` stays live through `withPolling`, wrapped once per session for the store, the
+ * uploader and the edit buffers' saves, so the user's own changes are never reported as someone else's
+ * (`useFileSystem().adapter` is the one passed in). Each round polls the active tab's folder, the root, the
+ * other tabs' folders, then the expanded folders (the most recently expanded first); nothing is polled while
+ * the page is hidden, and one round runs as soon as it is shown again.
  *
  * Path-keyed state (expanded folders, the selection, the clipboard entry and the open tabs) follows every
  * committed move or rename the store reports (`store.onMove`), except the exact `from`/`to` pair of a
@@ -435,9 +549,15 @@ function applyDefaultsOutsideParametersForReactCompiler(props: FileSystemProvide
  *
  * @example
  * ```tsx
- * <FileSystemProvider adapter={httpAdapter('/api/fs')} storageKey="my-app">
- *   <FileTree />
- * </FileSystemProvider>
+ * const adapter = httpAdapter('/api/fs');
+ *
+ * function App() {
+ *   return (
+ *     <FileSystemProvider adapter={adapter} storageKey="my-app">
+ *       <FileTree />
+ *     </FileSystemProvider>
+ *   );
+ * }
  * ```
  */
 export function FileSystemProvider(props: FileSystemProviderProps): React.JSX.Element {
@@ -465,6 +585,8 @@ export function FileSystemProvider(props: FileSystemProviderProps): React.JSX.El
     tabs: session.tabs,
     reveal: session.reveal,
     notify: session.notify,
+    hasUnsavedEdits: session.editBuffers.hasUnsavedEdits,
+    subscribeToEdits: session.editBuffers.subscribe,
   };
   return <FsContext value={value}>{children}</FsContext>;
 }

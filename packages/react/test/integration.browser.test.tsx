@@ -1,4 +1,4 @@
-import { FsError, type DropEntry } from '@scope/core';
+import { FsError, type DropEntry, type FileSystemAdapter } from '@scope/core';
 import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
 import axe from 'axe-core';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -8,6 +8,8 @@ import '../src/styles.css';
 import { useTabs } from '../src/tabs/useTabs';
 import { isMac } from '../src/tree/keyboard';
 import { Workspace } from '../src/workspace/Workspace';
+import { tiffBytes } from './fixtures/tiff';
+import { cssTransitionsToSettle } from './support/cssTransitionsToSettle';
 
 const FILES = {
   'README.md': '# Workspace',
@@ -195,10 +197,7 @@ async function expectNoAxeViolationsInEitherColorScheme(element: HTMLElement, st
   for (const colorScheme of THEMES) {
     await commands.emulateMedia({ colorScheme });
     await expect.poll(() => matchMedia('(prefers-color-scheme: dark)').matches).toBe(colorScheme === 'dark');
-    const colorTransitions = document
-      .getAnimations()
-      .filter((animation) => animation instanceof CSSTransition);
-    await Promise.all(colorTransitions.map((transition) => transition.finished));
+    await cssTransitionsToSettle();
     await expectNoAxeViolations(element, `${colorScheme} ${state}`);
   }
   await commands.emulateMedia({ colorScheme: null });
@@ -432,7 +431,7 @@ test('search reveals a file deep in the tree and previews it; Enter pins; a dirt
   await press('{Delete}');
   await expect.poll(() => dialog()?.getAttribute('role')).toBe('alertdialog');
   expect(dialog()!.textContent).toContain('index.ts');
-  await focusDialogButton('Close without saving');
+  await focusDialogButton('Discard');
   await press('{Enter}');
   await expect.poll(tabNames).toEqual(['guide.md']);
 });
@@ -500,3 +499,181 @@ test.each(THEMES)(
     await expectNoAxeViolations(workspace(), `${theme} search results`);
   },
 );
+
+const AFTER_AN_AUTOSAVE = { timeout: 4000 };
+const ONE_POLLING_INTERVAL_AND_MARGIN = { timeout: 8000 };
+const LOADING_THE_TIFF_CODE = { timeout: 5000 };
+const TO_THE_END_OF_THE_TEXT = isMac() ? '{Meta>}{ArrowDown}{/Meta}' : '{Control>}{End}{/Control}';
+const TIFF_PAGES = Array.from({ length: 6 }, () => ({ width: 200, height: 300 }));
+
+async function pngBytes(color: string): Promise<Uint8Array> {
+  const canvas = document.createElement('canvas');
+  canvas.width = 120;
+  canvas.height = 80;
+  const context = canvas.getContext('2d')!;
+  context.fillStyle = color;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob>((resolve) => canvas.toBlob((png) => resolve(png!), 'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+async function mountWithViewers(
+  adapt: (memory: MemoryAdapter) => FileSystemAdapter = (memory) => memory,
+): Promise<MemoryAdapter> {
+  const memory = createMemoryAdapter({
+    files: {
+      'notes.txt': 'first line',
+      'photo.png': await pngBytes('red'),
+      'scan.tiff': new Uint8Array(tiffBytes(TIFF_PAGES)),
+      'docs/guide.md': 'guide',
+    },
+  });
+  await render(<Workspace adapter={adapt(memory)} style={{ width: 960, height: 560 }} />);
+  await expect.poll(rowNames).toEqual(['docs', 'notes.txt', 'photo.png', 'scan.tiff']);
+  return memory;
+}
+
+const part = (name: string): HTMLElement | null =>
+  document.querySelector<HTMLElement>(`[role=tabpanel]:not([hidden]) [data-fs-part=${name}]`);
+const editor = (): HTMLTextAreaElement | null => part('text-editor') as HTMLTextAreaElement | null;
+const saveStatusText = (): string | null | undefined => part('viewer-save-status')?.textContent;
+const saveBanner = (): HTMLElement | null => part('save-banner');
+const isBannerButton =
+  (label: string) =>
+  (element: Element): boolean =>
+    element.textContent === label && element.closest('[data-fs-part=save-banner]') !== null;
+const tiffImageSources = (): string[] =>
+  [...document.querySelectorAll<HTMLImageElement>('[data-fs-part=tiff-page-image]')].map(
+    (image) => image.src,
+  );
+const replaceAsTheAgent = (adapter: MemoryAdapter, path: string, bytes: Uint8Array): Promise<unknown> =>
+  adapter.upload!.direct(path, new Blob([bytes as Uint8Array<ArrayBuffer>]), {
+    signal: new AbortController().signal,
+    overwrite: true,
+  });
+
+async function openFromTheTree(name: string): Promise<void> {
+  if (!isTreeRow(document.activeElement!)) {
+    const fromNowhere = document.activeElement === document.body;
+    await tabUntil(isTreeRow, 'the tree', fromNowhere ? 'forwards' : 'backwards');
+  }
+  await goToRow(name);
+  await press('{Enter}');
+  await expect.poll(activeTabName).toBe(name);
+}
+
+async function typeInTheEditor(text: string): Promise<void> {
+  await expect.poll(editor).not.toBeNull();
+  if (document.activeElement !== editor()) await tabUntil((element) => element === editor(), 'the editor');
+  await press(`${TO_THE_END_OF_THE_TEXT}${text}`);
+}
+
+test('viewer: a search preview pinned from the tree, autosave, and agent conflicts resolved from the banner, keyboard only', async () => {
+  const adapter = await mountWithViewers();
+  await tabUntil((element) => element.getAttribute('data-fs-part') === 'search-input', 'the search box');
+  await press('notes');
+  await expect.poll(() => document.querySelectorAll('[role=option]').length).toBe(1);
+  await press('{ArrowDown}{Enter}');
+  await expect.poll(activeTabName).toBe('notes.txt');
+  expect(activeTab()!.hasAttribute('data-preview'), 'search opens a preview').toBe(true);
+  await expect.poll(focusedRowName, { message: 'the reveal focuses the row' }).toBe('notes.txt');
+  await press('{Enter}');
+  await expect.poll(() => activeTab()?.hasAttribute('data-preview'), { message: 'Enter pins' }).toBe(false);
+  await expect.poll(() => editor()?.value).toBe('first line');
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'a pinned text file');
+
+  await typeInTheEditor(' edited');
+  await expect.poll(() => adapter.read('notes.txt', 'text'), AFTER_AN_AUTOSAVE).toBe('first line edited');
+  await expect.poll(saveStatusText).toBe('Saved');
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'saved');
+
+  await typeInTheEditor(' mine');
+  await adapter.write!('notes.txt', 'agent version');
+  await expect.poll(saveBanner).not.toBeNull();
+  await expect.poll(saveStatusText).toBe('Changed by someone else');
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'a conflict banner');
+  await tabUntil(isBannerButton('Keep mine'), 'Keep mine', 'backwards');
+  await press('{Enter}');
+  await expect.poll(() => adapter.read('notes.txt', 'text')).toBe('first line edited mine');
+  await expect.poll(saveStatusText).toBe('Saved');
+  expect(saveBanner()).toBeNull();
+  await expect.poll(() => document.activeElement, { message: 'focus is back in the editor' }).toBe(editor());
+
+  await typeInTheEditor('!');
+  await adapter.write!('notes.txt', 'their final word');
+  await expect.poll(saveBanner).not.toBeNull();
+  await tabUntil(isBannerButton('Take theirs'), 'Take theirs', 'backwards');
+  await press('{Enter}');
+  await expect.poll(() => editor()?.value).toBe('their final word');
+  expect(saveBanner()).toBeNull();
+  expect(await adapter.read('notes.txt', 'text')).toBe('their final word');
+});
+
+test('viewer: a new version refreshes in place, keeping the image zoom and the TIFF page, keyboard only', async () => {
+  const adapter = await mountWithViewers();
+  await openFromTheTree('photo.png');
+  const zoomLevel = (): string | null | undefined => part('image-zoom-level')?.textContent;
+  await expect.poll(() => part('image-content')?.getAttribute('src')).toBeTruthy();
+  await tabUntil((element) => element.getAttribute('data-fs-part') === 'image-surface', 'the image');
+  const fittedZoom = zoomLevel();
+  await press('+');
+  await expect.poll(zoomLevel).not.toBe(fittedZoom);
+  const zoomed = zoomLevel();
+  const firstVersion = part('image-content')!.getAttribute('src');
+  await replaceAsTheAgent(adapter, 'photo.png', await pngBytes('blue'));
+  await expect.poll(() => part('image-content')?.getAttribute('src')).not.toBe(firstVersion);
+  expect(zoomLevel(), 'the zoom survives the refresh').toBe(zoomed);
+  expect(part('image-surface')!.hasAttribute('data-zoomed')).toBe(true);
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'a zoomed image after a refresh');
+
+  await openFromTheTree('scan.tiff');
+  const pageIndicator = (): string | null | undefined => part('tiff-page-indicator')?.textContent;
+  await expect.poll(pageIndicator, LOADING_THE_TIFF_CODE).toBe('Page 1 of 6');
+  await tabUntil((element) => element.getAttribute('data-fs-part') === 'pages-viewport', 'the pages');
+  await press('{PageDown}{PageDown}');
+  await expect.poll(pageIndicator).toBe('Page 3 of 6');
+  await expect.poll(() => tiffImageSources().length).toBeGreaterThan(0);
+  const firstVersionPages = tiffImageSources();
+  const blue = TIFF_PAGES.map((page) => ({ ...page, rgb: [0, 0, 255] as const }));
+  await replaceAsTheAgent(adapter, 'scan.tiff', new Uint8Array(tiffBytes(blue)));
+  await expect
+    .poll(() => {
+      const shown = tiffImageSources();
+      return shown.length > 0 && shown.every((source) => !firstVersionPages.includes(source));
+    })
+    .toBe(true);
+  expect(pageIndicator(), 'the page survives the refresh').toBe('Page 3 of 6');
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'a TIFF after a refresh');
+});
+
+test('viewer: an open file deleted while it has unsaved edits keeps them, and Save creates it again, keyboard only', async () => {
+  const adapter = await mountWithViewers();
+  await openFromTheTree('notes.txt');
+  await typeInTheEditor(' draft');
+  await adapter.delete!('notes.txt');
+  await expect.poll(saveStatusText).toBe('Deleted');
+  expect(editor()!.value).toBe('first line draft');
+  expect(activeTab()!.hasAttribute('data-deleted')).toBe(true);
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'a deleted file with unsaved edits');
+  await tabUntil(isBannerButton('Save'), 'Save', 'backwards');
+  await press('{Enter}');
+  await expect.poll(() => adapter.read('notes.txt', 'text')).toBe('first line draft');
+  await expect.poll(saveStatusText).toBe('Saved');
+  expect(saveBanner()).toBeNull();
+  await expect.poll(() => activeTab()?.hasAttribute('data-deleted')).toBe(false);
+});
+
+test('viewer: without watch, polling brings an agent edit into the open file and autosave still works, keyboard only', async () => {
+  const adapter = await mountWithViewers((memory) => ({ ...memory, watch: undefined }));
+  await openFromTheTree('notes.txt');
+  await expect.poll(() => editor()?.value).toBe('first line');
+  await adapter.write!('notes.txt', 'an agent edit');
+  await expect.poll(() => editor()?.value, ONE_POLLING_INTERVAL_AND_MARGIN).toBe('an agent edit');
+  await expectNoAxeViolationsInEitherColorScheme(workspace(), 'a file refreshed by polling');
+  await typeInTheEditor(' and mine');
+  await expect
+    .poll(() => adapter.read('notes.txt', 'text'), AFTER_AN_AUTOSAVE)
+    .toBe('an agent edit and mine');
+  await expect.poll(saveStatusText).toBe('Saved');
+  expect(saveBanner()).toBeNull();
+});

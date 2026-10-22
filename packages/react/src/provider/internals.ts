@@ -1,8 +1,12 @@
 'use client';
 import type { TreeStore } from '@scope/core';
 import type { FollowedMove } from '../actions/followMove';
+import type { EditBuffers } from '../editing/buffers';
+import type { TreeCommandsHost } from '../actions/treeCommands';
+import type { TabIds } from '../tabs/tabIds';
 import type { ConflictQueue } from '../dialogs/conflicts';
 import type { UploadsController } from '../uploads/uploads';
+import type { ViewModes } from '../viewer/viewModes';
 import { useFileSystem, type FileSystemContext } from './hooks';
 import type { RevealHost } from './reveal';
 import type { UiStore } from './ui-store';
@@ -36,6 +40,20 @@ export interface FileSystemInternals {
    * call can leave a folder expanded but never loaded.
    */
   remapMovedPaths: (from: string, to: string) => void;
+  /**
+   * Calls `listener` after `remapMovedPaths` moved the path-keyed state from below `from` to below `to`: for
+   * a `followMove` (before the store call, then to the final path, or back on failure) and for every other
+   * move the store reports. Returns the unsubscribe.
+   */
+  onMovedPaths: (listener: (from: string, to: string) => void) => () => void;
+  /** The unsaved text edits: `FileViewer` edits them, and `useFileViewer` does not reload a dirty text. */
+  editBuffers: EditBuffers;
+  /** The view mode picked per path, for viewers whose mode is not controlled. */
+  viewModes: ViewModes;
+  /** The mounted trees' commands, run by the workspace toolbar and `useWorkspace`. */
+  treeCommands: TreeCommandsHost;
+  /** A stable id per open tab that follows renames and moves, for keys and element ids. */
+  tabIds: TabIds;
 }
 
 const internalsOfSessionStore = new WeakMap<TreeStore, FileSystemInternals>();
@@ -52,6 +70,11 @@ const internalsOfSessionStore = new WeakMap<TreeStore, FileSystemInternals>();
  *   isRevealing,
  *   attachRevealHost,
  *   remapMovedPaths,
+ *   onMovedPaths,
+ *   editBuffers,
+ *   viewModes,
+ *   treeCommands,
+ *   tabIds,
  * });
  * ```
  */

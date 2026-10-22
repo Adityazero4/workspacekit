@@ -50,7 +50,8 @@ export interface InlineRename {
   /**
    * Follows a move of the renaming entry or a folder above it: the session moves to the new path, and the row
    * that remounts there reopens the input with what was typed, the same selection, and focus if the input had
-   * it.
+   * it. Subscribe it to the provider's moved paths (`onMovedPaths`), which also carries `followMove`'s remap
+   * before the store call, so an in-app move keeps the draft as an agent's move does.
    */
   followMove: (from: string, to: string) => void;
   /**

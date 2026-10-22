@@ -1,16 +1,22 @@
-import { treeRowRenders } from './support/countComponentRenders';
+import { fileViewerRenders, treeRowRenders } from './support/countComponentRenders';
 import type { FileSystemAdapter } from '@scope/core';
 import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
 import axe from 'axe-core';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { page, server, userEvent } from 'vitest/browser';
+import { createRef, useEffect } from 'react';
 import { render } from 'vitest-browser-react';
 import '../src/styles.css';
 import { createTreeCommandsHost } from '../src/actions/treeCommands';
 import { FileSystemProvider } from '../src/provider/FileSystemProvider';
 import { SplitPane } from '../src/workspace/SplitPane';
+import { FileTabs } from '../src/tabs/FileTabs';
+import { FileTree } from '../src/tree/FileTree';
+import { defineRenderer, MATCH_SCORE, type Renderer, type RendererProps } from '../src/viewer/registry';
 import { Toolbar } from '../src/workspace/Toolbar';
+import { useWorkspace, type WorkspaceController } from '../src/workspace/useWorkspace';
 import { Workspace, type WorkspaceProps } from '../src/workspace/Workspace';
+import { interactionSettled } from './support/interactionSettled';
 
 const FILES = {
   'a.txt': 'a',
@@ -25,8 +31,32 @@ const WORKSPACE_WIDTH = 900;
 const MIN_PANE_SIZE = 160;
 const MAX_PANE_SIZE = WORKSPACE_WIDTH * 0.6;
 
-const settle = (milliseconds = 100): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
+const PAST_THE_FOLLOW_INTERVAL_MS = 600;
+const LONG_AFTER_THE_FOLLOW_INTERVAL_MS = 2000;
+const useFakeTimeouts = (): void => void vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+function heldListingsOf(
+  memory: MemoryAdapter,
+  heldPath: string,
+): { adapter: FileSystemAdapter; hold: () => void; release: () => void } {
+  let holding = false;
+  let release = (): void => undefined;
+  let released = Promise.resolve();
+  return {
+    adapter: {
+      ...memory,
+      list: async (path, options) => {
+        if (holding && path === heldPath) await released;
+        return memory.list(path, options);
+      },
+    },
+    hold: () => {
+      holding = true;
+      released = new Promise((resolve) => (release = resolve));
+    },
+    release: () => release(),
+  };
+}
 const workspace = (): HTMLElement => document.querySelector<HTMLElement>('[data-fs-part=workspace]')!;
 const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[role=treeitem]')];
 const labelOf = (row: Element): string | null | undefined =>
@@ -44,6 +74,10 @@ const panes = (): HTMLElement[] => [
   ...document.querySelectorAll<HTMLElement>('[data-fs-part=workspace-pane]'),
 ];
 const viewer = (): HTMLElement => document.querySelector<HTMLElement>('[data-fs-part=workspace-viewer]')!;
+const viewerTabs = (): HTMLElement[] => [
+  ...viewer().querySelectorAll<HTMLElement>(':scope > [data-fs-part=workspace-viewer-tab]'),
+];
+const shownViewer = (): HTMLElement | undefined => viewerTabs().find((tab) => !tab.hidden);
 const toolbarButtons = (): HTMLElement[] => [
   ...document.querySelectorAll<HTMLElement>('[role=toolbar] [data-fs-part=toolbar-button]'),
 ];
@@ -72,9 +106,10 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
-test('renders tree, tabs and the default viewer placeholder', async () => {
+test('renders tree, tabs, the empty viewer and then the default FileViewer', async () => {
   await mount();
   expect(rowNames()).toEqual(['src', 'a.txt', 'b.txt', 'c.txt']);
   expect(document.querySelector('[role=tablist]')).not.toBeNull();
@@ -87,17 +122,11 @@ test('renders tree, tabs and the default viewer placeholder', async () => {
   );
   await userEvent.click(rowNamed('a.txt')!);
   await expect.poll(activeTabName).toBe('a.txt');
-  expect(viewer().querySelector('[data-fs-part=viewer-placeholder]')?.textContent).toBe(
-    'There is no viewer for "a.txt" (1 byte) yet.',
-  );
-});
-
-test('the viewer placeholder shows the size of the open file in readable units', async () => {
-  await mount({}, createMemoryAdapter({ files: { 'big.txt': 'x'.repeat(1536) } }));
-  await userEvent.click(rowNamed('big.txt')!);
   await expect
-    .poll(() => viewer().querySelector('[data-fs-part=viewer-placeholder]')?.textContent)
-    .toBe('There is no viewer for "big.txt" (1.5 KB) yet.');
+    .poll(() => shownViewer()?.querySelector('[data-fs-part=viewer-name]')?.textContent)
+    .toBe('a.txt');
+  await expect.poll(() => shownViewer()?.querySelector('textarea')?.value).toBe('a');
+  expect(viewer().querySelector('[data-fs-part=viewer-placeholder]')).toBeNull();
 });
 
 test('showSearch and showToolbar turn off the search box and the toolbar', async () => {
@@ -112,18 +141,18 @@ test('opening a file shows renderViewer(path) in the active tab', async () => {
   await userEvent.click(rowNamed('a.txt')!);
   await expect.poll(activeTabName).toBe('a.txt');
   expect(activeTab()!.hasAttribute('data-preview'), 'a click previews').toBe(true);
-  expect(viewer().textContent).toBe('viewer:a.txt');
+  expect(shownViewer()?.textContent).toBe('viewer:a.txt');
 
   await userEvent.dblClick(rowNamed('b.txt')!);
   await expect.poll(activeTabName).toBe('b.txt');
   expect(activeTab()!.hasAttribute('data-preview'), 'a double click pins').toBe(false);
-  expect(viewer().textContent).toBe('viewer:b.txt');
+  expect(shownViewer()?.textContent).toBe('viewer:b.txt');
 
   rowNamed('c.txt')!.focus();
   await userEvent.keyboard('{Enter}');
   await expect.poll(activeTabName).toBe('c.txt');
   expect(activeTab()!.hasAttribute('data-preview'), 'Enter pins').toBe(false);
-  expect(viewer().textContent).toBe('viewer:c.txt');
+  expect(shownViewer()?.textContent).toBe('viewer:c.txt');
 });
 
 test('toolbar hides unsupported actions for a read-only adapter', async () => {
@@ -171,7 +200,7 @@ test('a tree action canPerform denies stays in place, aria-disabled, and does no
   expect(toolbarLabels(), 'the buttons do not shift').toEqual(labelsBefore);
   expect(toolbarButton('New folder').tabIndex, 'the tab stop stays').toBe(0);
   toolbarButton('New file').click();
-  await settle();
+  await interactionSettled();
   expect(document.querySelector('[role=dialog]')).toBeNull();
   await userEvent.click(rowNamed('a.txt')!);
   await expect.poll(() => toolbarButton('New file').hasAttribute('aria-disabled')).toBe(false);
@@ -201,7 +230,7 @@ test('the toolbar follows a canPerform that changes without a selection change, 
   await screen.rerender(workspaceWith((actionId) => actionId !== 'newFile'));
   await expect.poll(() => toolbarButton('New file').getAttribute('aria-disabled')).toBe('true');
   toolbarButton('New file').click();
-  await settle();
+  await interactionSettled();
   expect(document.querySelector('[role=dialog]')).toBeNull();
 });
 
@@ -297,7 +326,7 @@ test('a click outside the Sort menu closes it and leaves focus where the user cl
   const search = document.querySelector<HTMLElement>('[data-fs-part=search-input]')!;
   await userEvent.click(search, { position: { x: 8, y: 8 } });
   await expect.poll(() => document.querySelector('[role=menu]')).toBeNull();
-  await settle();
+  await interactionSettled();
   expect(document.activeElement, 'focus stays in the clicked search box').toBe(search);
 });
 
@@ -337,7 +366,7 @@ test('separator resizes with keyboard and persists size', async () => {
   await tooWide.unmount();
   localStorage.setItem('ws:pane', '"wide"');
   await mount({ storageKey: 'ws' });
-  await settle();
+  await interactionSettled();
   expect(valueNow(), 'a malformed size is ignored').toBe(DEFAULT_PANE_SIZE);
 });
 
@@ -416,21 +445,27 @@ test('follow mode coalesces changes to one reveal per 500 ms, the latest winning
     return <p>{path}</p>;
   };
   await mount({ defaultFollow: true, renderViewer }, adapter);
+  useFakeTimeouts();
   adapter.emit([{ type: 'updated', path: 'a.txt', actor: 'external' }]);
-  await settle(100);
+  await vi.advanceTimersByTimeAsync(100);
   adapter.emit([{ type: 'updated', path: 'b.txt', actor: 'agent' }]);
+  await vi.advanceTimersByTimeAsync(399);
+  expect(activeTabName(), 'not before 500 ms').toBeUndefined();
+  await vi.advanceTimersByTimeAsync(PAST_THE_FOLLOW_INTERVAL_MS);
   await expect.poll(activeTabName).toBe('b.txt');
   expect(viewed).toEqual(['b.txt']);
   expect(rowNamed('a.txt')!.hasAttribute('data-changed'), 'the skipped change stays marked').toBe(true);
 
   await adapter.create!('fresh.txt', 'file');
-  await settle(700);
+  await vi.advanceTimersByTimeAsync(LONG_AFTER_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
   expect(activeTabName(), 'a change made by the local user is not followed').toBe('b.txt');
 });
 
 test('follow ignores the user renaming a folder that holds marked files', async () => {
   const adapter = createMemoryAdapter({ files: FILES });
   await mount({}, adapter);
+  useFakeTimeouts();
   adapter.emit([{ type: 'updated', path: 'src/two.ts', actor: 'external' }]);
   await userEvent.click(toolbarButton('Follow agent changes'));
   rowNamed('src')!.focus();
@@ -443,7 +478,8 @@ test('follow ignores the user renaming a folder that holds marked files', async 
   input.select();
   await userEvent.keyboard('renamed{Enter}');
   await expect.poll(() => rowNamed('renamed')).toBeDefined();
-  await settle(900);
+  await vi.advanceTimersByTimeAsync(LONG_AFTER_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
   expect(tabs(), 'nothing was followed').toEqual([]);
   expect(rowNamed('renamed')!.getAttribute('aria-expanded')).toBe('false');
 });
@@ -469,23 +505,21 @@ test('a burst of 5,000 agent changes in one batch gives one reveal and one previ
     return <p>{path}</p>;
   };
   await mount({ defaultFollow: true, renderViewer }, adapter);
+  useFakeTimeouts();
   adapter.emit(names.map((path) => ({ type: 'updated', path, actor: 'agent' })));
+  await vi.advanceTimersByTimeAsync(PAST_THE_FOLLOW_INTERVAL_MS);
   await expect.poll(activeTabName).toBe('f-4999.txt');
-  await settle(1200);
+  await vi.advanceTimersByTimeAsync(LONG_AFTER_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
   expect(viewed).toEqual(['f-4999.txt']);
   expect(tabs()).toHaveLength(1);
 });
 
 test('follow never replaces a reveal the user started from search', async () => {
   const memory = createMemoryAdapter({ files: { ...FILES, 'slow/deep/target.txt': 't' } });
-  const slowFolders: FileSystemAdapter = {
-    ...memory,
-    list: async (path, options) => {
-      if (path === 'slow/deep') await settle(900);
-      return memory.list(path, options);
-    },
-  };
-  await mount({ defaultFollow: true }, slowFolders);
+  const slowDeep = heldListingsOf(memory, 'slow/deep');
+  await mount({ defaultFollow: true }, slowDeep.adapter);
+  slowDeep.hold();
   const search = document.querySelector<HTMLInputElement>('[data-fs-part=search-input]')!;
   await userEvent.click(search);
   await userEvent.fill(search, 'target');
@@ -495,47 +529,53 @@ test('follow never replaces a reveal the user started from search', async () => 
     return found;
   });
   await userEvent.click(option);
+  useFakeTimeouts();
   memory.emit([{ type: 'updated', path: 'c.txt', actor: 'agent' }]);
-  await expect.poll(() => document.activeElement === rowNamed('target.txt'), { timeout: 3000 }).toBe(true);
-  await expect.poll(activeTabName, { timeout: 3000 }).toBe('c.txt');
+  await vi.advanceTimersByTimeAsync(PAST_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
+  slowDeep.release();
+  await expect.poll(() => document.activeElement === rowNamed('target.txt')).toBe(true);
+  await expect.poll(activeTabName).toBe('c.txt');
   expect(document.activeElement, 'the user keeps their pick').toBe(rowNamed('target.txt'));
 });
 
 test('follow skips a change whose file is gone, or under a hidden name, by the time it checks', async () => {
   const adapter = createMemoryAdapter({ files: FILES });
   await mount({ defaultFollow: true }, adapter);
+  useFakeTimeouts();
   adapter.emit([{ type: 'updated', path: 'c.txt', actor: 'agent' }]);
   await adapter.delete!('c.txt');
-  await settle(900);
+  await vi.advanceTimersByTimeAsync(LONG_AFTER_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
   expect(tabs()).toEqual([]);
   expect(rows().filter((row) => row.getAttribute('aria-selected') === 'true')).toEqual([]);
 
   adapter.emit([{ type: 'updated', path: 'node_modules/dep.js', actor: 'agent' }]);
-  await settle(900);
+  await vi.advanceTimersByTimeAsync(LONG_AFTER_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
   expect(tabs()).toEqual([]);
 });
 
 test('unmounting while a follow check or its reveal is pending is quiet', async () => {
   const errors = vi.spyOn(console, 'error');
   const memory = createMemoryAdapter({ files: { ...FILES, 'slow/deep/x.txt': 'x' } });
-  const slowFolders: FileSystemAdapter = {
-    ...memory,
-    list: async (path, options) => {
-      if (path === 'slow/deep') await settle(400);
-      return memory.list(path, options);
-    },
-  };
-  const first = await mount({ defaultFollow: true }, slowFolders);
+  const slowDeep = heldListingsOf(memory, 'slow/deep');
+  const first = await mount({ defaultFollow: true }, slowDeep.adapter);
   memory.emit([{ type: 'updated', path: 'a.txt', actor: 'agent' }]);
   await first.unmount();
-  const second = await mount({ defaultFollow: true }, slowFolders);
+  const second = await mount({ defaultFollow: true }, slowDeep.adapter);
   await userEvent.click(rowNamed('slow')!);
   await expect.poll(() => rowNamed('deep')).toBeDefined();
+  slowDeep.hold();
+  useFakeTimeouts();
   memory.emit([{ type: 'updated', path: 'slow/deep', actor: 'agent' }]);
   memory.emit([{ type: 'created', path: 'slow/deep/x.txt', actor: 'agent' }]);
-  await settle(600);
+  await vi.advanceTimersByTimeAsync(PAST_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
   await second.unmount();
-  await settle(600);
+  slowDeep.release();
+  await vi.advanceTimersByTimeAsync(LONG_AFTER_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
   expect(errors).not.toHaveBeenCalled();
 });
 
@@ -560,6 +600,7 @@ test('turning follow off cancels a pending reveal; a controlled follow reports t
     />,
   );
   await expect.poll(() => rowNames().length).toBeGreaterThan(0);
+  useFakeTimeouts();
   adapter.emit([{ type: 'updated', path: 'c.txt', actor: 'external' }]);
   await screen.rerender(
     <Workspace
@@ -569,9 +610,11 @@ test('turning follow off cancels a pending reveal; a controlled follow reports t
       style={{ width: 900, height: 480 }}
     />,
   );
-  await settle(700);
+  await vi.advanceTimersByTimeAsync(LONG_AFTER_THE_FOLLOW_INTERVAL_MS);
+  await interactionSettled();
   expect(tabs()).toEqual([]);
   expect(rowNamed('c.txt')!.getAttribute('aria-selected')).toBe('false');
+  vi.useRealTimers();
 
   await userEvent.click(toolbarButton('Follow agent changes'));
   expect(onFollowChange).toHaveBeenCalledWith(true);
@@ -730,4 +773,226 @@ test('Tab follows the layout: toolbar, search, tree, upload buttons, separator, 
     'tab',
     'Edit a.txt',
   ]);
+});
+
+function probeRenderer(seen: { controller?: WorkspaceController }): Renderer {
+  function ProbeRenderer(props: RendererProps): React.JSX.Element {
+    const controller = useWorkspace();
+    useEffect(() => {
+      seen.controller = controller;
+    });
+    return <p data-testid="probe">{`${props.entry.path} active:${String(props.isActive)}`}</p>;
+  }
+  return defineRenderer({
+    id: 'probe',
+    match: (file) => file.kind === 'file' && MATCH_SCORE.specific,
+    input: 'none',
+    load: () => Promise.resolve({ default: ProbeRenderer }),
+  });
+}
+
+const probeIn = (element: Element | undefined): string | null | undefined =>
+  element?.querySelector('[data-testid=probe]')?.textContent;
+const tabNamed = (name: string): HTMLElement =>
+  tabs().find((tab) => tab.querySelector('[data-fs-part=tab-label]')?.textContent === name)!;
+
+test('background tabs stay mounted but inactive; closing a tab unmounts its viewer', async () => {
+  await mount({ renderers: [probeRenderer({})] });
+  await userEvent.dblClick(rowNamed('a.txt')!);
+  await expect.poll(() => probeIn(shownViewer())).toBe('a.txt active:true');
+  await userEvent.dblClick(rowNamed('b.txt')!);
+  await expect.poll(() => probeIn(shownViewer())).toBe('b.txt active:true');
+  expect(viewerTabs().map((tab) => [tab.hidden, probeIn(tab)])).toEqual([
+    [true, 'a.txt active:false'],
+    [false, 'b.txt active:true'],
+  ]);
+
+  await userEvent.click(tabNamed('b.txt').querySelector<HTMLElement>('[data-fs-part=tab-close]')!);
+  await expect.poll(() => viewerTabs().length).toBe(1);
+  await expect.poll(() => probeIn(shownViewer())).toBe('a.txt active:true');
+});
+
+test('opening or switching a tab re-renders no tree row; inactive viewers skip unrelated store changes', async () => {
+  const seen: { controller?: WorkspaceController } = {};
+  const memory = createMemoryAdapter({ files: FILES });
+  await mount({ renderers: [probeRenderer(seen)] }, memory);
+  await userEvent.click(rowNamed('a.txt')!);
+  await expect.poll(() => probeIn(shownViewer())).toBe('a.txt active:true');
+  await userEvent.click(tabNamed('a.txt'));
+  const rowRendersBefore = treeRowRenders.updates;
+
+  seen.controller!.open('b.txt', 'pin');
+  await expect.poll(() => probeIn(shownViewer())).toBe('b.txt active:true');
+  await userEvent.click(tabNamed('a.txt'));
+  await expect.poll(() => probeIn(shownViewer())).toBe('a.txt active:true');
+  expect(treeRowRenders.updates, 'opening and switching tabs re-render no tree row').toBe(rowRendersBefore);
+
+  const viewerRendersBefore = fileViewerRenders.updates;
+  await memory.write!('c.txt', 'changed');
+  memory.emit([{ type: 'updated', path: 'c.txt', actor: 'external' }]);
+  await memory.create!('d.txt', 'file');
+  await expect.poll(() => rowNamed('c.txt')?.hasAttribute('data-changed')).toBe(true);
+  await expect.poll(() => rowNamed('d.txt')).toBeDefined();
+  expect(fileViewerRenders.updates, 'no viewer re-renders for files it does not show').toBe(
+    viewerRendersBefore,
+  );
+});
+
+test('useWorkspace drives open, reveal, refresh, startRename, collapseAll and focus', async () => {
+  const memory = createMemoryAdapter({ files: FILES });
+  const list = vi.fn(memory.list);
+  const adapter: FileSystemAdapter = { ...memory, list };
+  const controllers: WorkspaceController[] = [];
+  function Probe(): null {
+    controllers.push(useWorkspace());
+    return null;
+  }
+  const app = (withTree: boolean): React.JSX.Element => (
+    <FileSystemProvider adapter={adapter}>
+      <Probe />
+      <FileTabs />
+      {withTree && <FileTree style={{ height: 300 }} />}
+    </FileSystemProvider>
+  );
+  const screen = await render(app(false));
+  const workspaceController = (): WorkspaceController => controllers.at(-1)!;
+  workspaceController().collapseAll();
+  workspaceController().startRename('a.txt');
+  workspaceController().focus('a.txt');
+
+  await screen.rerender(app(true));
+  await expect.poll(() => rowNames().length).toBeGreaterThan(0);
+  workspaceController().open('a.txt');
+  await expect.poll(activeTabName).toBe('a.txt');
+  expect(activeTab()!.hasAttribute('data-preview')).toBe(true);
+  workspaceController().open('b.txt', 'pin');
+  await expect.poll(activeTabName).toBe('b.txt');
+  expect(activeTab()!.hasAttribute('data-preview')).toBe(false);
+
+  await workspaceController().reveal('src/lib/one.ts');
+  await expect.poll(() => rowNamed('one.ts')?.getAttribute('aria-selected')).toBe('true');
+
+  const refreshed = async (path?: string): Promise<string[]> => {
+    list.mockClear();
+    await workspaceController().refresh(path);
+    return list.mock.calls.map(([listed]) => listed);
+  };
+  expect(await refreshed('src/two.ts'), 'a file refreshes its folder').toEqual(['src']);
+  expect(await refreshed('src/lib'), 'a folder refreshes itself').toEqual(['src/lib']);
+  expect(await refreshed(), 'no path refreshes every loaded folder').toEqual(
+    expect.arrayContaining(['', 'src', 'src/lib']),
+  );
+
+  workspaceController().collapseAll();
+  await expect.poll(rowNames).toEqual(['src', 'a.txt', 'b.txt', 'c.txt']);
+  workspaceController().focus('b.txt');
+  await expect.poll(() => document.activeElement).toBe(rowNamed('b.txt'));
+  workspaceController().startRename('c.txt');
+  await expect.poll(() => document.querySelector('[data-fs-part=tree-rename-input]')).not.toBeNull();
+  await userEvent.keyboard('{Escape}');
+
+  expect(new Set(controllers).size, 'one controller across renders').toBe(1);
+});
+
+const readCounter = (memory: MemoryAdapter): { adapter: FileSystemAdapter; readPaths: string[] } => {
+  const readPaths: string[] = [];
+  const read = ((path: string, ...rest: [never]) => {
+    readPaths.push(path);
+    return memory.read(path, ...rest);
+  }) as FileSystemAdapter['read'];
+  return { adapter: { ...memory, read }, readPaths };
+};
+
+const viewerIn = (panel: Element | undefined): Element | null | undefined =>
+  panel?.querySelector('[data-fs-part=viewer]');
+
+test('restored tabs load lazily: only the active tab reads its file, the others on activation', async () => {
+  localStorage.setItem(
+    'ws:tabs',
+    JSON.stringify({
+      tabs: [
+        { path: 'a.txt', preview: false },
+        { path: 'b.txt', preview: false },
+        { path: 'c.txt', preview: false },
+      ],
+      active: 'b.txt',
+    }),
+  );
+  const { adapter, readPaths } = readCounter(createMemoryAdapter({ files: FILES }));
+  await mount({ storageKey: 'ws' }, adapter);
+  await expect.poll(() => shownViewer()?.querySelector('textarea')?.value).toBe('bbbb');
+  expect(readPaths).toEqual(['b.txt']);
+  const neverActive = viewerTabs().filter((panel) => panel.hidden);
+  expect(neverActive.map((panel) => viewerIn(panel)?.getAttribute('data-status'))).toEqual([
+    'loading',
+    'loading',
+  ]);
+  expect(neverActive.some((panel) => panel.querySelector('textarea'))).toBe(false);
+
+  await userEvent.click(tabNamed('c.txt'));
+  await expect.poll(() => shownViewer()?.querySelector('textarea')?.value).toBe('cc');
+  expect(readPaths).toEqual(['b.txt', 'c.txt']);
+});
+
+test('renaming an open file keeps its viewer mounted and does not read it again', async () => {
+  const workspace = createRef<WorkspaceController>();
+  const { adapter, readPaths } = readCounter(createMemoryAdapter({ files: FILES }));
+  await mount({ ref: workspace }, adapter);
+  await userEvent.dblClick(rowNamed('a.txt')!);
+  await expect.poll(() => shownViewer()?.querySelector('textarea')?.value).toBe('a');
+  const viewerBefore = viewerIn(shownViewer());
+  const readsBefore = readPaths.length;
+
+  workspace.current!.startRename('a.txt');
+  const input = await vi.waitFor(() => {
+    const found = document.querySelector<HTMLInputElement>('[data-fs-part=tree-rename-input]');
+    if (!found) throw new Error('no rename input');
+    return found;
+  });
+  await userEvent.fill(input, 'renamed.txt');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(activeTabName).toBe('renamed.txt');
+  await expect
+    .poll(() => shownViewer()?.querySelector('[data-fs-part=viewer-name]')?.textContent)
+    .toBe('renamed.txt');
+  expect(viewerIn(shownViewer()), 'the same viewer element').toBe(viewerBefore);
+  expect(readPaths.length, 'no read after the rename').toBe(readsBefore);
+});
+
+test('a ref drives the workspace from outside it', async () => {
+  const workspace = createRef<WorkspaceController>();
+  await render(
+    <>
+      <button type="button" onClick={() => workspace.current?.open('a.txt')}>
+        Open a.txt
+      </button>
+      <Workspace ref={workspace} adapter={createMemoryAdapter({ files: FILES })} style={{ height: 480 }} />
+    </>,
+  );
+  await expect.poll(() => rowNames().length).toBeGreaterThan(0);
+  await userEvent.click(page.getByRole('button', { name: 'Open a.txt' }));
+  await expect.poll(activeTabName).toBe('a.txt');
+});
+
+test('each viewer is a tabpanel labelled by its tab; a switch re-renders only the two viewers involved', async () => {
+  const seen: { controller?: WorkspaceController } = {};
+  await mount({ renderers: [probeRenderer(seen)] });
+  await userEvent.dblClick(rowNamed('a.txt')!);
+  await expect.poll(() => probeIn(shownViewer())).toBe('a.txt active:true');
+  seen.controller!.open('b.txt', 'pin');
+  seen.controller!.open('c.txt', 'pin');
+  await expect.poll(() => probeIn(shownViewer())).toBe('c.txt active:true');
+  for (const panel of viewerTabs()) {
+    expect(panel.getAttribute('role')).toBe('tabpanel');
+    const tab = document.getElementById(panel.getAttribute('aria-labelledby')!);
+    expect(tab?.getAttribute('role')).toBe('tab');
+    expect(tab?.getAttribute('aria-controls')).toBe(panel.id);
+  }
+
+  await userEvent.click(tabNamed('b.txt'));
+  await expect.poll(() => probeIn(shownViewer())).toBe('b.txt active:true');
+  const viewerRendersBefore = fileViewerRenders.updates;
+  await userEvent.click(tabNamed('a.txt'));
+  await expect.poll(() => probeIn(shownViewer())).toBe('a.txt active:true');
+  expect(fileViewerRenders.updates - viewerRendersBefore, 'b goes inactive, a active; c untouched').toBe(2);
 });

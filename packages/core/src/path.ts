@@ -2,6 +2,7 @@ import { FsError } from './errors';
 
 const UNPAIRED_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const ONLY_DOTS_AND_SPACES = /^[. ]+$/;
+const CANONICAL_ASCII_PATH = /^[\w-][\w .-]*(?:\/[\w-][\w .-]*)*$/;
 
 /**
  * Canonical form: NFC, `/`-separated, no leading/trailing slash, no `.`/`..`. Root is `''`.
@@ -12,6 +13,7 @@ const ONLY_DOTS_AND_SPACES = /^[. ]+$/;
  * ```
  */
 export function normalizePath(path: string): string {
+  if (CANONICAL_ASCII_PATH.test(path)) return path;
   if (path.includes('\0')) throw new FsError('invalid', 'path contains NUL', { path });
   if (path.includes('\\')) throw new FsError('invalid', 'path contains backslash', { path });
   if (UNPAIRED_SURROGATE.test(path)) throw new FsError('invalid', 'path contains invalid UTF-16', { path });

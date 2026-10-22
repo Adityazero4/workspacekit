@@ -13,7 +13,8 @@ import { internalsOf } from '../provider/internals';
 import { focusIsInsideOrNowhere } from '../tree/rovingFocus';
 import type { FileTreeApi } from '../tree/useFileTree';
 import { ActionMenu, DefaultMenu } from './ActionMenu';
-import type { TreeActions } from './useTreeActions';
+import type { Action } from './actions';
+import type { TreeActions, TreeOverlay } from './useTreeActions';
 
 interface FocusReturn {
   path: string;
@@ -163,6 +164,89 @@ function useConflictHost(conflicts: ConflictQueue, hasOwnOverlay: boolean): Conf
   return isTheShowingHost && !someHostIsBusy ? waiting[0] : undefined;
 }
 
+function useFocusReturnedWhenOverlaysClose(
+  overlayStore: TreeActions['overlay'],
+  overlay: TreeOverlay | null,
+  tree: FileTreeApi,
+  viewport: RefObject<HTMLElement | null>,
+): FocusReturner {
+  const [focusReturner] = useState(createFocusReturner);
+  useEffect(() => {
+    if (overlay === null) focusReturner.deliver(tree, viewport);
+  });
+  useAnswerPendingConfirmOnUnmount(overlayStore, focusReturner);
+  useMenuClosedWhenItsRowScrolls(
+    overlay?.kind === 'menu' ? overlay.path : null,
+    viewport,
+    overlayStore,
+    focusReturner,
+  );
+  return focusReturner;
+}
+
+interface MenuOfAVisibleRow {
+  entry: Entry;
+  actions: Action[];
+}
+
+function useMenuOfAVisibleRow(
+  overlay: TreeOverlay | null,
+  tree: FileTreeApi,
+  treeActions: TreeActions,
+): MenuOfAVisibleRow | null {
+  const menuEntry = overlay?.kind === 'menu' ? entryOfVisibleRow(tree, overlay.path) : undefined;
+  const menuActions = menuEntry ? treeActions.visibleFor(menuEntry) : [];
+  const menuHasNothingToShow = overlay?.kind === 'menu' && menuActions.length === 0;
+  useEffect(() => {
+    if (menuHasNothingToShow) treeActions.overlay.set(null);
+  }, [menuHasNothingToShow, treeActions.overlay]);
+  return menuEntry && menuActions.length > 0 ? { entry: menuEntry, actions: menuActions } : null;
+}
+
+interface OverlayClosing {
+  close: (request: FocusReturn) => void;
+  noteMenuInteractionOutside: () => void;
+  closeMenu: (path: string) => void;
+}
+
+function useOverlayClosing(
+  overlayStore: TreeActions['overlay'],
+  focusReturner: FocusReturner,
+): OverlayClosing {
+  const menuClosedFromOutside = useRef(false);
+  const close = (request: FocusReturn): void => {
+    menuClosedFromOutside.current = false;
+    if (overlayStore.get() === null) return;
+    overlayStore.set(null);
+    focusReturner.request(request);
+  };
+  return {
+    close,
+    noteMenuInteractionOutside: () => {
+      menuClosedFromOutside.current = true;
+    },
+    closeMenu: (path) =>
+      close({ path, focus: menuClosedFromOutside.current ? 'leaveWhereTheUserPutIt' : 'returnToTheRow' }),
+  };
+}
+
+function answerConflict(
+  host: { conflicts: ConflictQueue; tree: FileTreeApi; focusReturner: FocusReturner },
+  request: ConflictRequest,
+  answer: ConflictAnswer | null,
+): void {
+  const { conflicts, tree, focusReturner } = host;
+  conflicts.dismiss(request);
+  const returnTo = tree.focusedPath;
+  const anotherConflictIsWaiting = conflicts.requests.get().length > 0;
+  if (returnTo === null || anotherConflictIsWaiting) return request.settle(answer);
+  focusReturner.request({
+    path: returnTo,
+    afterFocusReturns: () => request.settle(answer),
+    ifCancelled: () => request.settle(null),
+  });
+}
+
 /**
  * Props of `TreeActionOverlays`.
  *
@@ -210,44 +294,11 @@ export function TreeActionOverlays(props: TreeActionOverlaysProps): React.JSX.El
   const { treeActions, tree, viewport, components, classNames } = props;
   const fs = useFileSystem();
   const overlay = useUiValue(treeActions.overlay);
-  const [focusReturner] = useState(createFocusReturner);
-  const menuClosedFromOutside = useRef(false);
-  useEffect(() => {
-    if (overlay === null) focusReturner.deliver(tree, viewport);
-  });
-  useAnswerPendingConfirmOnUnmount(treeActions.overlay, focusReturner);
-  useMenuClosedWhenItsRowScrolls(
-    overlay?.kind === 'menu' ? overlay.path : null,
-    viewport,
-    treeActions.overlay,
-    focusReturner,
-  );
+  const focusReturner = useFocusReturnedWhenOverlaysClose(treeActions.overlay, overlay, tree, viewport);
   const { conflicts } = internalsOf(fs);
   const conflict = useConflictHost(conflicts, overlay !== null);
-  const menuEntry = overlay?.kind === 'menu' ? entryOfVisibleRow(tree, overlay.path) : undefined;
-  const menuActions = menuEntry ? treeActions.visibleFor(menuEntry) : [];
-  const menuHasNothingToShow = overlay?.kind === 'menu' && menuActions.length === 0;
-  useEffect(() => {
-    if (menuHasNothingToShow) treeActions.overlay.set(null);
-  }, [menuHasNothingToShow, treeActions.overlay]);
-
-  const close = (request: FocusReturn): void => {
-    menuClosedFromOutside.current = false;
-    if (treeActions.overlay.get() === null) return;
-    treeActions.overlay.set(null);
-    focusReturner.request(request);
-  };
-  const answerConflict = (request: ConflictRequest, answer: ConflictAnswer | null): void => {
-    conflicts.dismiss(request);
-    const returnTo = tree.focusedPath;
-    const anotherConflictIsWaiting = conflicts.requests.get().length > 0;
-    if (returnTo === null || anotherConflictIsWaiting) return request.settle(answer);
-    focusReturner.request({
-      path: returnTo,
-      afterFocusReturns: () => request.settle(answer),
-      ifCancelled: () => request.settle(null),
-    });
-  };
+  const menu = useMenuOfAVisibleRow(overlay, tree, treeActions);
+  const closing = useOverlayClosing(treeActions.overlay, focusReturner);
   const Dialog = components?.Dialog ?? DefaultDialog;
   if (!overlay) {
     if (!conflict) return null;
@@ -261,34 +312,52 @@ export function TreeActionOverlays(props: TreeActionOverlaysProps): React.JSX.El
         offersReplace={conflict.offersReplace}
         Dialog={Dialog}
         classNames={classNames}
-        onAnswer={(answer) => answerConflict(conflict, answer)}
+        onAnswer={(answer) => answerConflict({ conflicts, tree, focusReturner }, conflict, answer)}
       />
     );
   }
+  return (
+    <OpenOverlay
+      overlay={overlay}
+      menu={menu}
+      closing={closing}
+      run={treeActions.run}
+      createAndReveal={(request) => createAndReveal(fs, tree, request, focusReturner.request)}
+      Menu={components?.Menu ?? DefaultMenu}
+      Dialog={Dialog}
+      classNames={classNames}
+    />
+  );
+}
 
+interface OpenOverlayProps {
+  overlay: TreeOverlay;
+  menu: MenuOfAVisibleRow | null;
+  closing: OverlayClosing;
+  run: TreeActions['run'];
+  createAndReveal: (request: CreateRequest) => void;
+  Menu: NonNullable<Components['Menu']>;
+  Dialog: NonNullable<Components['Dialog']>;
+  classNames?: ClassNames;
+}
+
+function OpenOverlay(props: OpenOverlayProps): React.JSX.Element | null {
+  const { overlay, menu, closing, run, Menu, Dialog, classNames } = props;
+  const { close } = closing;
   switch (overlay.kind) {
     case 'menu': {
-      if (!menuEntry || menuActions.length === 0) return null;
-      const entry = menuEntry;
+      if (!menu) return null;
+      const { entry } = menu;
       return (
         <ActionMenu
           entry={entry}
-          actions={menuActions}
+          actions={menu.actions}
           anchor={overlay.anchor}
-          Menu={components?.Menu ?? DefaultMenu}
+          Menu={Menu}
           classNames={classNames}
-          onSelect={(action) =>
-            close({ path: overlay.path, afterFocusReturns: () => treeActions.run(action, entry) })
-          }
-          onInteractOutside={() => {
-            menuClosedFromOutside.current = true;
-          }}
-          onClose={() =>
-            close({
-              path: overlay.path,
-              focus: menuClosedFromOutside.current ? 'leaveWhereTheUserPutIt' : 'returnToTheRow',
-            })
-          }
+          onSelect={(action) => close({ path: overlay.path, afterFocusReturns: () => run(action, entry) })}
+          onInteractOutside={closing.noteMenuInteractionOutside}
+          onClose={() => closing.closeMenu(overlay.path)}
         />
       );
     }
@@ -302,7 +371,7 @@ export function TreeActionOverlays(props: TreeActionOverlaysProps): React.JSX.El
           onCancel={() => close({ path: overlay.returnTo, returnFocusTo: overlay.returnFocusTo })}
           onCreate={(name) => {
             close({ path: joinPath(overlay.parent, name), waitForRowToAppear: true });
-            createAndReveal(fs, tree, { ...overlay, name }, focusReturner.request);
+            props.createAndReveal({ ...overlay, name });
           }}
         />
       );

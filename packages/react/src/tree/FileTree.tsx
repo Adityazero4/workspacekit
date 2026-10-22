@@ -1,11 +1,10 @@
 'use client';
-import type { DroppedItem, Entry, VisibleRowIndex } from '@scope/core';
-import { defaultRangeExtractor, useVirtualizer, type Range, type VirtualItem } from '@tanstack/react-virtual';
+import type { DroppedItem, Entry } from '@scope/core';
+import type { VirtualItem } from '@tanstack/react-virtual';
 import {
   useEffect,
   useLayoutEffect,
   useRef,
-  useState,
   type CSSProperties,
   type KeyboardEventHandler,
   type ReactNode,
@@ -15,19 +14,26 @@ import {
 import type { Action, CanPerform } from '../actions/actions';
 import { TreeActionOverlays } from '../actions/TreeActionOverlays';
 import { useAttachedTreeCommands } from '../actions/treeCommands';
-import { useTreeActions } from '../actions/useTreeActions';
+import { useTreeActions, type TreeActions } from '../actions/useTreeActions';
 import type { Components } from '../components';
 import { partProps } from '../cx';
-import { useIsRootDropTarget, useTreeDnd } from '../dnd/useTreeDnd';
+import {
+  useIsRootDropTarget,
+  useTreeDnd,
+  type TreeDragHandlers,
+  type TreeViewportDragProps,
+} from '../dnd/useTreeDnd';
 import type { ClassNames } from '../parts';
 import { useEntryState, useFileSystem, type FileSystemContext } from '../provider/hooks';
+import type { UiStore } from '../provider/ui-store';
 import { UploadPlaceholderRow } from '../uploads/UploadPlaceholderRow';
-import { useUploads } from '../uploads/uploads';
-import { useUploadInputs } from '../uploads/useUploadInputs';
-import { uploadPlaceholderGroups } from '../uploads/placeholders';
-import { createRowLayout, type RowLayout } from './rowLayout';
-import { rowsCoveredAbove, stickyAncestors, stickyCapacity, StickyHeaders } from './StickyHeaders';
+import { useUploads, type UploadRun } from '../uploads/uploads';
+import { useUploadInputs, type UploadInputs, type UploadPickerKind } from '../uploads/useUploadInputs';
+import type { InlineRename } from './inlineRename';
+import type { RowLayout } from './rowLayout';
+import { useRowsOnScreen, type RowsOnScreen } from './rowsOnScreen';
 import { focusFellToBody } from './rovingFocus';
+import { StickyHeaders } from './StickyHeaders';
 import { TreeRow, TreeRowContext, type TreeRowShared } from './TreeRow';
 import {
   useFileTreeWithInlineRename,
@@ -71,9 +77,6 @@ export interface FileTreeProps extends UseFileTreeOptions {
   components?: Components;
 }
 
-const OVERSCAN = 10;
-const ROWS_IN_FIRST_PAINT = 50;
-
 /**
  * The file tree: a virtualized WAI-ARIA tree over the nearest `FileSystemProvider`, with sticky folder
  * headers, changed/pending/loading/error markers and render slots.
@@ -111,94 +114,10 @@ const ROWS_IN_FIRST_PAINT = 50;
  * ```
  */
 export function FileTree(props: FileTreeProps): React.JSX.Element {
-  const {
-    className,
-    classNames,
-    style,
-    renderIcon,
-    renderBadge,
-    renderTrailing,
-    emptyState,
-    onOpenFile,
-    components,
-  } = props;
-  const fs = useFileSystem();
-  const rootStatus = useEntryState(fs.root).status;
-  const openFile = (entry: Entry, how: 'preview' | 'pin'): void => {
-    fs.store.markSeen(entry.path);
-    onOpenFile?.(entry, how);
-  };
-  const { tree, inlineRename, flashing } = useFileTreeWithInlineRename({
-    rowHeight: props.rowHeight,
-    onOpenFile: openFile,
-  });
-  const uploads = useUploads();
-  const startUpload = (items: DroppedItem[], targetDir: string): void => {
-    if (targetDir !== fs.root) tree.expand(targetDir);
-    void uploads.upload(items, targetDir);
-  };
-  const uploadInputs = useUploadInputs({
-    enabled: fs.adapter.upload !== undefined,
-    onPicked: startUpload,
-    classNames,
-  });
-  const dnd = useTreeDnd({ fs, tree, startUpload });
-  const isRootDropTarget = useIsRootDropTarget(dnd.handlers.dropTarget);
-  const layout = createRowLayout(
-    tree.index.count,
-    uploadPlaceholderGroups(uploads.runs, tree.index, fs.root),
-  );
+  const { className, classNames, style, renderIcon, emptyState, components } = props;
   const viewport = useRef<HTMLDivElement>(null);
-  const rowWindow = useRowWindow(tree, layout, viewport);
-  const stickyRows =
-    (props.stickyHeaders ?? true) ? stickyCapacity(rowWindow.viewportHeight, tree.rowHeight) : 0;
-  const headers = stickyAncestors(
-    tree.index,
-    layout.rowIndexAtOrAfter(rowWindow.firstVisibleIndex),
-    stickyRows,
-  );
-  useEffect(() =>
-    tree.setScrollToIndex((rowIndex) =>
-      scrollRowIntoView(viewport.current, rowIndex, { ...tree, layout }, stickyRows),
-    ),
-  );
-  useSelectionMarksSeen(fs);
-  const emptyStateRef = useEmptyStateThatPassesFocusBackToTheRows(tree);
-  const treeActions = useTreeActions(tree, {
-    actions: props.actions,
-    canPerform: props.canPerform,
-    pickUploads: uploadInputs.pick,
-  });
-  useAttachedTreeCommands(
-    {
-      canRun: (actionId, entry) => treeActions.visibleFor(entry).some((action) => action.id === actionId),
-      runAction: treeActions.runFromOutside,
-      collapseAll: tree.collapseAll,
-    },
-    { adapter: fs.adapter, actions: props.actions, canPerform: props.canPerform },
-  );
-
-  const { toggle, rowBindings } = tree;
-  const shared: TreeRowShared = {
-    classNames,
-    renderIcon,
-    renderBadge,
-    renderTrailing,
-    bindings: rowBindings,
-    openFile,
-    openMenu: treeActions.openMenu,
-    inlineRename,
-    flashing,
-    draggable: fs.adapter.move !== undefined || fs.adapter.copy !== undefined,
-    drag: dnd.handlers,
-    activate: (entry, clickCount) => {
-      fs.selected.set(entry.path);
-      fs.store.markSeen(entry.path);
-      if (entry.kind === 'file') openFile(entry, 'preview');
-      else if (clickCount <= 1) toggle(entry.path);
-    },
-  };
-  const isEmpty = layout.count === 0 && rootStatus === 'loaded';
+  const { tree, rows, shared, dnd, treeActions, uploads, isRootDropTarget, isEmpty, attachEmptyState } =
+    useFileTreeModel(props, viewport);
   const treeProps = withActionKeys(tree.getTreeProps(), treeActions.onKeyDown);
   const EmptyState = components?.EmptyState;
   return (
@@ -210,9 +129,9 @@ export function FileTree(props: FileTreeProps): React.JSX.Element {
       tabIndex={-1}
       style={withRowHeightToken(style, tree.rowHeight)}
     >
-      {headers.length > 0 && (
+      {rows.headers.length > 0 && (
         <StickyHeaders
-          rows={headers}
+          rows={rows.headers}
           classNames={classNames}
           renderIcon={renderIcon}
           onActivate={(path) => tree.focus(path)}
@@ -221,7 +140,7 @@ export function FileTree(props: FileTreeProps): React.JSX.Element {
         />
       )}
       {isEmpty ? (
-        <div key="empty" {...partProps('tree-empty', classNames)} tabIndex={-1} ref={emptyStateRef}>
+        <div key="empty" {...partProps('tree-empty', classNames)} tabIndex={-1} ref={attachEmptyState}>
           {EmptyState ? <EmptyState>{emptyState}</EmptyState> : emptyState}
         </div>
       ) : (
@@ -230,37 +149,16 @@ export function FileTree(props: FileTreeProps): React.JSX.Element {
           {...treeProps}
           {...partProps('tree', classNames)}
           aria-label={props['aria-label'] ?? 'Files'}
-          style={{ height: rowWindow.totalSize }}
+          style={{ height: rows.rowWindow.totalSize }}
         >
           <TreeRowContext value={shared}>
-            {rowWindow.items.map((item) => {
-              const slot = layout.slotAt(item.index);
-              if (slot.kind === 'placeholder') {
-                return (
-                  <UploadPlaceholderRow
-                    key={slot.placeholder.key}
-                    placeholder={slot.placeholder}
-                    offset={item.start}
-                    drag={dnd.handlers}
-                    classNames={classNames}
-                  />
-                );
-              }
-              const row = tree.index.rowAt(slot.rowIndex);
-              return (
-                <TreeRow
-                  key={row.path}
-                  path={row.path}
-                  rowIndex={slot.rowIndex}
-                  offset={item.start}
-                  depth={row.depth}
-                  setSize={row.setSize}
-                  posInSet={row.posInSet}
-                  isTabStop={slot.rowIndex === tree.tabbableIndex}
-                  isFocused={tree.treeHasFocus && row.path === tree.focusedPath}
-                />
-              );
-            })}
+            <OnScreenRows
+              items={rows.rowWindow.items}
+              layout={rows.layout}
+              tree={tree}
+              drag={dnd.handlers}
+              classNames={classNames}
+            />
           </TreeRowContext>
         </div>
       )}
@@ -271,8 +169,173 @@ export function FileTree(props: FileTreeProps): React.JSX.Element {
         components={components}
         classNames={classNames}
       />
-      {uploadInputs.inputs}
+      {uploads.inputs}
     </div>
+  );
+}
+
+interface FileTreeModel {
+  tree: FileTreeApi;
+  rows: RowsOnScreen;
+  shared: TreeRowShared;
+  dnd: { handlers: TreeDragHandlers; viewportProps: TreeViewportDragProps };
+  treeActions: TreeActions;
+  uploads: TreeUploads;
+  isRootDropTarget: boolean;
+  isEmpty: boolean;
+  attachEmptyState: RefCallback<HTMLDivElement>;
+}
+
+function useFileTreeModel(props: FileTreeProps, viewport: RefObject<HTMLDivElement | null>): FileTreeModel {
+  const { classNames, onOpenFile } = props;
+  const fs = useFileSystem();
+  const rootStatus = useEntryState(fs.root).status;
+  const openFile = (entry: Entry, how: 'preview' | 'pin'): void => {
+    fs.store.markSeen(entry.path);
+    onOpenFile?.(entry, how);
+  };
+  const rendered = useFileTreeWithInlineRename({ rowHeight: props.rowHeight, onOpenFile: openFile });
+  const { tree } = rendered;
+  const uploads = useTreeUploads(fs, tree, classNames);
+  const dnd = useTreeDnd({ fs, tree, startUpload: uploads.start });
+  const isRootDropTarget = useIsRootDropTarget(dnd.handlers.dropTarget);
+  const rows = useRowsOnScreen(tree, viewport, {
+    uploadRuns: uploads.runs,
+    root: fs.root,
+    stickyHeaders: props.stickyHeaders ?? true,
+  });
+  useSelectionMarksSeen(fs);
+  const attachEmptyState = useEmptyStateThatPassesFocusBackToTheRows(tree);
+  const treeActions = useTreeActionsServingTheToolbar(fs, tree, {
+    actions: props.actions,
+    canPerform: props.canPerform,
+    pickUploads: uploads.pick,
+  });
+  const shared = useRowContextValue(props, rendered, {
+    openFile,
+    openMenu: treeActions.openMenu,
+    drag: dnd.handlers,
+  });
+  const isEmpty = rows.layout.count === 0 && rootStatus === 'loaded';
+  return { tree, rows, shared, dnd, treeActions, uploads, isRootDropTarget, isEmpty, attachEmptyState };
+}
+
+interface TreeUploads extends UploadInputs {
+  runs: readonly UploadRun[];
+  start: (items: DroppedItem[], targetDir: string) => void;
+}
+
+function useTreeUploads(
+  fs: FileSystemContext,
+  tree: FileTreeApi,
+  classNames: ClassNames | undefined,
+): TreeUploads {
+  const uploads = useUploads();
+  const start = (items: DroppedItem[], targetDir: string): void => {
+    if (targetDir !== fs.root) tree.expand(targetDir);
+    void uploads.upload(items, targetDir);
+  };
+  const { inputs, pick } = useUploadInputs({
+    enabled: fs.adapter.upload !== undefined,
+    onPicked: start,
+    classNames,
+  });
+  return { runs: uploads.runs, start, inputs, pick };
+}
+
+function useTreeActionsServingTheToolbar(
+  fs: FileSystemContext,
+  tree: FileTreeApi,
+  options: {
+    actions?: Action[];
+    canPerform?: CanPerform;
+    pickUploads: (kind: UploadPickerKind, targetDir: string) => void;
+  },
+): TreeActions {
+  const treeActions = useTreeActions(tree, options);
+  useAttachedTreeCommands(
+    {
+      canRun: (actionId, entry) => treeActions.visibleFor(entry).some((action) => action.id === actionId),
+      runAction: treeActions.runFromOutside,
+      collapseAll: tree.collapseAll,
+      startRename: tree.startRename,
+      focus: tree.focus,
+    },
+    { adapter: fs.adapter, actions: options.actions, canPerform: options.canPerform },
+  );
+  return treeActions;
+}
+
+function useRowContextValue(
+  slots: Pick<FileTreeProps, 'classNames' | 'renderIcon' | 'renderBadge' | 'renderTrailing'>,
+  rendered: { tree: FileTreeApi; inlineRename: InlineRename; flashing: UiStore<string | null> },
+  handlers: Pick<TreeRowShared, 'openFile' | 'openMenu' | 'drag'>,
+): TreeRowShared {
+  const fs = useFileSystem();
+  const { classNames, renderIcon, renderBadge, renderTrailing } = slots;
+  const { inlineRename, flashing } = rendered;
+  const { toggle, rowBindings } = rendered.tree;
+  const { openFile, openMenu, drag } = handlers;
+  return {
+    classNames,
+    renderIcon,
+    renderBadge,
+    renderTrailing,
+    bindings: rowBindings,
+    openFile,
+    openMenu,
+    inlineRename,
+    flashing,
+    draggable: fs.adapter.move !== undefined || fs.adapter.copy !== undefined,
+    drag,
+    activate: (entry, clickCount) => {
+      fs.selected.set(entry.path);
+      fs.store.markSeen(entry.path);
+      if (entry.kind === 'file') openFile(entry, 'preview');
+      else if (clickCount <= 1) toggle(entry.path);
+    },
+  };
+}
+
+function OnScreenRows(props: {
+  items: VirtualItem[];
+  layout: RowLayout;
+  tree: FileTreeApi;
+  drag: TreeDragHandlers;
+  classNames?: ClassNames;
+}): React.JSX.Element {
+  const { items, layout, tree, drag, classNames } = props;
+  return (
+    <>
+      {items.map((item) => {
+        const slot = layout.slotAt(item.index);
+        if (slot.kind === 'placeholder') {
+          return (
+            <UploadPlaceholderRow
+              key={slot.placeholder.key}
+              placeholder={slot.placeholder}
+              offset={item.start}
+              drag={drag}
+              classNames={classNames}
+            />
+          );
+        }
+        const row = tree.index.rowAt(slot.rowIndex);
+        return (
+          <TreeRow
+            key={row.path}
+            path={row.path}
+            rowIndex={slot.rowIndex}
+            offset={item.start}
+            depth={row.depth}
+            setSize={row.setSize}
+            posInSet={row.posInSet}
+            isTabStop={slot.rowIndex === tree.tabbableIndex}
+            isFocused={tree.treeHasFocus && row.path === tree.focusedPath}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -305,104 +368,6 @@ function useEmptyStateThatPassesFocusBackToTheRows(tree: FileTreeApi): RefCallba
       emptyStateHeldFocusWhenRemoved.current = element.contains(document.activeElement);
     };
   };
-}
-
-interface RowWindow {
-  items: VirtualItem[];
-  totalSize: number;
-  firstVisibleIndex: number;
-  viewportHeight: number;
-}
-
-function useRowWindow(
-  tree: FileTreeApi,
-  layout: RowLayout,
-  viewport: RefObject<HTMLElement | null>,
-): RowWindow {
-  'use no memo';
-  const { rowHeight } = tree;
-  const renamingIndex = tree.renaming === null ? -1 : tree.index.indexOf(tree.renaming);
-  const positionOfRow = (rowIndex: number): number => (rowIndex < 0 ? -1 : layout.positionOf(rowIndex));
-  const rangeExtractor = useRangeExtractorStableUntilAKeptRowMoves(
-    positionOfRow(tree.tabbableIndex),
-    positionOfRow(renamingIndex),
-  );
-  // eslint-disable-next-line react-hooks/incompatible-library -- 'use no memo' keeps this hook uncompiled; it returns fresh values every render
-  const virtualizer = useVirtualizer({
-    count: layout.count,
-    getScrollElement: () => viewport.current,
-    estimateSize: () => rowHeight,
-    overscan: OVERSCAN,
-    initialRect: { width: 0, height: (ROWS_IN_FIRST_PAINT - OVERSCAN) * rowHeight },
-    rangeExtractor,
-  });
-  return {
-    items: virtualizer.getVirtualItems(),
-    totalSize: virtualizer.getTotalSize(),
-    firstVisibleIndex: virtualizer.range?.startIndex ?? 0,
-    viewportHeight: virtualizer.scrollRect?.height ?? 0,
-  };
-}
-
-interface RangeExtractorKeepingRows {
-  tabStopIndex: number;
-  renamingIndex: number;
-  extract: (range: Range) => number[];
-}
-
-function rangeExtractorKeeping(tabStopIndex: number, renamingIndex: number): RangeExtractorKeepingRows {
-  return {
-    tabStopIndex,
-    renamingIndex,
-    extract: (range) => withRowsKeptRendered(defaultRangeExtractor(range), [tabStopIndex, renamingIndex]),
-  };
-}
-
-function useRangeExtractorStableUntilAKeptRowMoves(
-  tabStopIndex: number,
-  renamingIndex: number,
-): (range: Range) => number[] {
-  const [current, setCurrent] = useState(() => rangeExtractorKeeping(tabStopIndex, renamingIndex));
-  const keepsTheSameRows = current.tabStopIndex === tabStopIndex && current.renamingIndex === renamingIndex;
-  if (keepsTheSameRows) return current.extract;
-  const next = rangeExtractorKeeping(tabStopIndex, renamingIndex);
-  setCurrent(next);
-  return next.extract;
-}
-
-function withRowsKeptRendered(rowIndexes: number[], keptRowIndexes: number[]): number[] {
-  const missing = keptRowIndexes.filter((kept) => kept >= 0 && !rowIndexes.includes(kept));
-  if (missing.length === 0) return rowIndexes;
-  return [...new Set([...rowIndexes, ...missing])].sort((a, b) => a - b);
-}
-
-function scrollRowIntoView(
-  viewport: HTMLElement | null,
-  rowIndex: number,
-  tree: Pick<FileTreeApi, 'index' | 'rowHeight'> & { layout: RowLayout },
-  stickyRows: number,
-): void {
-  if (!viewport) return;
-  const { index, rowHeight, layout } = tree;
-  const position = layout.positionOf(rowIndex);
-  const rowTop = position * rowHeight;
-  const coveredNow = stickyRowsAt(index, layout, viewport.scrollTop, rowHeight, stickyRows) * rowHeight;
-  if (rowTop < viewport.scrollTop + coveredNow) {
-    viewport.scrollTop = (position - rowsCoveredAbove(index, rowIndex, stickyRows)) * rowHeight;
-  } else if (rowTop + rowHeight > viewport.scrollTop + viewport.clientHeight) {
-    viewport.scrollTop = rowTop + rowHeight - viewport.clientHeight;
-  }
-}
-
-function stickyRowsAt(
-  index: VisibleRowIndex,
-  layout: RowLayout,
-  scrollTop: number,
-  rowHeight: number,
-  stickyRows: number,
-): number {
-  const firstRowInView = layout.rowIndexAtOrAfter(Math.floor(scrollTop / rowHeight));
-  return stickyAncestors(index, firstRowInView, stickyRows).length;
 }
 
 function useSelectionMarksSeen({ selected, store }: FileSystemContext): void {

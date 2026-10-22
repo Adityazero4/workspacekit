@@ -5,10 +5,12 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import '../src/styles.css';
+import { followMove } from '../src/actions/followMove';
 import { FileSystemProvider } from '../src/provider/FileSystemProvider';
 import { useFileSystem, type FileSystemContext, type Notice } from '../src/provider/hooks';
 import { FileTree } from '../src/tree/FileTree';
 import { isMac } from '../src/tree/keyboard';
+import { interactionSettled } from './support/interactionSettled';
 
 const ROW_HEIGHT = 24;
 const MOD = isMac() ? 'Meta' : 'Control';
@@ -58,7 +60,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 100));
 const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[role=treeitem]')];
 const labelOf = (row: Element): string | null | undefined =>
   row.querySelector('[data-fs-part=tree-row-label]')?.textContent;
@@ -116,7 +117,7 @@ test('invalid and duplicate names show a message and block Enter', async () => {
   expect(input.getAttribute('aria-invalid')).toBe('true');
   expect(input.getAttribute('aria-describedby')).toBe(renameError()!.id);
   await userEvent.keyboard('{Enter}');
-  await settle();
+  await interactionSettled();
   expect(renameInput(), 'Enter is blocked').toBe(input);
   expect(await listing(adapter)).toEqual(['a.txt', 'b.txt']);
 
@@ -164,7 +165,7 @@ test('Rename from the menu focuses the input once focus has returned to the row'
   )!;
   await userEvent.click(renameItem);
   await expect.poll(() => document.activeElement === renameInput() && renameInput() !== null).toBe(true);
-  await settle();
+  await interactionSettled();
   expect(document.activeElement, 'nothing takes focus back from the input').toBe(renameInput());
   expect(selectedText(renameInput()!)).toBe('b');
 });
@@ -177,7 +178,7 @@ test('keys typed in the input stay out of the tree', async () => {
   await userEvent.keyboard('{ArrowDown}{ArrowUp}{Home}{End}');
   await userEvent.keyboard(`{${MOD}>}c{/${MOD}}`);
   await userEvent.keyboard('{F2}{Delete}');
-  await settle();
+  await interactionSettled();
   expect(document.activeElement).toBe(input);
   expect(fs.selected.get()).toBe('a.txt');
   expect(fs.clipboard.get()).toBeNull();
@@ -189,7 +190,7 @@ test('clicking the input does not toggle or open its row', async () => {
   const input = await startRenameWithF2('src');
   await userEvent.click(input);
   await userEvent.dblClick(input);
-  await settle();
+  await interactionSettled();
   expect(fs.expanded.get().has('src')).toBe(false);
   expect(renameInput()).toBe(input);
 });
@@ -226,7 +227,7 @@ test('a burst of watch events does not cancel an in-progress rename', async () =
   await expect
     .poll(() => rows().map((row) => labelOf(row) ?? 'input'))
     .toEqual(['0-new.txt', 'a.txt', 'input']);
-  await settle();
+  await interactionSettled();
   expect(renameInput(), 'the same input stays mounted').toBe(input);
   expect(document.activeElement).toBe(input);
   expect(input.value).toBe('renamed.txt');
@@ -244,7 +245,7 @@ test('renaming row survives scrolling out of the window', async () => {
   const viewport = document.querySelector<HTMLElement>('[data-fs-part=tree-viewport]')!;
   viewport.scrollTop = viewport.scrollHeight;
   await expect.poll(() => rowNamed('f299.txt')).toBeDefined();
-  await settle();
+  await interactionSettled();
   expect(input.isConnected).toBe(true);
   expect(document.activeElement).toBe(input);
   await userEvent.keyboard('g');
@@ -301,7 +302,7 @@ test('a failed blur commit leaves the notice and does not take focus back', asyn
   await userEvent.keyboard('c');
   await userEvent.click(outsideInput());
   await expect.poll(() => notices.filter((notice) => notice.kind === 'error').length).toBe(1);
-  await settle();
+  await interactionSettled();
   expect(document.activeElement).toBe(outsideInput());
   expect(moves, 'no retry loop').toBe(1);
 });
@@ -316,7 +317,7 @@ test('a failed rename leaves no focus request behind for the name it tried', asy
   await userEvent.click(outsideInput());
   await expect.poll(() => listing(adapter)).toEqual(['b.txt', 'c.txt']);
   await expect.poll(() => rowNamed('c.txt')).toBeDefined();
-  await settle();
+  await interactionSettled();
   expect(document.activeElement).toBe(outsideInput());
 });
 
@@ -330,7 +331,7 @@ test('renaming an expanded folder keeps it expanded', async () => {
   await expect.poll(activeRowLabel).toBe('lib');
   expect(fs.expanded.get()).toEqual(new Set(['lib']));
   expect(rows().map(labelOf)).toEqual(['lib', 'a.txt', 'z.txt']);
-  await settle();
+  await interactionSettled();
   expect(notices).toEqual([]);
 });
 
@@ -344,7 +345,7 @@ test('cutting and pasting an expanded folder keeps it expanded', async () => {
     .toEqual(['src', 'x.txt']);
   expect(fs.expanded.get().has('dest/src')).toBe(true);
   expect(fs.expanded.get().has('src')).toBe(false);
-  await settle();
+  await interactionSettled();
   expect(notices).toEqual([]);
 });
 
@@ -371,7 +372,7 @@ test('an external delete ends the rename; re-creating the path neither reopens i
   await expect.poll(activeRowLabel).toBe('b.txt');
   await adapter.create!('a.txt', 'file');
   await expect.poll(() => rowNamed('a.txt')).toBeDefined();
-  await settle();
+  await interactionSettled();
   expect(renameInput()).toBeNull();
   expect(activeRowLabel()).toBe('b.txt');
 });
@@ -402,7 +403,7 @@ test('leaving the window keeps the rename open', async () => {
   await userEvent.keyboard('c');
   vi.spyOn(document, 'hasFocus').mockReturnValue(false);
   input.blur();
-  await settle();
+  await interactionSettled();
   expect(renameInput()).toBe(input);
   expect(input.value).toBe('c.txt');
   expect(await listing(adapter)).toEqual(['a.txt', 'b.txt']);
@@ -522,7 +523,7 @@ test('a failure after focus left the tree reopens the input without taking focus
   rejectMove(new FsError('forbidden', 'the server refused'));
   await expect.poll(() => notices.length).toBe(1);
   await expect.poll(() => renameInput()?.value).toBe('c.txt');
-  await settle();
+  await interactionSettled();
   expect(document.activeElement).toBe(outsideInput());
 });
 
@@ -538,7 +539,7 @@ test('showing the rename message scrolls only the tree, never the page', async (
   expect(window.scrollY).toBe(0);
   await replaceName(input, 'a/b');
   await expect.poll(() => renameError()?.textContent).toContain('slashes');
-  await settle();
+  await interactionSettled();
   expect(window.scrollY).toBe(0);
 });
 
@@ -550,6 +551,24 @@ test('a move of a folder above the renaming row keeps the input open, focused, w
   await replaceName(input, 'draft.txt');
   input.setSelectionRange(1, 3);
   await adapter.move!('dir', 'moved');
+  await expect.poll(() => rowNamed('moved')).toBeDefined();
+  await expect.poll(() => renameInput()?.value).toBe('draft.txt');
+  expect(document.activeElement).toBe(renameInput());
+  expect(selectedText(renameInput()!)).toBe('ra');
+  await userEvent.keyboard('{Enter}');
+  await expect
+    .poll(() => adapter.list('moved', { depth: 1 }).then((entries) => entries.map((e) => e.path)))
+    .toEqual(['moved/draft.txt']);
+});
+
+test('a rename draft follows an in-app ancestor move', async () => {
+  const { fs, adapter } = await mount({ 'dir/a.txt': '' });
+  fs.expanded.set(new Set(['dir']));
+  await expect.poll(() => rowNamed('a.txt')).toBeDefined();
+  const input = await startRenameWithF2('a.txt');
+  await replaceName(input, 'draft.txt');
+  input.setSelectionRange(1, 3);
+  await followMove(fs, 'dir', 'moved', () => fs.store.rename('dir', 'moved'));
   await expect.poll(() => rowNamed('moved')).toBeDefined();
   await expect.poll(() => renameInput()?.value).toBe('draft.txt');
   expect(document.activeElement).toBe(renameInput());
