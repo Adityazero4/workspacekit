@@ -8,7 +8,10 @@
     "**/*.css"
   ],
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "AGENTS.md",
+    "llms.txt"
   ],
   "exports": {
     ".": {

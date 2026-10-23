@@ -1,0 +1,4 @@
+{
+  "title": "Recipes",
+  "pages": ["s3", "custom-adapter", "custom-renderer", "theming", "standalone-pdf", "server-route"]
+}

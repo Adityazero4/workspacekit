@@ -987,3 +987,16 @@ describe('httpAdapter against the handler', () => {
     s.dispose();
   });
 });
+
+describe('a store without a root directory', () => {
+  it('answers a generic 500 and reports the detail only to onError', async () => {
+    const onError = vi.fn();
+    const handler = make({ store: nodeFsStore(undefined as unknown as string), onError });
+    const response = await handler(new Request(url('list', { path: '' })));
+    const body = await response.text();
+    expect(response.status).toBe(500);
+    expect(body).toContain('internal error');
+    expect(body).not.toContain('AGENT_WORKSPACE_DIR');
+    expect(String(onError.mock.calls[0]?.[0])).toContain('AGENT_WORKSPACE_DIR');
+  });
+});

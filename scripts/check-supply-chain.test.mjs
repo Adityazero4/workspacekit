@@ -234,6 +234,13 @@ test('flags a populated allow-list, in object or list form', () => {
   const problem = 'pnpm-workspace.yaml: allowBuilds is missing or weakened';
   assert.deepEqual(settingProblems(settings({ allowBuilds: { esbuild: true } })), [problem]);
   assert.deepEqual(settingProblems(settings({ allowBuilds: ['esbuild'] })), [problem]);
+  assert.deepEqual(settingProblems(settings({ allowBuilds: { esbuild: 'set this to true or false' } })), [
+    problem,
+  ]);
+});
+
+test('accepts explicit refusals in the allow-list', () => {
+  assert.deepEqual(settingProblems(settings({ allowBuilds: { esbuild: false } })), []);
 });
 
 test('flags a release age below seven days or not a number', () => {

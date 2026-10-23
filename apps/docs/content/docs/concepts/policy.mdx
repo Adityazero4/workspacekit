@@ -1,0 +1,42 @@
+---
+title: Policy
+description: Hide or block actions in the UI with canPerform, and enforce who may do what on the server with authorize.
+---
+
+There are two layers, and they do different jobs. `canPerform` shapes the interface. `authorize` is the security boundary.
+
+## In the UI: canPerform
+
+`canPerform(actionId, entry)` is asked for every built-in and custom action on every entry. Return `false` and the action is not offered. For example, keep an agent's `.git` read-only:
+
+```tsx
+import { httpAdapter } from '@scope/core/http';
+import { Workspace, type CanPerform } from '@scope/workspace';
+import '@scope/workspace/styles.css';
+
+const adapter = httpAdapter('/api/files');
+
+const canPerform: CanPerform = (actionId, entry) =>
+  !(entry.path === '.git' || entry.path.startsWith('.git/')) || actionId === 'open';
+
+export function Files(): React.JSX.Element {
+  return <Workspace adapter={adapter} canPerform={canPerform} style={{ height: '100vh' }} />;
+}
+```
+
+Try it: `README.md` and `package.json` cannot be deleted, renamed or cut in this workspace.
+
+<ActionsDemo />
+
+## Noise: hidden names
+
+`hidden` lists basenames that are hidden by default and can be shown: `.git`, `node_modules`, `__pycache__` and `.DS_Store` unless you pass your own. It only hides rows. To keep names off the wire, use `exclude` on `nodeFsStore`, which the server enforces.
+
+## On the server: authorize
+
+`canPerform` is not a security control, because a client can call the server directly. `createFileHandler` requires `authorize(req, op, path)` and answers 403 when it returns a falsy value. It is asked once per affected path. Two rules matter:
+
+- `list`, `search` and `stat` results are not filtered per entry. A principal who may see only part of the tree must be denied `'list'` and `'search'`, or the hidden parts must be protected with `exclude`.
+- `watch` is asked once, with `''`, and its events reveal paths anywhere under the root. Deny `'watch'` to anyone scoped to part of the tree.
+
+`readOnly: true` on the handler rejects every mutating operation. See [the handler](/docs/server/handler) and [security](/docs/server/security).

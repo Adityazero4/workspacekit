@@ -29,7 +29,12 @@ const NFD_NAME = 'dir with space/résumé #1 100%?+.md';
  * Runs against any FileSystemAdapter, including a client talking to a real server.
  * Seeds data only through adapter methods and never assumes watch delivery is synchronous.
  */
-export function runAdapterContract(name: string, make: Make): void {
+export function runAdapterContract(
+  name: string,
+  make: Make,
+  options: { supportsWatch?: boolean } = {},
+): void {
+  const { supportsWatch = true } = options;
   describe(`adapter contract: ${name}`, () => {
     let fs: Full;
     let cleanup: () => Promise<void>;
@@ -199,7 +204,7 @@ export function runAdapterContract(name: string, make: Make): void {
       expect(await fs.stat('up/aborted.bin')).toBeNull();
     });
 
-    it('watch', async () => {
+    it.skipIf(!supportsWatch)('watch', async () => {
       await fs.write('watched.txt', 'one');
       const events: ChangeEvent[] = [];
       const unsubscribe = fs.watch((batch) => events.push(...batch));

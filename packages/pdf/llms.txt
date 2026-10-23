@@ -1,0 +1,32 @@
+# @scope/pdf
+
+> A PDF renderer for the file workspace, drawn by pdf.js one page at a time, with selectable text, links, zoom and a password prompt.
+
+- API reference: https://docs.example.invalid/api/pdf
+- Install: `npm install @scope/pdf @scope/react react react-dom`
+
+## README sections
+
+- Install
+- Entry: `pdfRenderer()` returns a renderer.
+- Standalone use: `PdfViewer` shows one file without a tree or a provider.
+- CSS: Import `@scope/react/styles.css` and `@scope/pdf/styles.css` once each.
+- Options: `workerSrc`: the URL of the pdf.js worker.
+- Vite: A production build needs no configuration.
+
+## Entry points
+
+- `@scope/pdf`
+- `@scope/pdf/styles.css` (stylesheet)
+
+## Exports of `@scope/pdf`
+
+- `PDF_MAX_BYTES`: The largest PDF the renderer and the standalone `PdfViewer` open from bytes or a blob: 200 MiB.
+- `PDF_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `pdf-` prefix.
+- `PdfAssets`: Where pdf.js finds the data files it cannot reach through `import.meta.url`: `wasmUrl` (the JPX and JBIG2 image decoders), `cMapUrl` (character maps for CJK text) and `standardFontDataUrl` (the 14 standard fonts when a PDF does not embed them).
+- `PdfClassNames`: Extra class names per part of this package, merged after the part's own class.
+- `PdfPart`: A part name of this package.
+- `PdfRendererOptions`: How pdf.js runs.
+- `PdfViewer`: Shows a PDF without a `FileSystemProvider`, drawn by pdf.js one page at a time as pages scroll into view, with selectable text, safe links, zoom, "Page X of N" and a password prompt.
+- `PdfViewerProps`: Props of `PdfViewer`: the standalone viewer props, pdf.js's `workerSrc`, `assets` and `maxCanvasPixels` (see `PdfRendererOptions`), and `password`, tried before the user is asked for one.
+- `pdfRenderer`: Creates the registry entry for `.pdf` files up to 200 MiB, drawn by pdf.js (6.4.299, its legacy build, which runs in the browsers this library supports) one page at a time as pages scroll into view, with selectable text, links (external ones open in a new tab with `rel="noopener noreferrer"`; `javascript:` links are never rendered), zoom, "Page X of N" and a password prompt.

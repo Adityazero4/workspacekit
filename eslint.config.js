@@ -21,6 +21,10 @@ export default defineConfig([
   {
     ignores: [
       '**/dist/**',
+      'packages/create-workspace/templates/**',
+      '**/.next/**',
+      '**/.source/**',
+      'apps/docs/out/**',
       '**/node_modules/**',
       'coverage/**',
       '.vitest/**',

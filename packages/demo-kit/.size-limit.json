@@ -1,0 +1,1 @@
+[{ "name": "@scope/demo-kit", "path": "dist/index.js", "limit": "4 KB", "gzip": true, "ignore": ["fflate"] }]

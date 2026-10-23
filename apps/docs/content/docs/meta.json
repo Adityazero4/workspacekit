@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "index",
+    "getting-started",
+    "concepts",
+    "server",
+    "styling",
+    "standalone-renderers",
+    "recipes",
+    "coding-agents"
+  ]
+}

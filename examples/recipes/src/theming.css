@@ -1,0 +1,20 @@
+.brand-workspace {
+  --fs-accent: #6d28d9;
+  --fs-radius: 10px;
+  --fs-row-height: 30px;
+  --fs-font: ui-rounded, 'Segoe UI', system-ui, sans-serif;
+}
+
+.brand-workspace[data-theme='dark'] {
+  --fs-accent: #c4b5fd;
+}
+
+@media (prefers-color-scheme: dark) {
+  .brand-workspace:not([data-theme='light']) {
+    --fs-accent: #c4b5fd;
+  }
+}
+
+.brand-files {
+  border-inline-end: 3px solid var(--fs-accent);
+}

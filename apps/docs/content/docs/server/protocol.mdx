@@ -1,0 +1,42 @@
+---
+title: Protocol
+description: The HTTP routes the handler serves and httpAdapter speaks, so you can implement either side in another language.
+---
+
+All paths are relative to wherever you mount the handler. A `path` query parameter is a `/`-separated path with no leading slash; the root is empty.
+
+## Routes
+
+| Operation        | Request                                                                    | Response                                                                        |
+| ---------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `list`           | `GET list?path=&depth=` (depth defaults to 1)                              | `{ entries }`                                                                   |
+| `stat`           | `GET stat?path=`                                                           | `{ entry }`, where `entry` is `null` when missing                               |
+| `read`           | `GET read?path=`, optional `Range: bytes=a-b`                              | The bytes, with `Accept-Ranges` and an `X-Mtime-Ms` header. A range answers 206 |
+| `search`         | `GET search?q=`                                                            | `{ entries }`, at most 200                                                      |
+| `create`         | `POST create` with `{ path, kind }`                                        | `{ entry }`                                                                     |
+| `write`          | `PUT write?path=` with the new content as the body, optional `If-Mtime-Ms` | `{ entry }`                                                                     |
+| `move`, `copy`   | `POST move`, `POST copy` with `{ from, to, overwrite? }`                   | `{ entry }`                                                                     |
+| `delete`         | `DELETE delete?path=`                                                      | 204                                                                             |
+| `uploadDirect`   | `POST upload?path=&overwrite=1` with the file as the body                  | `{ entry }`                                                                     |
+| `uploadInit`     | `POST upload/init` with `{ path, totalBytes, overwrite? }`                 | `{ uploadId, chunkSize }`                                                       |
+| `uploadChunk`    | `PUT upload/chunk?id=&index=&offset=` with the chunk as the body           | 204                                                                             |
+| `uploadComplete` | `POST upload/complete` with `{ uploadId }`                                 | `{ entry }`                                                                     |
+| `uploadAbort`    | `DELETE upload?id=`                                                        | 204                                                                             |
+| `download`       | `POST download` with `{ paths }`                                           | The file's own bytes for a single file, otherwise a streamed zip                |
+| `watch`          | `GET watch`                                                                | A server-sent event stream                                                      |
+
+## Headers
+
+- Every request that is not a `GET` must send `X-FS-Request: 1`. Without it the answer is 403. `httpAdapter` adds it.
+- `If-Mtime-Ms` on `write` is the version the client read. If the file changed since, the answer is 409 `conflict` and nothing is written.
+- `X-Mtime-Ms` on `read` is the version of the file just read.
+
+## Errors
+
+A failure is a JSON body `{ error: { kind, message, path? } }`. `kind` is one of `not_found`, `conflict`, `forbidden`, `too_large`, `invalid`, `network`, `timeout`, `cancelled` or `unknown`. The status follows the kind: 400 `invalid`, 403 `forbidden`, 404 `not_found`, 409 `conflict`, 413 `too_large`, 504 `timeout`, and 500 otherwise. An unsatisfiable range is 416.
+
+## Live updates
+
+`watch` answers `text/event-stream`. Each message is `data: ` followed by a JSON array of change events, then a blank line. Each event is `{ type, path, oldPath?, mtimeMs?, actor?, entry? }` where `type` is `created`, `updated`, `deleted`, `moved` or `resync`. A `: ping` comment is sent on an interval to keep the connection open. A store without `watch` answers 501. One that cannot start watching answers 503 with a `Retry-After` header, which `httpAdapter` honors before it reconnects.
+
+`httpAdapter` is the reference client, in `@scope/core/http`.

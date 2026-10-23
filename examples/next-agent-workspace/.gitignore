@@ -1,0 +1,8 @@
+node_modules
+dist
+.next
+.env*.local
+test-results
+
+# written by next dev for coding agents
+AGENTS.md

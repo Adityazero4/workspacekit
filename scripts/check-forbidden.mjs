@@ -64,6 +64,12 @@ const invokedPathWithSymlinksResolved = process.argv[1] && realpathSync(process.
 if (invokedPathWithSymlinksResolved === fileURLToPath(import.meta.url)) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const patterns = await loadPatterns(root);
+  if (patterns.length === 0 && process.env.CI !== 'true') {
+    console.warn(
+      'forbidden-strings: skipped, no pattern list (maintainers set FORBIDDEN_PATTERNS or create internal/forbidden-patterns.txt; CI requires one)',
+    );
+    process.exit(0);
+  }
   if (patterns.length === 0) {
     console.error(
       'forbidden-strings: no pattern list (set FORBIDDEN_PATTERNS or create internal/forbidden-patterns.txt)',

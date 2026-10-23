@@ -1,0 +1,210 @@
+# @scope/react
+
+> The React file workspace: a virtualized file tree, search, tabs, upload and viewers, in one `Workspace` component, plus every building block it is made of.
+
+- API reference: https://docs.example.invalid/api/react
+- Install: `npm install @scope/react @scope/core react react-dom`
+
+## README sections
+
+- Install
+- Entry: `Workspace` takes an adapter and fills its parent, so give it a height.
+- Use the parts on their own: `FileSystemProvider` owns the tree store.
+- Standalone viewers: `@scope/react/renderers` exports the light viewers, which take a file and need no provider.
+- Write a renderer: `@scope/react/renderer-kit` is the public API for renderer packages.
+- CSS: Import `@scope/react/styles.css` once.
+- Options: `adapter`: required.
+
+## Entry points
+
+- `@scope/react`
+- `@scope/react/renderers`
+- `@scope/react/renderer-kit`
+- `@scope/react/styles.css` (stylesheet)
+
+## Exports of `@scope/react`
+
+- `Action`: One command on an entry, rendered in the context menu, the row's "More actions" button and as a keyboard shortcut.
+- `ActionContext`: What an action's `when` and `run` receive besides the entry.
+- `AutosaveState`: What `useAutosave` returns.
+- `Autosaver`: A debounced saver for one text; see `createAutosaver`.
+- `AutosaverOptions`: Options of `createAutosaver`.
+- `BUILTIN_ACTION_IDS`: The ids of the built-in actions, in menu order; `canPerform` receives them (and custom action ids).
+- `CanPerform`: Decides whether the user may run an action on an entry; a `false` hides the action everywhere.
+- `ClassNames`: Extra class names per part, merged after the part's own class.
+- `Clipboard`: The provider's in-app clipboard (not the system clipboard).
+- `ClipboardItem`: What the clipboard holds: one entry, cut or copied.
+- `Components`: Component slots (spec layer 5); defaults are Radix-based.
+- `ConfirmRequest`: What `ActionContext.confirm` asks.
+- `ConflictAnswer`: The user's answer to a conflict.
+- `ConflictDetails`: What the conflict dialog needs to know besides the path, so it offers only answers that can work.
+- `ConflictKind`: What ran into an existing name: a move, a copy or an upload.
+- `ConflictResolver`: Asks the user what to do about `path`, which already exists; resolves with `null` when they cancel.
+- `DialogSlotProps`: Props of the `Dialog` slot.
+- `EntryState`: What `useEntryState` returns for one path.
+- `FileInfo`: An {@link Entry} plus the lower-cased name parts renderers match on.
+- `FileSearch`: A search box over the nearest provider's adapter, following the WAI-ARIA combobox-with-listbox pattern: the input owns focus, ArrowDown and ArrowUp move the active result (wrapping), Enter or a click reveals it in the tree (see `FileSystemContext.reveal`), and Escape clears the query.
+- `FileSearchProps`: Props of `FileSearch`.
+- `FileSearchState`: What `useFileSearch` returns.
+- `FileSearchStatus`: Where a search stands: `idle` (the query is too short), `searching`, `done`, `error`, or `unsupported` (the adapter has no `search`).
+- `FileSystemContext`: What `useFileSystem` returns: the adapter, the tree store and the shared UI-state stores.
+- `FileSystemProvider`: Owns the tree store for `adapter` (and `root`) plus the shared UI state, and provides them to every file-system component below it.
+- `FileSystemProviderProps`: Props of `FileSystemProvider`.
+- `FileTabs`: The open-file tab strip: a WAI-ARIA tab list over the provider's tabs (see `useTabs`), or over `tabs` when controlled.
+- `FileTabsProps`: Props of `FileTabs`.
+- `FileTree`: The file tree: a virtualized WAI-ARIA tree over the nearest `FileSystemProvider`, with sticky folder headers, changed/pending/loading/error markers and render slots.
+- `FileTreeApi`: What `useFileTree` returns: the visible rows, focus state, prop getters and tree commands.
+- `FileTreeProps`: Props of `FileTree`.
+- `FileViewer`: The file viewer: `useFileViewer` in a styled shell.
+- `FileViewerProps`: Props of `FileViewer`: the `useFileViewer` options plus the shell's.
+- `FileViewerState`: What `useFileViewer` returns for one path.
+- `FileViewerStatus`: Where a viewer is: loading the file, showing it (`ready`), or unable to show it (`error`).
+- `Icons`: Built-in 16px `currentColor` icons.
+- `LoaderSlotProps`: Props of the `Loader` slot: what a viewer shows while it loads a file or its renderer.
+- `MATCH_SCORE`: Scores for `Renderer.match`.
+- `MatchScore`: The type of {@link MATCH_SCORE}: the score a renderer's `match` returns, by how specific the match is.
+- `MenuAnchor`: Where a menu opens, in viewport pixels: the pointer for a right click, below the button or row otherwise.
+- `MenuSlotItem`: One item of an action menu, ready to render.
+- `MenuSlotProps`: Props of the `Menu` slot.
+- `NO_TABS`: The tab state with no open tabs.
+- `Notice`: A user-facing message components report through `notify`; `error` is also passed to `onError`.
+- `PARTS`: Every styleable element carries `data-fs-part="<part>"`; these are the valid part names.
+- `PageGeometry`: One page as `renderPage` receives it.
+- `Part`: A styleable part name.
+- `Renderer`: Describes how to show one family of files: when it applies (`match`), how to load its component, and which content shape it needs.
+- `RendererInput`: What a renderer wants to be given: a URL, a `Blob`, an `ArrayBuffer`, decoded text, or nothing.
+- `RendererProps`: The props every renderer component receives.
+- `RendererSource`: The file content handed to a renderer, in the shape its {@link RendererInput} asked for.
+- `Reveal`: Shows an entry in the tree; see `FileSystemContext.reveal`.
+- `RevealOptions`: Options of `reveal`.
+- `SaveStatus`: The save status of an edited file (the `viewer-save-status` part): "Unsaved", "Saving…", "Saved", "Couldn't save." with a Retry button, "Changed by someone else" or "Deleted", and empty while nothing is edited.
+- `SaveStatusKind`: Where an edited text stands: nothing edited (`idle`), edits waiting (`dirty`), a save in flight (`saving`), everything saved (`saved`), the last save failed (`error`), the file changed on the server (`conflict`), or the file was deleted (`deleted`).
+- `SaveStatusProps`: Props of `SaveStatus`.
+- `SplitPane`: Two panes side by side with a draggable separator between them, following the WAI-ARIA window splitter pattern: the separator is focusable, Left and Right move it 16 px, and Home and End go to the first pane's smallest and largest width.
+- `SplitPaneProps`: Props of `SplitPane`.
+- `Tab`: One open file in the tab strip.
+- `TabPanelIds`: The element ids that link a tab to its panel.
+- `TabsApi`: What `useTabs` returns: the open tabs and the calls that change them.
+- `TabsState`: The open tabs, in strip order, and the active tab's path.
+- `TreeProps`: Props for the tree container; spread them onto the element that wraps the rows.
+- `TreeRowBindings`: Row handlers whose identity never changes for the life of the tree, so a memoized row can register itself and report focus without receiving new props.
+- `TreeRowProps`: Props for one rendered row; spread them onto the row element.
+- `UiStore`: Small external store; snapshot is immutable; set() notifies once per change.
+- `UploadPickerKind`: Which file picker to open: files (several at once) or one folder with everything in it.
+- `UploadRun`: One upload run: the files of one drop or one file-picker selection, uploaded into `targetDir`.
+- `UploadStatus`: The upload list of the nearest `FileSystemProvider`: one item per run with its progress bar (while bytes are moving) and a Cancel button (or Dismiss once it finished), each labelled with the run's target, plus a polite live region that announces when a run starts, finishes, fails or is cancelled.
+- `UploadStatusProps`: Props of `UploadStatus`.
+- `UploadsApi`: What `useUploads` returns.
+- `UseAutosaveOptions`: Options of `useAutosave`.
+- `UseFileSearchOptions`: Options of `useFileSearch`.
+- `UseFileTreeOptions`: Options for `useFileTree`.
+- `UseFileViewerOptions`: Options of `useFileViewer`.
+- `ViewerError`: A viewer failure: a machine-readable `kind` and a `message` that is safe to show the user.
+- `ViewerErrorKind`: Why a viewer could not show a file.
+- `ViewerSaveState`: The save state of the text a `FileViewer` edits, for a custom header: render it with `SaveStatus`.
+- `VirtualPages`: A vertically scrolling, virtualized stack of pages (a multi-page TIFF, a PDF), centred horizontally and scrolling sideways when a zoomed page is wider than the viewport.
+- `VirtualPagesHandle`: What a `ref` on `VirtualPages` can do.
+- `VirtualPagesProps`: Props of `VirtualPages`.
+- `Workspace`: The drop-in file workspace: a `FileSystemProvider` around a toolbar, the search box and the file tree on one side of a resizable split, and the open-file tabs with the active file's viewer on the other.
+- `WorkspaceController`: What `useWorkspace` returns: calls that drive the workspace from anywhere under its provider.
+- `WorkspaceProps`: Props of `Workspace`: the provider's props plus the shell's.
+- `activateTab`: Activates the open tab at `path`; unknown paths change nothing.
+- `audioRenderer`: Audio in the browser's native player.
+- `builtinActions`: The built-in actions this adapter supports: create gives New file and New folder, move gives Rename and Cut, copy gives Duplicate and Copy, delete gives Delete, download gives Download, upload gives Upload files and Upload folder (into the entry's folder); Open and Copy path are always there.
+- `closeOtherTabs`: Closes every tab except the one at `path`, and activates it.
+- `closeTab`: Closes the tab at `path`.
+- `createAutosaver`: Saves a text as it is edited, without React.
+- `createUiStore`: A minimal external store for UI state, readable with `useSyncExternalStore` (or `useUiValue`).
+- `cx`: Join truthy class names with a space.
+- `defineRenderer`: Returns the renderer unchanged; use it to get the `Renderer` type checked where the object is written.
+- `directoryRenderer`: Every directory: its children with name, size and modified columns, opened with `onOpenEntry`.
+- `fileInfo`: Adds the lower-cased `basename` (the whole file name) and `extension` (text after the last dot) that renderers match on.
+- `followMove`: Runs `move`, a store rename or move of `from` to `to`, with the path-keyed UI state following it: expanded folders, the selection, the clipboard entry and the open tabs move to `to` before the store call (so nothing flashes collapsed), to the entry's final path once it resolves, and back to `from` if it fails.
+- `highlightRanges`: Where `query` occurs in `name`, as `[start, end)` string offsets into `name` itself, ignoring case and Unicode normalization (NFC).
+- `htmlRenderer`: HTML documents, up to 5 MiB, in two modes: `preview` (the default; the page in a frame sandboxed to `allow-scripts`, with no `allow-same-origin`) and `source` (the text editor, editable under its rules).
+- `imageRenderer`: Images a browser can draw (PNG, JPEG, GIF, WebP, AVIF, SVG, BMP, ICO), with zoom, pan and rotate.
+- `lightRenderers`: The built-in renderers, each loaded on first use: text, HTML, image, TIFF, audio, video, directory and the unsupported fallback.
+- `openTab`: Opens `path` and activates it.
+- `partProps`: Props for an element that renders `part`: the `data-fs-part` attribute plus the consumer's `classNames[part]` and an optional extra class.
+- `pinTab`: Turns the preview tab at `path` into a pinned one.
+- `resolveRenderer`: Picks the renderer whose `match` scores highest for the entry.
+- `setTabDirty`: Marks the tab at `path` dirty or clean; a dirty tab is pinned, so a preview never replaces unsaved changes.
+- `textRenderer`: Plain text, configuration and source files (by extension, by well-known names such as `Makefile`, and `.env` or `.env.*`), up to 10 MiB.
+- `tiffRenderer`: TIFF images, single or multi-page, up to 200 MiB, laid out from their tags and decoded page by page as they scroll into view.
+- `unsupportedRenderer`: The fallback for any file no other renderer matches: its name and size, and Download when possible.
+- `useAutosave`: `createAutosaver` for a custom editor: saves `value` a second after it stops changing, one save at a time, with `expectedMtimeMs`.
+- `useConflictResolver`: Asks the user what to do when a move, copy or upload meets an existing name, in the conflict dialog of the nearest provider's first mounted `FileTree`.
+- `useEntryState`: One path's entry, folder status, pending, changed and changed-below flags and load error.
+- `useExpanded`: Whether `path` is expanded; re-renders only when that changes.
+- `useFileSearch`: Searches the nearest provider's adapter as the query changes.
+- `useFileSystem`: The nearest `FileSystemProvider`'s adapter, tree store and UI-state stores.
+- `useFileTree`: The headless tree: a visible-row index over the provider's tree (hidden names filtered unless Show hidden is on), the WAI-ARIA keyboard model with a roving tabindex and type-ahead, and prop getters for a renderer.
+- `useFileViewer`: The headless file viewer: finds the entry at `path`, picks its renderer from `renderers`, and loads the content in the shape the renderer asks for (`RendererInput`).
+- `useSelected`: Whether `path` is the selected entry; re-renders only when that changes.
+- `useTabs`: The provider's open tabs (the state an uncontrolled `FileTabs` shows), re-rendering when they change.
+- `useTreeSnapshot`: The whole tree snapshot; re-renders on every store change.
+- `useUiValue`: The current value of a `UiStore`, re-rendering when it changes.
+- `useUploads`: The upload runs of the nearest `FileSystemProvider`, plus `upload` and `dismiss`.
+- `useWorkspace`: Drives the workspace from any component under its `FileSystemProvider` (a viewer, a renderer, a panel of your own): open tabs, reveal entries, refresh folders, and run the first mounted tree's rename, Collapse all and focus.
+- `videoRenderer`: Video in the browser's native player.
+- `viewerError`: Builds the {@link ViewerError} for a kind, with the standard user-facing message.
+
+## Exports of `@scope/react/renderers`
+
+- `AudioViewer`: Plays audio without a `FileSystemProvider`, in the browser's native `<audio>` player.
+- `ClassNames`: Extra class names per part, merged after the part's own class.
+- `HtmlViewer`: Shows an HTML file without a `FileSystemProvider`.
+- `HtmlViewerProps`: Props of the standalone `HtmlViewer`: `TextViewer`'s, plus `mode`.
+- `ImageViewer`: Shows an image without a `FileSystemProvider`, with zoom (0.1× to 8×; Ctrl or ⌘ with the wheel zooms at the cursor, a plain wheel scrolls the page), drag and arrow-key panning when zoomed, double-click to toggle fit and 2×, the keys `+`, `-`, `0` (fit) and `r` (rotate), and full screen where the browser offers it.
+- `PageGeometry`: One page as `renderPage` receives it.
+- `Part`: A styleable part name.
+- `StandaloneViewerProps`: Props every standalone renderer takes.
+- `TextViewer`: Shows a text file without a `FileSystemProvider`: an editable `<textarea>` (labelled "Contents of <fileName>") up to 1 MiB, a read-only virtualized line view above that.
+- `TextViewerProps`: Props of the standalone `TextViewer`.
+- `TiffViewer`: Shows a TIFF without a `FileSystemProvider`, one page under another.
+- `UnsupportedViewer`: What a viewer shows for a file it cannot preview: the name, the size when known, "No preview for this file type." and a Download button when `onDownload` is set.
+- `UnsupportedViewerProps`: Props of `UnsupportedViewer`.
+- `VideoViewer`: Plays video without a `FileSystemProvider`, in the browser's native `<video>` player.
+- `ViewerError`: A viewer failure: a machine-readable `kind` and a `message` that is safe to show the user.
+- `ViewerErrorKind`: Why a viewer could not show a file.
+- `VirtualPages`: A vertically scrolling, virtualized stack of pages (a multi-page TIFF, a PDF), centred horizontally and scrolling sideways when a zoomed page is wider than the viewport.
+- `VirtualPagesHandle`: What a `ref` on `VirtualPages` can do.
+- `VirtualPagesProps`: Props of `VirtualPages`.
+
+## Exports of `@scope/react/renderer-kit`
+
+- `ClassNames`: Extra class names per part, merged after the part's own class.
+- `FileInfo`: An {@link Entry} plus the lower-cased name parts renderers match on.
+- `MATCH_SCORE`: Scores for `Renderer.match`.
+- `MatchScore`: The type of {@link MATCH_SCORE}: the score a renderer's `match` returns, by how specific the match is.
+- `PageGeometry`: One page as `renderPage` receives it.
+- `Part`: A styleable part name.
+- `Renderer`: Describes how to show one family of files: when it applies (`match`), how to load its component, and which content shape it needs.
+- `RendererInput`: What a renderer wants to be given: a URL, a `Blob`, an `ArrayBuffer`, decoded text, or nothing.
+- `RendererProps`: The props every renderer component receives.
+- `RendererSource`: The file content handed to a renderer, in the shape its {@link RendererInput} asked for.
+- `StaleNotice`: A `role="alert"` notice saying the latest version of the file couldn't be opened and the content below is the previous version, followed by the error's message.
+- `StaleNoticeProps`: Props of `StaleNotice`: `error` is why the latest version failed to load.
+- `StandaloneFile`: Where a standalone renderer's file is: still loading, loaded (with the fields `Ready` names), or failed.
+- `StandaloneLoadOptions`: Options of `useStandaloneText` and `useStandaloneBytes`.
+- `StandaloneRoot`: The root every standalone renderer shares: the `part` element with the viewer's `className`, `style` and `data-theme`, `data-status="loading|error"`, `aria-busy` while loading, and the error message as a `role="alert"` paragraph (the `errorPart`).
+- `StandaloneRootProps`: Props of `StandaloneRoot`.
+- `StandaloneSource`: What `useStandaloneText` and `useStandaloneBytes` return: the file to show, and whether it belongs to an earlier `src` while the current one loads (show it read-only then, and report no edits).
+- `StandaloneViewerProps`: Props every standalone renderer takes.
+- `ViewerError`: A viewer failure: a machine-readable `kind` and a `message` that is safe to show the user.
+- `ViewerErrorKind`: Why a viewer could not show a file.
+- `VirtualPages`: A vertically scrolling, virtualized stack of pages (a multi-page TIFF, a PDF), centred horizontally and scrolling sideways when a zoomed page is wider than the viewport.
+- `VirtualPagesHandle`: What a `ref` on `VirtualPages` can do.
+- `VirtualPagesProps`: Props of `VirtualPages`.
+- `defineRenderer`: Returns the renderer unchanged; use it to get the `Renderer` type checked where the object is written.
+- `lineBreakOf`: The line break a file uses, judged by its first one: `'\r\n'` when that is CRLF, otherwise `'\n'` (also for text without line breaks).
+- `mediaUrlOfBlob`: A URL an `img`, `audio` or `video` element can show `blob` from, typed so it can never render as a page.
+- `partProps`: Props for an element that renders `part`: the `data-fs-part` attribute plus the consumer's `classNames[part]` and an optional extra class.
+- `safeUrlOrNull`: The absolute form of `url` (an adapter's answer, a link inside a document) when it is http, https or blob; `null` otherwise (such as `javascript:` or `data:`), so the URL can never run script when it is followed, downloaded or shown.
+- `stepZoom`: The next zoom level in or out from `scale`: the next multiple of 0.25, within 0.1–8.
+- `useSettledAnnouncement`: Returns `text` for a live region once it has stopped changing for 300 ms, so a gesture that changes it many times (a zoom, a scroll through pages) is announced once, at its end.
+- `useStandaloneBytes`: Loads a standalone renderer's `src` as an `ArrayBuffer`, like `useStandaloneText` but without decoding: a `Uint8Array` is copied into a buffer of its own, an `ArrayBuffer` is used as given.
+- `viewerError`: Builds the {@link ViewerError} for a kind, with the standard user-facing message.
+- `withLfLineBreaks`: The text with every line break (`\r\n`, a lone `\r`, or `\n`) turned into `\n`: the form editors work in.
+- `withLineBreak`: Turns `\n`-only text (as an editor holds it) back into text with `lineBreak` between lines.
+- `zoomTowards`: Moves from `current` towards `target`, clamped to 0.1–8, never past `current` the wrong way: zooming out from a fit below 0.1 stays put rather than jumping in to 0.1.

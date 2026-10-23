@@ -511,3 +511,22 @@ describe('symlink cycles', () => {
     expect((await store.search!('f.txt', 10)).map((e) => e.path)).toEqual(['a/f.txt']);
   });
 });
+
+describe('nodeFsStore with an unusable root', () => {
+  it.each([undefined, ''])(
+    'creates the store without throwing and rejects each operation (%j)',
+    async (bad) => {
+      const lazy = nodeFsStore(bad as unknown as string);
+      const { kind, message } = await fail(lazy.list('', 1));
+      expect(kind).toBe('unknown');
+      expect(message).toContain('AGENT_WORKSPACE_DIR');
+      expect(await kindOf(lazy.stat('a.txt'))).toBe('unknown');
+      expect(() =>
+        lazy.watch?.(
+          () => undefined,
+          () => undefined,
+        ),
+      ).toThrow(/root directory/);
+    },
+  );
+});

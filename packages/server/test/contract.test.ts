@@ -1,15 +1,10 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { httpAdapter } from '@scope/core/http';
-import { createFileHandler, nodeFsStore } from '../src';
-import { runAdapterContract } from '../../core/test/contract/adapter-contract';
+import { nodeFsStore } from '../src';
+import { runStoreContract } from './support/store-contract';
 
-runAdapterContract('http + server + nodeFsStore', async () => {
+runStoreContract('nodeFsStore', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'fs-contract-'));
-  const handler = createFileHandler({ store: nodeFsStore(dir), authorize: () => true, chunkSize: 4 });
-  return {
-    adapter: httpAdapter('http://t/api/files', { fetch: (i, init) => handler(new Request(i, init)) }),
-    cleanup: () => rm(dir, { recursive: true }),
-  };
+  return { store: nodeFsStore(dir), cleanup: () => rm(dir, { recursive: true }) };
 });

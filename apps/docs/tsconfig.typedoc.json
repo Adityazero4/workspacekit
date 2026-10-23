@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.monorepo.json",
+  "compilerOptions": { "incremental": false },
+  "include": ["../../packages/*/src/**/*"]
+}

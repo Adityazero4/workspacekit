@@ -41,6 +41,12 @@ async function nullIfMissing<T>(pending: Promise<T>): Promise<T | null> {
   }
 }
 
+const unusableRootError = (): FsError =>
+  new FsError(
+    'unknown',
+    'nodeFsStore has no root directory: set the environment variable that holds it (for example AGENT_WORKSPACE_DIR) before the first request',
+  );
+
 function assertNotRoot(rel: string): void {
   if (rel === '') throw new FsError('invalid', 'operation not allowed on the root', { path: rel });
 }
@@ -170,18 +176,25 @@ class NodeFsStore implements FileStore {
   readonly #excluded: Set<string>;
   readonly #searchLimit: number;
   readonly #lock = new SerialLock();
+  readonly #unusableRoot: FsError | undefined;
   #rootRealPending: Promise<string> | undefined;
   readonly watch: Subscribe;
 
   constructor(root: string, options: { exclude?: string[]; searchLimit?: number }) {
     this.#root = root;
+    const unusableRoot = typeof root === 'string' && root.trim() !== '' ? undefined : unusableRootError();
     this.#excluded = new Set((options.exclude ?? []).map(foldForExclusion));
     this.#searchLimit = options.searchLimit ?? 200;
-    this.watch = createWatcher({
-      root: path.resolve(root),
-      hiddenName: (name) => this.#isHidden(name),
-      probe: (rel, osReportedName) => this.#probe(rel, osReportedName),
-    });
+    this.#unusableRoot = unusableRoot;
+    this.watch = unusableRoot
+      ? () => {
+          throw unusableRoot;
+        }
+      : createWatcher({
+          root: path.resolve(root),
+          hiddenName: (name) => this.#isHidden(name),
+          probe: (rel, osReportedName) => this.#probe(rel, osReportedName),
+        });
   }
 
   list = (requestedPath: string, depth: number): Promise<Entry[]> =>
@@ -283,6 +296,7 @@ class NodeFsStore implements FileStore {
   }
 
   #rootReal(): Promise<string> {
+    if (this.#unusableRoot) return Promise.reject(this.#unusableRoot);
     return (this.#rootRealPending ??= realpath(this.#root).catch(() => {
       this.#rootRealPending = undefined;
       throw new FsError('unknown', 'server root is unavailable');
@@ -570,6 +584,12 @@ async function replaceWith(
  * that leaves the root, and big walks do not starve mutations. A directory that should be walked but is not
  * (a link to a directory, unreadable, or swapped since it was queued) gets `meta: { incomplete: true }`, so
  * clients do not take it as empty.
+ *
+ * The root is only checked when the first operation runs, so a route module that creates the store at import
+ * time (for example while `next build` collects page data) does not crash without its environment variable.
+ * An undefined or empty root, or a directory that is missing, rejects each operation with an `FsError`
+ * (`'unknown'`, so the handler answers a generic 500 and reports the detail to `onError`); `watch` throws
+ * the same error.
  *
  * Residual risk: a local process racing the server outside the HTTP API can still redirect a
  * single fs call (TOCTOU between the check and the syscall); acceptable for v1.

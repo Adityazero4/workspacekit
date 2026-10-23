@@ -1,0 +1,31 @@
+# @scope/docx
+
+> A Word renderer for the file workspace: .docx files laid out in pages by docx-preview and sanitized before they are shown.
+
+- API reference: https://docs.example.invalid/api/docx
+- Install: `npm install @scope/docx @scope/react react react-dom`
+
+## README sections
+
+- Install
+- Entry: `docxRenderer()` returns a renderer.
+- Standalone use: `DocxViewer` shows one file without a tree or a provider.
+- CSS: Import `@scope/react/styles.css` and `@scope/docx/styles.css` once each.
+- Options: `classNames`: classes for this package's `docx-*` parts.
+- Vite: No configuration is needed in a build or in the dev server.
+
+## Entry points
+
+- `@scope/docx`
+- `@scope/docx/styles.css` (stylesheet)
+
+## Exports of `@scope/docx`
+
+- `DOCX_MAX_BYTES`: The largest `.docx` the renderer and the standalone `DocxViewer` open: 25 MiB.
+- `DOCX_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `docx-` prefix.
+- `DocxClassNames`: Extra class names per part of this package, merged after the part's own class.
+- `DocxPart`: A part name of this package.
+- `DocxRendererOptions`: Options of `docxRenderer`.
+- `DocxViewer`: Shows a Word `.docx` without a `FileSystemProvider`, laid out in pages and sanitized like the registry entry (see `docxRenderer`).
+- `DocxViewerProps`: Props of `DocxViewer`: the standalone viewer props, with this package's parts in `classNames`.
+- `docxRenderer`: Creates the registry entry for Word `.docx` files up to 25 MiB, laid out in pages by docx-preview and sanitized before it is shown: no scripts, frames or embedded HTML, only `http(s):` and `mailto:` links (opened in a new tab), `#bookmark` links that scroll inside the document, no request for anything outside the file, and nothing drawn outside the viewer's box.

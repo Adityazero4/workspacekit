@@ -1,0 +1,16 @@
+---
+title: Server route
+description: The complete Next.js route handler and client page.
+---
+
+Two files make the whole setup: the route handler that serves a directory, and the page that shows it.
+
+The route handler. `isSignedIn` is yours to write, and `AGENT_WORKSPACE_DIR` is the directory to serve.
+
+<Include file="examples/next-agent-workspace/app/api/files/[...path]/route.ts" />
+
+The page. It starts with `'use client'`, and `Workspace` fills its parent.
+
+<Include file="examples/next-agent-workspace/app/page.tsx" />
+
+The example in `examples/next-agent-workspace` also contains a development `isSignedIn`. Replace it with your own authentication before you deploy: see [security](/docs/server/security).

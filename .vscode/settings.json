@@ -1,0 +1,29 @@
+{
+  "search.followSymlinks": false,
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.next": true,
+    "**/out": true,
+    "**/.vitest": true,
+    "**/test-results": true,
+    "**/playwright-report": true,
+    "**/templates": true,
+    "**/.agent-docs-fixture": true,
+    ".claude/worktrees": true,
+    ".superpowers": true,
+    "pnpm-lock.yaml": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.next/**": true,
+    "**/out/**": true,
+    "**/.vitest/**": true,
+    "**/test-results/**": true,
+    "**/playwright-report/**": true,
+    "**/.agent-docs-fixture/**": true,
+    "**/.claude/worktrees/**": true,
+    "**/.superpowers/**": true
+  }
+}

@@ -1,0 +1,27 @@
+# @scope/server
+
+> A Fetch-API request handler that serves a directory to the file workspace, with a required per-request `authorize` callback.
+
+- API reference: https://docs.example.invalid/api/server
+- Install: `npm install @scope/server`
+
+## README sections
+
+- Install
+- Entry: `createFileHandler({ store, authorize })` returns a handler.
+- Use it on its own: The handler is a plain function from `Request` to `Response`, so it runs without a framework:
+- CSS: None.
+- Options: `authorize(request, operation, path)`: required.
+
+## Entry points
+
+- `@scope/server`
+
+## Exports of `@scope/server`
+
+- `FileHandlerOptions`: Options for `createFileHandler`: the store, the per-path authorization callback, limits and hooks.
+- `FileStore`: Storage backend the HTTP handler talks to.
+- `Operation`: The operation a request performs, as `authorize` sees it: a key of `ROUTES`.
+- `createFileHandler`: A fetch-style handler serving the `ROUTES` protocol from a `FileStore`.
+- `nodeFsStore`: A `FileStore` over a directory tree.
+- `resolveInRoot`: Resolves an untrusted relative path to an absolute one inside `rootReal` (already a realpath).

@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@scope/code": ["../../packages/code/src/index.ts"],
+      "@scope/core": ["../../packages/core/src/index.ts"],
+      "@scope/core/http": ["../../packages/core/src/http/index.ts"],
+      "@scope/core/memory": ["../../packages/core/src/memory/index.ts"],
+      "@scope/demo-kit": ["../../packages/demo-kit/src/index.ts"],
+      "@scope/docx": ["../../packages/docx/src/index.ts"],
+      "@scope/markdown": ["../../packages/markdown/src/index.ts"],
+      "@scope/pdf": ["../../packages/pdf/src/index.ts"],
+      "@scope/pptx": ["../../packages/pptx/src/index.ts"],
+      "@scope/react": ["../../packages/react/src/index.ts"],
+      "@scope/react/renderer-kit": ["../../packages/react/src/renderer-kit/index.ts"],
+      "@scope/react/renderers": ["../../packages/react/src/renderers/index.ts"],
+      "@scope/server": ["../../packages/server/src/index.ts"],
+      "@scope/spreadsheet": ["../../packages/spreadsheet/src/index.ts"],
+      "@scope/workspace": ["../../packages/workspace/src/index.ts"]
+    }
+  },
+  "include": ["src", "test", "*.ts", "../../packages/spreadsheet/src/reader/fast-formula-parser.d.ts"]
+}

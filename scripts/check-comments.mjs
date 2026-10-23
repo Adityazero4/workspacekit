@@ -31,10 +31,12 @@ const DECLARATION_KINDS = new Set([
   ts.SyntaxKind.ModuleDeclaration,
 ]);
 
+const GENERATED_DIRECTORIES = new Set(['node_modules', 'dist', '.next', '.source', 'out', 'test-results']);
+
 async function* filesUnder(dir, accept) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory() && entry.name !== 'node_modules' && entry.name !== 'dist') {
+    if (entry.isDirectory() && !GENERATED_DIRECTORIES.has(entry.name)) {
       yield* filesUnder(full, accept);
     } else if (entry.isFile() && accept(entry.name)) {
       yield full;
@@ -279,7 +281,7 @@ function exampleTexts(sourceFile) {
 
 /**
  * `create…` and `use…` calls in the file's `@example` code that are neither in `knownNames` (what the package
- * sources and their runtime dependencies export) nor defined in the example itself, so an example cannot
+ * sources and their runtime dependencies export) nor defined in the example or the file, so an example cannot
  * teach an API that does not exist.
  *
  * @example
@@ -289,8 +291,12 @@ function exampleTexts(sourceFile) {
 export function unknownNamesInExamples(file, text, knownNames) {
   const sourceFile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKindOf(file));
   const problems = [];
+  const definedInFile = [...text.matchAll(DEFINITION)].map((match) => match[1]);
   for (const example of exampleTexts(sourceFile)) {
-    const defined = new Set([...example.text.matchAll(DEFINITION)].map((match) => match[1]));
+    const defined = new Set([
+      ...definedInFile,
+      ...[...example.text.matchAll(DEFINITION)].map((match) => match[1]),
+    ]);
     const called = new Set([...example.text.matchAll(API_CALL)].map((match) => match[1]));
     for (const name of called) {
       if (knownNames.has(name) || defined.has(name)) continue;
@@ -320,9 +326,34 @@ async function exportedNamesOfTheRepo(root, sourceFiles) {
   return names;
 }
 
+const isSource = (name) => /\.tsx?$/.test(name) && !name.endsWith('.d.ts');
+const isScript = (name) => /\.m?js$/.test(name) && !/\.test\.m?js$/.test(name);
+const IS_TEST_OR_CONFIG_FILE = /(\.e2e\.|\.test\.|\.browser\.test\.|\.config\.)|(^|\/)test\//;
+
+/**
+ * Lists the files of every app that the comment policy applies to. Source files outside tests
+ * and configuration need JSDoc with an @example on their exports; the others are only checked for comments.
+ *
+ * @example
+ * const targets = await appAndExampleTargets(root);
+ */
+export async function appAndExampleTargets(root) {
+  const targets = [];
+  for (const group of ['apps', 'examples']) {
+    if (!existsSync(path.join(root, group))) continue;
+    for (const name of await readdir(path.join(root, group))) {
+      const projectDir = path.join(root, group, name);
+      for await (const file of filesUnder(projectDir, (entry) => isSource(entry) || isScript(entry))) {
+        const relative = path.relative(projectDir, file).split(path.sep).join('/');
+        const requireDocs = isSource(file) && !IS_TEST_OR_CONFIG_FILE.test(relative);
+        targets.push({ file, requireDocs });
+      }
+    }
+  }
+  return targets;
+}
+
 async function checkRepo(root) {
-  const isSource = (name) => /\.tsx?$/.test(name) && !name.endsWith('.d.ts');
-  const isScript = (name) => /\.m?js$/.test(name) && !/\.test\.m?js$/.test(name);
   const targets = [];
   for (const pkg of await readdir(path.join(root, 'packages'))) {
     const src = path.join(root, 'packages', pkg, 'src');
@@ -339,6 +370,7 @@ async function checkRepo(root) {
   }
   const packageSources = targets.filter((target) => target.requireDocs).map((target) => target.file);
   const knownNames = await exportedNamesOfTheRepo(root, packageSources);
+  targets.push(...(await appAndExampleTargets(root)));
   const failures = [];
   for (const { file, requireDocs } of targets) {
     const text = await readFile(file, 'utf8');

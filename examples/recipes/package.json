@@ -1,0 +1,31 @@
+{
+  "name": "@scope/example-recipes",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./customRenderer": "./src/customRenderer.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.monorepo.json"
+  },
+  "dependencies": {
+    "@scope/core": "workspace:*",
+    "@scope/pdf": "workspace:*",
+    "@scope/react": "workspace:*",
+    "@scope/server": "workspace:*",
+    "@scope/workspace": "workspace:*",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitest/browser-playwright": "5.0.5",
+    "axe-core": "4.14.0",
+    "playwright": "1.64.1",
+    "vitest-browser-react": "2.3.0"
+  }
+}

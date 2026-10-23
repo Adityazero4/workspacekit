@@ -1,0 +1,10 @@
+---
+title: Custom renderer
+description: Show .log files with each line colored by its level.
+---
+
+`defineRenderer` and `MATCH_SCORE` come from `@scope/react/renderer-kit`. This renderer scores `specific`, so it beats the built-in text renderer, which scores `text`. It colors lines with the `--fs-*` tokens, so it follows the theme. Create the renderer array once, at module level.
+
+<Include file="examples/recipes/src/customRenderer.tsx" />
+
+Put it before `lightRenderers` in the `renderers` array, as the example in its comment shows. It running live is on [the renderers page](/docs/concepts/renderers).

@@ -1,0 +1,147 @@
+---
+title: Styling
+description: Seven layers, from the default theme to fully custom markup. Go only as deep as you need.
+---
+
+Each layer is independent. There is no CSS-in-JS and no runtime style injection, so it is safe for React Server Components and a strict Content-Security-Policy. Part names, tokens and `classNames` keys are public API.
+
+## 1. The default theme
+
+Import the stylesheet once. It looks finished in light and dark: it follows `prefers-color-scheme`, and `data-theme="light"` or `"dark"` on any ancestor overrides it (`Workspace` sets it from its `theme` prop).
+
+```tsx
+import '@scope/workspace/styles.css';
+```
+
+With `@scope/react` alone, import `@scope/react/styles.css` instead. All of it lives in `@layer fs`, so your own unlayered CSS wins without `!important`.
+
+## 2. Design tokens
+
+Set custom properties on the workspace or any ancestor. A few lines rebrand everything.
+
+```css
+.brand-workspace {
+  --fs-accent: #6d28d9;
+  --fs-radius: 10px;
+  --fs-row-height: 30px;
+}
+```
+
+| Token                                           | Controls                                                             |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| `--fs-font`, `--fs-font-size`                   | Typeface and base size                                               |
+| `--fs-fg`, `--fs-muted`                         | Text and secondary text                                              |
+| `--fs-bg`, `--fs-bg-hover`, `--fs-bg-selected`  | Surfaces                                                             |
+| `--fs-accent`, `--fs-focus`                     | Accent color and the focus ring                                      |
+| `--fs-border`, `--fs-input-border`              | Borders                                                              |
+| `--fs-danger`, `--fs-changed`                   | Destructive actions, and the marker for changes made by someone else |
+| `--fs-radius`, `--fs-row-height`, `--fs-indent` | Shape and rhythm                                                     |
+| `--fs-flash`, `--fs-flash-duration`             | The highlight when a change arrives                                  |
+
+The code viewers also read `--fs-syntax-keyword`, `--fs-syntax-string`, `--fs-syntax-number`, `--fs-syntax-comment`, `--fs-syntax-function`, `--fs-syntax-type`, `--fs-syntax-variable`, `--fs-syntax-operator`, `--fs-syntax-tag` and `--fs-syntax-attribute`.
+
+Change them live:
+
+<TokenPlayground />
+
+## 3. Part selectors
+
+Every element carries `data-fs-part="<part>"`, and state is a data attribute: `data-selected`, `data-expanded`, `data-focused`, `data-cut`, `data-drop-target`, `data-changed`, `data-pending`, `data-status`, `data-preview`, `data-dirty`, `data-dragging`, `data-flash`, `data-deleted`, `data-changed-below`, `data-mode` and `data-zoomed`.
+
+```css
+[data-fs-part='tree-row'][data-selected] {
+  outline: 2px solid var(--fs-accent);
+}
+```
+
+The valid names are the `PARTS` constant exported by `@scope/react`. Each renderer package exports its own: `PDF_PARTS`, `CODE_PARTS`, `MARKDOWN_PARTS`, `SHEET_PARTS`, `DOCX_PARTS` and `PPTX_PARTS`. Style against these names, not generated class names.
+
+## 4. Class names per part
+
+`classNames` maps a part name to a class. Tailwind works directly.
+
+```tsx
+import { createMemoryAdapter } from '@scope/core/memory';
+import { Workspace } from '@scope/workspace';
+import '@scope/workspace/styles.css';
+
+const adapter = createMemoryAdapter({ files: { 'README.md': '# Hello' } });
+const classNames = { 'workspace-files': 'border-e-4 border-fuchsia-600', 'tree-row': 'font-medium' };
+
+export function Files(): React.JSX.Element {
+  return <Workspace adapter={adapter} classNames={classNames} style={{ height: 480 }} />;
+}
+```
+
+## 5. Component slots
+
+`components` replaces a part with your design system's version: `Menu`, `Dialog`, `EmptyState` and `Loader`.
+
+```tsx
+import { createMemoryAdapter } from '@scope/core/memory';
+import { Workspace, type Components } from '@scope/workspace';
+import '@scope/workspace/styles.css';
+
+function BrandEmptyState({ children }: { children?: React.ReactNode }): React.JSX.Element {
+  return (
+    <div role="note">
+      <strong>Nothing here yet</strong>
+      <p>{children}</p>
+    </div>
+  );
+}
+
+const components: Components = { EmptyState: BrandEmptyState };
+const adapter = createMemoryAdapter({ files: {} });
+
+export function Files(): React.JSX.Element {
+  return <Workspace adapter={adapter} components={components} style={{ height: 480 }} />;
+}
+```
+
+Layers 4 and 5, switched on and off on an empty workspace:
+
+<SlotPlayground />
+
+## 6. Unstyled
+
+Do not import the stylesheet. Structure, accessibility and behavior stay, with no visual opinion. Style the parts yourself, with layer 3 or 4.
+
+## 7. Headless hooks
+
+`useFileTree` and `useFileViewer` give state and prop getters for fully custom markup. They are stable API. This tree is plain `div`s with no stylesheet; it keeps the WAI-ARIA keyboard model and the single tab stop.
+
+```tsx
+import { createMemoryAdapter } from '@scope/core/memory';
+import { FileSystemProvider, useFileTree } from '@scope/react';
+
+const adapter = createMemoryAdapter({ files: { 'src/index.ts': 'export {};' } });
+
+function PlainTree(): React.JSX.Element {
+  const tree = useFileTree();
+  const rows = Array.from({ length: tree.index.count }, (_, index) => tree.index.rowAt(index));
+  return (
+    <div {...tree.getTreeProps()}>
+      {rows.map((row) => (
+        <div key={row.path} {...tree.getRowProps(row)} style={{ paddingInlineStart: row.depth * 16 }}>
+          {row.entry.name}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function Files(): React.JSX.Element {
+  return (
+    <FileSystemProvider adapter={adapter}>
+      <PlainTree />
+    </FileSystemProvider>
+  );
+}
+```
+
+<HeadlessTreeDemo />
+
+For a long tree, virtualize `tree.index` the way `FileTree` does. The `useFileTree` reference has a complete example.
+
+A full theming walk-through, with the stylesheet and a dark value, is the [theming recipe](/docs/recipes/theming).

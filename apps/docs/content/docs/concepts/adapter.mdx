@@ -1,0 +1,85 @@
+---
+title: The adapter
+description: The one place backend code lives. Two methods are required; every other method turns on the UI that needs it.
+---
+
+A `FileSystemAdapter` is everything the workspace knows about your storage. `httpAdapter` talks to `createFileHandler`, `createMemoryAdapter` keeps files in memory, and you can write your own for S3, a sandbox or the browser's File System Access API.
+
+## What each method turns on
+
+`list` and `read` are required. A workspace with only those is read-only. Each optional method switches on the matching UI, so a missing `move` means no drag to move.
+
+| Method         | Turns on                                                                                                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stat`         | Checks whether a file still exists before a replace. Without it the parent folder is listed instead                                                                         |
+| `url`          | Streaming for media and PDF ranges, instead of reading the whole file                                                                                                       |
+| `search`       | The search box                                                                                                                                                              |
+| `create`       | New file and new folder                                                                                                                                                     |
+| `write`        | Editing and autosave. Receives `expectedMtimeMs` so a conflict is a `conflict` error, not a lost edit                                                                       |
+| `move`, `copy` | Rename, drag to move, cut, copy and paste, duplicate                                                                                                                        |
+| `delete`       | Delete                                                                                                                                                                      |
+| `upload`       | Upload files and folders, direct or chunked                                                                                                                                 |
+| `download`     | Download, with folders as a zip                                                                                                                                             |
+| `watch`        | Live updates. Without it the root, the folders of open tabs and the expanded folders are polled every few seconds, paused while the tab is hidden and slowed after failures |
+
+## What `list` returns
+
+`list(path, { depth, signal })` returns the descendants of `path` down to `depth` levels below it, as one flat array of entries with full paths from the root. `depth: 1` is the direct children only and `depth: 2` adds their children. The folder `path` itself is not in the result, and a missing folder is a `not_found` error. Return an entry with `kind: 'directory'` for every folder in the window, because the tree builds a folder from the entries listed under it.
+
+- **Empty folders** are a `directory` entry with nothing listed under it. A folder inside the window that has no entries under it is shown as empty; a folder at the edge of the window is shown as not loaded yet until the UI lists it. There is no placeholder file. A source that cannot tell (a symlink, an unreadable folder) sets `meta: { incomplete: true }` on that entry, which means its children are unknown, not empty.
+- **`size`** is the byte length of a file. A directory has `size: null` or none.
+- **`mtimeMs`** is a version number in milliseconds that changes whenever the entry's content changes. A directory's can be real or omitted; it only affects sorting by date, which treats a missing value as 0.
+- **New files:** the UI calls `create(path, 'file')` for a new empty file and `create(path, 'directory')` for a new folder. `write` is called afterwards for edits, autosave and conflict copies, and it must also create a file that does not exist yet. `create` on an existing path is a `conflict` error.
+- **Missing optional methods** hide the UI in the table above: with no `create` there is no New file or New folder, with no `write` the editors are read-only, and with no `watch` the workspace polls.
+
+`Entry.mtimeMs` is the version: it keys caches, detects conflicts and drives live refresh. Paths are `/`-separated with no leading slash, and the root is the empty string. Build them with `joinPath` and `parentPath` from `@scope/core`, never by concatenating strings.
+
+## A minimal adapter
+
+This read-only adapter shows the shape. `read` has three overloads in the contract, so a single implementation is cast to its type.
+
+```ts
+import { FsError, type Entry, type FileSystemAdapter } from '@scope/core';
+
+const FILES: Record<string, string> = { 'notes.txt': 'hello' };
+
+const entries: Entry[] = Object.entries(FILES).map(([path, text]) => ({
+  path,
+  name: path,
+  kind: 'file',
+  size: text.length,
+}));
+
+const read = async (path: string, as: 'text' | 'blob' | 'arrayBuffer') => {
+  const text = FILES[path];
+  if (text === undefined) throw new FsError('not_found', `no such file: ${path}`, { path });
+  if (as === 'text') return text;
+  const blob = new Blob([text]);
+  return as === 'blob' ? blob : blob.arrayBuffer();
+};
+
+export const adapter: FileSystemAdapter = {
+  list: async () => entries,
+  read: read as FileSystemAdapter['read'],
+};
+```
+
+Throw `FsError` so the UI can tell failures apart. Its `kind` is one of `not_found`, `conflict`, `forbidden`, `too_large`, `invalid`, `network`, `timeout`, `cancelled` or `unknown`.
+
+A complete adapter, over a folder the user picks in the browser, is in the [custom adapter recipe](/docs/recipes/custom-adapter). A server-side store for S3 is in the [S3 recipe](/docs/recipes/s3).
+
+## Live updates
+
+`watch(onChange)` calls `onChange` with a batch of `ChangeEvent`s (`created`, `updated`, `deleted`, `moved` or `resync`) and returns the function that stops watching. The store subscribes to it itself, so never wire `watch` separately. Events carry an optional `actor`, which lets the UI tell the user's own writes from an agent's.
+
+The workspace below is a memory adapter. A simulated agent writes to it while it is on screen, and the changes appear with a dot and a flash.
+
+<LiveWorkspace />
+
+## Scoping and tenancy
+
+Scope a tenant or sandbox on the adapter instance, for example `httpAdapter('/api/files', { headers })` with a function that returns the current token. The components never see it.
+
+## Where to create it
+
+Create the adapter once, at module scope or with `useState(() => ...)`. A new adapter identity starts a new session: a fresh tree, UI state and edit buffers.

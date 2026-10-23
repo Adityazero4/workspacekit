@@ -1,0 +1,98 @@
+---
+title: Standalone renderers
+description: Use one viewer or editor on its own, with no provider, adapter, tabs or workspace.
+---
+
+Every renderer package exports two things: a registry entry for the workspace, and a standalone React component. The workspace's `FileViewer` uses the same components inside, so the two paths cannot drift apart. Each component loads its engine the first time it renders, so importing one stays cheap and never pulls in another.
+
+| Package                  | Component                                                                             | Input                                      |
+| ------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `@scope/pdf`             | `PdfViewer`                                                                           | `src`                                      |
+| `@scope/spreadsheet`     | `SpreadsheetViewer`                                                                   | `src`, with `fileName` to pick CSV or XLSX |
+| `@scope/docx`            | `DocxViewer`                                                                          | `src`                                      |
+| `@scope/pptx`            | `PptxViewer`                                                                          | `src`                                      |
+| `@scope/markdown`        | `MarkdownEditor`                                                                      | `value` and `onChange`                     |
+| `@scope/code`            | `CodeEditor`, `CodeViewer`                                                            | `value`, `language`, `readOnly`            |
+| `@scope/react/renderers` | `TextViewer`, `ImageViewer`, `AudioViewer`, `VideoViewer`, `HtmlViewer`, `TiffViewer` | `src`                                      |
+
+Install the renderer package with `@scope/react` and React, for example `npm install @scope/pdf @scope/react react react-dom`. `@scope/react` is a peer dependency of every renderer package and supplies the base stylesheet.
+
+## Props
+
+The viewers take the same props:
+
+- `src`: a URL string, a `Blob`, an `ArrayBuffer` or a `Uint8Array`. A string is handed to the viewer's engine as a URL: a root-relative path such as `/files/report.pdf` resolves against the page's origin, and `http(s):` and `blob:` URLs work. Never pass a URL from untrusted input without checking its scheme.
+- `fileName`: its extension picks the language or parser.
+- `className`, `classNames`, `style`: appearance. `classNames` is keyed by that package's part names.
+- `theme`: `'light'`, `'dark'` or `'system'` (the default).
+- `onError`: called with a viewer error.
+
+The editors take `value` and `onChange` instead of `src`. Each package adds its own options, such as `workerSrc` and `assets` for PDF. `PdfViewer` works without both under Vite or Next.js, because the bundler resolves the worker; set `assets` only for CJK fonts and JPX or JBIG2 images.
+
+## Examples
+
+Import the stylesheet of `@scope/react` first and the package's after it: both are in `@layer fs`, where a later rule wins at equal specificity, so the package can refine the base styles (the `@scope/workspace` stylesheet imports them in the same order). Put the viewer in a parent that has a height, because pages scroll inside the viewer.
+
+```tsx
+import { PdfViewer } from '@scope/pdf';
+import '@scope/react/styles.css';
+import '@scope/pdf/styles.css';
+
+export function Preview(): React.JSX.Element {
+  return (
+    <div style={{ height: 600 }}>
+      <PdfViewer src="/files/report.pdf" fileName="report.pdf" />
+    </div>
+  );
+}
+```
+
+```tsx
+import { SpreadsheetViewer } from '@scope/spreadsheet';
+import '@scope/react/styles.css';
+import '@scope/spreadsheet/styles.css';
+
+export function Sheet({ file }: { file: File }): React.JSX.Element {
+  return (
+    <div style={{ height: 480 }}>
+      <SpreadsheetViewer src={file} fileName={file.name} />
+    </div>
+  );
+}
+```
+
+```tsx
+import { MarkdownEditor } from '@scope/markdown';
+import '@scope/react/styles.css';
+import '@scope/markdown/styles.css';
+import { useState } from 'react';
+
+export function Notes(): React.JSX.Element {
+  const [markdown, setMarkdown] = useState('# Notes');
+  return (
+    <div style={{ height: 320 }}>
+      <MarkdownEditor value={markdown} onChange={setMarkdown} />
+    </div>
+  );
+}
+```
+
+```tsx
+import { CodeEditor } from '@scope/code';
+import '@scope/react/styles.css';
+import '@scope/code/styles.css';
+
+export function Snippet({ code }: { code: string }): React.JSX.Element {
+  return (
+    <div style={{ height: 240 }}>
+      <CodeEditor value={code} language="ts" readOnly />
+    </div>
+  );
+}
+```
+
+Inside a workspace the same viewers run through `FileViewer`. Open each kind here:
+
+<RendererGallery />
+
+To show one file from an adapter without the tree, put `FileViewer` inside a `FileSystemProvider` with `allRenderers()`; both come from `@scope/workspace`. A tested PDF example is the [standalone PDF recipe](/docs/recipes/standalone-pdf).

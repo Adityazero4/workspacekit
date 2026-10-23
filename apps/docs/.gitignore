@@ -1,0 +1,10 @@
+.next
+.source
+out
+test-results
+content/api
+public/llms.txt
+public/llms-full.txt
+
+# written by next dev for coding agents
+AGENTS.md

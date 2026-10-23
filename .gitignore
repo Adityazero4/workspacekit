@@ -8,3 +8,5 @@ internal/
 .vitest
 .playwright-mcp/
 .claude/worktrees/
+packages/create-workspace/templates
+.agent-docs-fixture

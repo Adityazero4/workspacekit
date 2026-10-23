@@ -1,0 +1,46 @@
+{
+  "name": "@scope/demo-kit",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "AGENTS.md",
+    "llms.txt"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p .",
+    "lint:pkg": "publint && attw --pack . --profile esm-only",
+    "size": "size-limit"
+  },
+  "dependencies": {
+    "@scope/core": "workspace:*",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@babel/core": "8.0.7",
+    "@rolldown/plugin-babel": "0.2.4",
+    "@scope/react": "workspace:*",
+    "@scope/spreadsheet": "workspace:*",
+    "@scope/workspace": "workspace:*",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitest/browser-playwright": "5.0.5",
+    "babel-plugin-react-compiler": "1.0.0",
+    "playwright": "1.64.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "vitest-browser-react": "2.3.0"
+  }
+}

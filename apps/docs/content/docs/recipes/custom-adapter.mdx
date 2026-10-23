@@ -1,0 +1,12 @@
+---
+title: Custom adapter
+description: A complete FileSystemAdapter over a folder the user picks in the browser.
+---
+
+This adapter runs entirely in the browser, over the File System Access API. It implements `list`, `read`, `stat`, `create`, `write`, `move` and `delete`, so the workspace offers exactly those actions. It leaves out `watch`, and the workspace polls instead. For what each method turns on, read [the adapter](/docs/concepts/adapter).
+
+Errors are thrown as `FsError` with a `kind`, so the interface can tell a missing file from a conflict. Paths go through `normalizePath`, never string concatenation.
+
+<Include file="examples/vite-memory/src/fileSystemAccessAdapter.ts" />
+
+Create it once, after the user picks a folder, and pass it to `Workspace`.
