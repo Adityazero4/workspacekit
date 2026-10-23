@@ -135,7 +135,7 @@ export function noticeFileText(dependencies) {
   });
   return [
     'File workspace',
-    'Copyright the File workspace contributors',
+    'Copyright 2026 Aditya Jain',
     '',
     'This product is licensed under the Apache License, Version 2.0 (see LICENSE).',
     '',

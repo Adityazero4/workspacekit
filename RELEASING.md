@@ -12,7 +12,6 @@ A security checklist for maintainers, to complete before the first publish and t
 - [ ] `main` and release tags are protected (required reviews and checks, no force pushes, no tag deletion).
 - [ ] Branch protection on `main` requires code-owner review, so a pull request cannot approve changes to the security gate on its own.
 - [ ] Replace `@OWNER` in `.github/CODEOWNERS` with the maintainers' GitHub user or team. `pnpm check:supply-chain --release` (and the check in CI, where `CI=true`) fails while the placeholder is there; a plain local `pnpm check` does not.
-- [ ] Replace the copyright holder in `NOTICE` (currently 'the File workspace contributors') with the real owner. Also replace `@OWNER` in `CODE_OF_CONDUCT.md`, which names the enforcement contact; edit `noticeFileText` in `scripts/check-licenses.mjs` so `--write` keeps the change.
 - [ ] When the packages stop being `private`, each `package.json` gets `publishConfig` with `access: public` and `provenance: true`.
 
 ## Dependencies
