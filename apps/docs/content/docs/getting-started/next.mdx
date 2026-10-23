@@ -1,0 +1,79 @@
+---
+title: Next.js
+description: Serve a directory from a route handler and show it with one component.
+---
+
+## Create the app and install
+
+Requirements: React 19 (the peer range is `^19.0.0`) and Node.js for the route. The packages have no peer dependency on Next.js; the tested example uses Next.js 16.
+
+Start from `create-next-app`, which sets up TypeScript, the React and Node types (`@types/node` is needed for the route) and the CSS module types that the stylesheet import relies on. Then add the packages:
+
+```sh
+npx create-next-app@latest my-files --ts --app
+cd my-files
+npm install @scope/workspace @scope/core @scope/server
+```
+
+`@scope/workspace` is the preset: `Workspace` with every renderer. `@scope/core` provides `httpAdapter`, which the page imports. `@scope/server` is the request handler.
+
+## Serve a directory
+
+`authorize` is required and there is no default-open mode. `isSignedIn` is yours to write: it must verify the session or token on the request, not only check that a header exists.
+
+```ts
+// app/api/files/[...path]/route.ts — Next.js; any Fetch-API server works the same way
+import { createFileHandler, nodeFsStore } from '@scope/server';
+
+const handler = createFileHandler({
+  store: nodeFsStore(process.env.AGENT_WORKSPACE_DIR!),
+  authorize: async (req, op, path) => isSignedIn(req), // required; no default-open
+});
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE };
+```
+
+Import `isSignedIn` from your own `lib/auth.ts`, which is shown below:
+
+```ts
+// not-compiled: the path is relative to your own project
+import { isSignedIn } from '../../../../lib/auth';
+```
+
+Set `AGENT_WORKSPACE_DIR` to the directory to serve. A relative path resolves against the working directory of the server process (the project folder when you run `next dev` or `next start`), and the directory must already exist: `nodeFsStore` does not create it, and a missing one fails the same way as an unset variable. `nodeFsStore` checks it on the first request, not when the module loads, so `next build` works without it; a request without it gets a generic 500, and the error that names the variable goes to the handler's `onError`, never to the browser.
+
+Here is `lib/auth.ts` from the example. It compares a token from a cookie with a secret in constant time. Replace `isSignedIn` with your real session or token check before you deploy.
+
+<Include file="examples/next-agent-workspace/lib/auth.ts" />
+
+The page cannot sign itself in, so in development something has to set the cookie. This `proxy.ts` at the project root (Next.js 16 calls the file `proxy`; older versions call it `middleware`) hands the page a per-process random token when it is requested from this machine (`localhost`, `127.0.0.1` or `[::1]`) and gives nothing to any other `Host`. Run `next dev --hostname 127.0.0.1` so the dev server is not reachable from the network. Replace it with your real sign-in, such as a login route that sets the cookie after checking a password or your identity provider. It exists only to make the first run work and must not ship.
+
+<Include file="examples/next-agent-workspace/proxy.ts" />
+
+If you set `AGENT_WORKSPACE_TOKEN`, that secret is required instead and is never handed to the browser, so you have to provide your own sign-in that sets the session cookie. Without the cookie every request is refused with a 403.
+
+## Render it
+
+```tsx
+// page.tsx
+'use client';
+import { Workspace } from '@scope/workspace';
+import { httpAdapter } from '@scope/core/http';
+import '@scope/workspace/styles.css';
+
+export default function Files() {
+  return <Workspace adapter={httpAdapter('/api/files')} />;
+}
+```
+
+`Workspace` fills its parent: give the parent a height, for example `<main style={{ height: '100vh' }}>`. This is what you get, here on sample files in memory with a simulated agent editing them:
+
+<LiveWorkspace />
+
+## Check these first
+
+- Put `'use client'` at the top of the file that renders `Workspace`.
+- Import `@scope/workspace/styles.css` once. Without it the components render unstyled.
+- Create the adapter once, at module scope. A new adapter identity starts a new session.
+- Decide who may list and watch the whole tree: see [policy](/docs/concepts/policy).
+
+The complete route and page are in the [server route recipe](/docs/recipes/server-route). The whole example is in `examples/next-agent-workspace`.

@@ -1,0 +1,16 @@
+---
+title: S3 store
+description: Serve an S3 bucket, or one prefix of it, with createFileHandler.
+---
+
+`s3Store(client, bucket, prefix)` is a `FileStore`: files are objects, and folders are the `/` in keys. Pass it to `createFileHandler` in place of `nodeFsStore`, as the example in its comment shows.
+
+```sh
+npm install @scope/server @scope/core @aws-sdk/client-s3
+```
+
+`S3Like` is the part of an AWS SDK v3 `S3` client that the store calls, so `new S3({ region })` is meant to satisfy it. The package does not depend on the SDK. The limits are listed in the comment above `s3Store`: one-second timestamps, no `watch` (clients poll), and a write that is buffered in memory.
+
+<Include file="examples/recipes/src/s3Store.ts" />
+
+Authorize each request as in [the handler](/docs/server/handler), and scope the prefix to the verified tenant as in [security](/docs/server/security).

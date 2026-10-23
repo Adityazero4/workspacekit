@@ -1,0 +1,151 @@
+# @scope/workspace
+
+> The one-install preset: `Workspace` with every renderer, plus the whole `@scope/react` API.
+
+- API reference: https://docs.example.invalid/api/workspace
+- Install: `npm install @scope/workspace @scope/core react react-dom`
+
+## README sections
+
+- Install
+- Entry
+- Standalone use: To show one file without the tree, put `FileViewer` inside a `FileSystemProvider` and give it `allRenderers()`.
+- CSS: Import `@scope/workspace/styles.css` once.
+- Why `@scope/react` is a dependency: `@scope/react` is a dependency here, not a peer.
+- Renderer options: `Workspace` uses `allRenderers()`.
+- Vite: Vite 7 and 8 are supported.
+- pdf.js data files: Without them, JPX and JBIG2 images are missing and PDFs that do not embed their CJK or standard fonts draw with fallback glyphs.
+
+## Entry points
+
+- `@scope/workspace`
+- `@scope/workspace/styles.css` (stylesheet)
+
+## Exports of `@scope/workspace`
+
+- `Action`: One command on an entry, rendered in the context menu, the row's "More actions" button and as a keyboard shortcut.
+- `ActionContext`: What an action's `when` and `run` receive besides the entry.
+- `AllRenderersOptions`: Options of `allRenderers`, one entry per renderer package, each passed to that package's factory as it is: `pdf` to `pdfRenderer` (such as `workerSrc` and `assets`), `spreadsheet` to `spreadsheetRenderer` (such as `engines.xlsx`), `code` to `codeRenderer` (such as the CSP `nonce`), and so on.
+- `AutosaveState`: What `useAutosave` returns.
+- `Autosaver`: A debounced saver for one text; see `createAutosaver`.
+- `AutosaverOptions`: Options of `createAutosaver`.
+- `BUILTIN_ACTION_IDS`: The ids of the built-in actions, in menu order; `canPerform` receives them (and custom action ids).
+- `CanPerform`: Decides whether the user may run an action on an entry; a `false` hides the action everywhere.
+- `ClassNames`: Extra class names per part, merged after the part's own class.
+- `Clipboard`: The provider's in-app clipboard (not the system clipboard).
+- `ClipboardItem`: What the clipboard holds: one entry, cut or copied.
+- `Components`: Component slots (spec layer 5); defaults are Radix-based.
+- `ConfirmRequest`: What `ActionContext.confirm` asks.
+- `ConflictAnswer`: The user's answer to a conflict.
+- `ConflictDetails`: What the conflict dialog needs to know besides the path, so it offers only answers that can work.
+- `ConflictKind`: What ran into an existing name: a move, a copy or an upload.
+- `ConflictResolver`: Asks the user what to do about `path`, which already exists; resolves with `null` when they cancel.
+- `DialogSlotProps`: Props of the `Dialog` slot.
+- `EntryState`: What `useEntryState` returns for one path.
+- `FileInfo`: An {@link Entry} plus the lower-cased name parts renderers match on.
+- `FileSearch`: A search box over the nearest provider's adapter, following the WAI-ARIA combobox-with-listbox pattern: the input owns focus, ArrowDown and ArrowUp move the active result (wrapping), Enter or a click reveals it in the tree (see `FileSystemContext.reveal`), and Escape clears the query.
+- `FileSearchProps`: Props of `FileSearch`.
+- `FileSearchState`: What `useFileSearch` returns.
+- `FileSearchStatus`: Where a search stands: `idle` (the query is too short), `searching`, `done`, `error`, or `unsupported` (the adapter has no `search`).
+- `FileSystemContext`: What `useFileSystem` returns: the adapter, the tree store and the shared UI-state stores.
+- `FileSystemProvider`: Owns the tree store for `adapter` (and `root`) plus the shared UI state, and provides them to every file-system component below it.
+- `FileSystemProviderProps`: Props of `FileSystemProvider`.
+- `FileTabs`: The open-file tab strip: a WAI-ARIA tab list over the provider's tabs (see `useTabs`), or over `tabs` when controlled.
+- `FileTabsProps`: Props of `FileTabs`.
+- `FileTree`: The file tree: a virtualized WAI-ARIA tree over the nearest `FileSystemProvider`, with sticky folder headers, changed/pending/loading/error markers and render slots.
+- `FileTreeApi`: What `useFileTree` returns: the visible rows, focus state, prop getters and tree commands.
+- `FileTreeProps`: Props of `FileTree`.
+- `FileViewer`: The file viewer: `useFileViewer` in a styled shell.
+- `FileViewerProps`: Props of `FileViewer`: the `useFileViewer` options plus the shell's.
+- `FileViewerState`: What `useFileViewer` returns for one path.
+- `FileViewerStatus`: Where a viewer is: loading the file, showing it (`ready`), or unable to show it (`error`).
+- `Icons`: Built-in 16px `currentColor` icons.
+- `LoaderSlotProps`: Props of the `Loader` slot: what a viewer shows while it loads a file or its renderer.
+- `MATCH_SCORE`: Scores for `Renderer.match`.
+- `MatchScore`: The type of {@link MATCH_SCORE}: the score a renderer's `match` returns, by how specific the match is.
+- `MenuAnchor`: Where a menu opens, in viewport pixels: the pointer for a right click, below the button or row otherwise.
+- `MenuSlotItem`: One item of an action menu, ready to render.
+- `MenuSlotProps`: Props of the `Menu` slot.
+- `NO_TABS`: The tab state with no open tabs.
+- `Notice`: A user-facing message components report through `notify`; `error` is also passed to `onError`.
+- `PARTS`: Every styleable element carries `data-fs-part="<part>"`; these are the valid part names.
+- `PageGeometry`: One page as `renderPage` receives it.
+- `Part`: A styleable part name.
+- `Renderer`: Describes how to show one family of files: when it applies (`match`), how to load its component, and which content shape it needs.
+- `RendererInput`: What a renderer wants to be given: a URL, a `Blob`, an `ArrayBuffer`, decoded text, or nothing.
+- `RendererProps`: The props every renderer component receives.
+- `RendererSource`: The file content handed to a renderer, in the shape its {@link RendererInput} asked for.
+- `Reveal`: Shows an entry in the tree; see `FileSystemContext.reveal`.
+- `RevealOptions`: Options of `reveal`.
+- `SaveStatus`: The save status of an edited file (the `viewer-save-status` part): "Unsaved", "Saving…", "Saved", "Couldn't save." with a Retry button, "Changed by someone else" or "Deleted", and empty while nothing is edited.
+- `SaveStatusKind`: Where an edited text stands: nothing edited (`idle`), edits waiting (`dirty`), a save in flight (`saving`), everything saved (`saved`), the last save failed (`error`), the file changed on the server (`conflict`), or the file was deleted (`deleted`).
+- `SaveStatusProps`: Props of `SaveStatus`.
+- `SplitPane`: Two panes side by side with a draggable separator between them, following the WAI-ARIA window splitter pattern: the separator is focusable, Left and Right move it 16 px, and Home and End go to the first pane's smallest and largest width.
+- `SplitPaneProps`: Props of `SplitPane`.
+- `Tab`: One open file in the tab strip.
+- `TabPanelIds`: The element ids that link a tab to its panel.
+- `TabsApi`: What `useTabs` returns: the open tabs and the calls that change them.
+- `TabsState`: The open tabs, in strip order, and the active tab's path.
+- `TreeProps`: Props for the tree container; spread them onto the element that wraps the rows.
+- `TreeRowBindings`: Row handlers whose identity never changes for the life of the tree, so a memoized row can register itself and report focus without receiving new props.
+- `TreeRowProps`: Props for one rendered row; spread them onto the row element.
+- `UiStore`: Small external store; snapshot is immutable; set() notifies once per change.
+- `UploadPickerKind`: Which file picker to open: files (several at once) or one folder with everything in it.
+- `UploadRun`: One upload run: the files of one drop or one file-picker selection, uploaded into `targetDir`.
+- `UploadStatus`: The upload list of the nearest `FileSystemProvider`: one item per run with its progress bar (while bytes are moving) and a Cancel button (or Dismiss once it finished), each labelled with the run's target, plus a polite live region that announces when a run starts, finishes, fails or is cancelled.
+- `UploadStatusProps`: Props of `UploadStatus`.
+- `UploadsApi`: What `useUploads` returns.
+- `UseAutosaveOptions`: Options of `useAutosave`.
+- `UseFileSearchOptions`: Options of `useFileSearch`.
+- `UseFileTreeOptions`: Options for `useFileTree`.
+- `UseFileViewerOptions`: Options of `useFileViewer`.
+- `ViewerError`: A viewer failure: a machine-readable `kind` and a `message` that is safe to show the user.
+- `ViewerErrorKind`: Why a viewer could not show a file.
+- `ViewerSaveState`: The save state of the text a `FileViewer` edits, for a custom header: render it with `SaveStatus`.
+- `VirtualPages`: A vertically scrolling, virtualized stack of pages (a multi-page TIFF, a PDF), centred horizontally and scrolling sideways when a zoomed page is wider than the viewport.
+- `VirtualPagesHandle`: What a `ref` on `VirtualPages` can do.
+- `VirtualPagesProps`: Props of `VirtualPages`.
+- `Workspace`: `@scope/react`'s `Workspace` with every renderer installed: `renderers` defaults to `allRenderers()`, and a `renderers` you pass still wins.
+- `WorkspaceController`: What `useWorkspace` returns: calls that drive the workspace from anywhere under its provider.
+- `WorkspaceProps`: Props of `Workspace`: the provider's props plus the shell's.
+- `activateTab`: Activates the open tab at `path`; unknown paths change nothing.
+- `allRenderers`: Every renderer the library ships, in precedence order: PDF, Word, PowerPoint, spreadsheets, Markdown (its source mode drawn by the code renderer), code, then the built-in light renderers (text, HTML, image, TIFF, audio, video, directory and the unsupported fallback).
+- `audioRenderer`: Audio in the browser's native player.
+- `builtinActions`: The built-in actions this adapter supports: create gives New file and New folder, move gives Rename and Cut, copy gives Duplicate and Copy, delete gives Delete, download gives Download, upload gives Upload files and Upload folder (into the entry's folder); Open and Copy path are always there.
+- `closeOtherTabs`: Closes every tab except the one at `path`, and activates it.
+- `closeTab`: Closes the tab at `path`.
+- `createAutosaver`: Saves a text as it is edited, without React.
+- `createUiStore`: A minimal external store for UI state, readable with `useSyncExternalStore` (or `useUiValue`).
+- `cx`: Join truthy class names with a space.
+- `defineRenderer`: Returns the renderer unchanged; use it to get the `Renderer` type checked where the object is written.
+- `directoryRenderer`: Every directory: its children with name, size and modified columns, opened with `onOpenEntry`.
+- `fileInfo`: Adds the lower-cased `basename` (the whole file name) and `extension` (text after the last dot) that renderers match on.
+- `followMove`: Runs `move`, a store rename or move of `from` to `to`, with the path-keyed UI state following it: expanded folders, the selection, the clipboard entry and the open tabs move to `to` before the store call (so nothing flashes collapsed), to the entry's final path once it resolves, and back to `from` if it fails.
+- `highlightRanges`: Where `query` occurs in `name`, as `[start, end)` string offsets into `name` itself, ignoring case and Unicode normalization (NFC).
+- `htmlRenderer`: HTML documents, up to 5 MiB, in two modes: `preview` (the default; the page in a frame sandboxed to `allow-scripts`, with no `allow-same-origin`) and `source` (the text editor, editable under its rules).
+- `imageRenderer`: Images a browser can draw (PNG, JPEG, GIF, WebP, AVIF, SVG, BMP, ICO), with zoom, pan and rotate.
+- `lightRenderers`: The built-in renderers, each loaded on first use: text, HTML, image, TIFF, audio, video, directory and the unsupported fallback.
+- `openTab`: Opens `path` and activates it.
+- `partProps`: Props for an element that renders `part`: the `data-fs-part` attribute plus the consumer's `classNames[part]` and an optional extra class.
+- `pinTab`: Turns the preview tab at `path` into a pinned one.
+- `resolveRenderer`: Picks the renderer whose `match` scores highest for the entry.
+- `setTabDirty`: Marks the tab at `path` dirty or clean; a dirty tab is pinned, so a preview never replaces unsaved changes.
+- `textRenderer`: Plain text, configuration and source files (by extension, by well-known names such as `Makefile`, and `.env` or `.env.*`), up to 10 MiB.
+- `tiffRenderer`: TIFF images, single or multi-page, up to 200 MiB, laid out from their tags and decoded page by page as they scroll into view.
+- `unsupportedRenderer`: The fallback for any file no other renderer matches: its name and size, and Download when possible.
+- `useAutosave`: `createAutosaver` for a custom editor: saves `value` a second after it stops changing, one save at a time, with `expectedMtimeMs`.
+- `useConflictResolver`: Asks the user what to do when a move, copy or upload meets an existing name, in the conflict dialog of the nearest provider's first mounted `FileTree`.
+- `useEntryState`: One path's entry, folder status, pending, changed and changed-below flags and load error.
+- `useExpanded`: Whether `path` is expanded; re-renders only when that changes.
+- `useFileSearch`: Searches the nearest provider's adapter as the query changes.
+- `useFileSystem`: The nearest `FileSystemProvider`'s adapter, tree store and UI-state stores.
+- `useFileTree`: The headless tree: a visible-row index over the provider's tree (hidden names filtered unless Show hidden is on), the WAI-ARIA keyboard model with a roving tabindex and type-ahead, and prop getters for a renderer.
+- `useFileViewer`: The headless file viewer: finds the entry at `path`, picks its renderer from `renderers`, and loads the content in the shape the renderer asks for (`RendererInput`).
+- `useSelected`: Whether `path` is the selected entry; re-renders only when that changes.
+- `useTabs`: The provider's open tabs (the state an uncontrolled `FileTabs` shows), re-rendering when they change.
+- `useTreeSnapshot`: The whole tree snapshot; re-renders on every store change.
+- `useUiValue`: The current value of a `UiStore`, re-rendering when it changes.
+- `useUploads`: The upload runs of the nearest `FileSystemProvider`, plus `upload` and `dismiss`.
+- `useWorkspace`: Drives the workspace from any component under its `FileSystemProvider` (a viewer, a renderer, a panel of your own): open tabs, reveal entries, refresh folders, and run the first mounted tree's rename, Collapse all and focus.
+- `videoRenderer`: Video in the browser's native player.
+- `viewerError`: Builds the {@link ViewerError} for a kind, with the standard user-facing message.

@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkSource, unknownNamesInExamples } from './check-comments.mjs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { appAndExampleTargets, checkSource, unknownNamesInExamples } from './check-comments.mjs';
 
 const messages = (text, requireDocs = true) =>
   checkSource('src/a.ts', text, requireDocs).map((p) => p.message);
@@ -80,6 +83,8 @@ test('rejects create… and use… calls in an @example that no package source e
     unknownNamesInExamples('src/a.ts', withExample(example), known).map((p) => p.message);
   assert.deepEqual(unknown(" * const fs = useFileSystem();\n * httpAdapter('/api/fs');"), []);
   assert.deepEqual(unknown(' * function useCounter() {}\n * useCounter();'), []);
+  const definedBelow = `${withExample(' * createBucket();')}export function createBucket(): void {}\n`;
+  assert.deepEqual(unknownNamesInExamples('src/a.ts', definedBelow, known), []);
   assert.deepEqual(unknown(" * <Provider adapter={createHttpAdapter({ baseUrl: '/api/fs' })} />"), [
     '@example calls `createHttpAdapter`, which no package source exports',
   ]);
@@ -92,4 +97,33 @@ test('rejects JSDoc lines longer than 110 columns, prose and example code alike'
   assert.match(messages(longExample)[0], /^JSDoc line is \d+ columns; wrap it at 110$/);
   const exactly110 = `/**\n * ${'x'.repeat(107)}\n *\n * @example\n * use();\n */\nexport function a(): void {}\n`;
   assert.deepEqual(messages(exactly110), []);
+});
+
+test('scans example sources like app sources', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'check-comments-'));
+  const file = path.join(root, 'examples', 'demo', 'src', 'index.ts');
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, 'export const a = 1;\n');
+  assert.deepEqual(await appAndExampleTargets(root), [{ file, requireDocs: true }]);
+});
+
+test('scans app sources, needing docs only outside tests and config, and skips generated folders', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'check-comments-'));
+  const write = (relative) => {
+    const file = path.join(root, 'apps', 'site', relative);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, 'export const a = 1;\n');
+  };
+  ['app/page.tsx', 'test/landing.e2e.ts', 'playwright.config.ts', '.source/server.ts', 'out/x.js'].forEach(
+    write,
+  );
+  const found = (await appAndExampleTargets(root)).map(({ file, requireDocs }) => [
+    path.relative(path.join(root, 'apps', 'site'), file),
+    requireDocs,
+  ]);
+  assert.deepEqual(found.sort(), [
+    ['app/page.tsx', true],
+    ['playwright.config.ts', false],
+    ['test/landing.e2e.ts', false],
+  ]);
 });

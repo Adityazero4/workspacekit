@@ -7,6 +7,7 @@ export default defineConfig({
       'packages/server',
       'packages/_template',
       'packages/code/vitest.{unit,browser}.config.ts',
+      'packages/demo-kit/vitest.{unit,browser}.config.ts',
       'packages/docx/vitest.{unit,browser}.config.ts',
       'packages/markdown/vitest.{unit,browser}.config.ts',
       'packages/pdf/vitest.{unit,browser}.config.ts',
@@ -14,6 +15,8 @@ export default defineConfig({
       'packages/react/vitest.{unit,browser}.config.ts',
       'packages/spreadsheet/vitest.{unit,browser}.config.ts',
       'packages/workspace/vitest.{unit,browser}.config.ts',
+      'examples/recipes/vitest.{unit,browser}.config.ts',
+      'examples/vite-memory/vitest.browser.config.ts',
     ],
   },
 });

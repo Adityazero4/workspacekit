@@ -26,6 +26,7 @@ async function runCli(root, env = {}) {
   await copyFile(SCRIPT, script);
   const childEnv = { ...process.env, ...env };
   if (!('FORBIDDEN_PATTERNS' in env)) delete childEnv.FORBIDDEN_PATTERNS;
+  if (!('CI' in env)) delete childEnv.CI;
   return new Promise((resolve) => {
     execFile(process.execPath, [script], { env: childEnv }, (err, stdout, stderr) =>
       resolve({ code: err ? err.code : 0, stdout, stderr }),
@@ -56,9 +57,16 @@ test('clean tree returns no hits', async () => {
   assert.deepEqual(await scan(fixtureRoot, [bad]), []);
 });
 
-test('CLI exits 2 when no pattern list is available', async () => {
+test('CLI skips with a notice when no pattern list is available outside CI', async () => {
   const fixtureRoot = await fixture({ 'a.ts': `${bad}\n` });
   const r = await runCli(fixtureRoot);
+  assert.equal(r.code, 0);
+  assert.match(r.stdout + r.stderr, /forbidden-strings: skipped, no pattern list/);
+});
+
+test('CLI exits 2 in CI when no pattern list is available', async () => {
+  const fixtureRoot = await fixture({ 'a.ts': `${bad}\n` });
+  const r = await runCli(fixtureRoot, { CI: 'true' });
   assert.equal(r.code, 2);
   assert.match(
     r.stdout + r.stderr,
@@ -83,4 +91,25 @@ test('CLI reads internal/forbidden-patterns.txt (comments ignored) and exits 0 o
   const r = await runCli(fixtureRoot);
   assert.equal(r.code, 1);
   assert.equal(r.stdout.trim(), `b.ts:1 ${bad}`);
+});
+
+test('scans the root Markdown files, examples and apps', async () => {
+  const body = `${bad}\n`;
+  const fixtureRoot = await fixture({
+    'README.md': body,
+    'CONTRIBUTING.md': body,
+    'CODE_OF_CONDUCT.md': body,
+    'CHANGELOG.md': body,
+    'examples/demo/page.tsx': body,
+    'apps/site/index.md': body,
+  });
+  const hits = await scan(fixtureRoot, [bad]);
+  assert.deepEqual(hits.map((hit) => path.relative(fixtureRoot, hit.file)).sort(), [
+    'CHANGELOG.md',
+    'CODE_OF_CONDUCT.md',
+    'CONTRIBUTING.md',
+    'README.md',
+    'apps/site/index.md',
+    'examples/demo/page.tsx',
+  ]);
 });

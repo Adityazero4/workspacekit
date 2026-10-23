@@ -1,0 +1,31 @@
+# @scope/pptx
+
+> A PowerPoint renderer for the file workspace: .pptx slides in a virtualized list, each drawn in its own shadow root.
+
+- API reference: https://docs.example.invalid/api/pptx
+- Install: `npm install @scope/pptx @scope/react react react-dom`
+
+## README sections
+
+- Install
+- Entry: `pptxRenderer()` returns a renderer.
+- Standalone use: `PptxViewer` shows one file without a tree or a provider.
+- CSS: Import `@scope/react/styles.css` and `@scope/pptx/styles.css` once each.
+- Options: `externalMedia`: `'block'` (default) or `'allow'`.
+- Vite: No configuration is needed in a build or in the dev server.
+
+## Entry points
+
+- `@scope/pptx`
+- `@scope/pptx/styles.css` (stylesheet)
+
+## Exports of `@scope/pptx`
+
+- `PPTX_MAX_BYTES`: The largest `.pptx` the renderer and the standalone `PptxViewer` open: 200 MiB.
+- `PPTX_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `pptx-` prefix.
+- `PptxClassNames`: Extra class names per part of this package, merged after the part's own class.
+- `PptxPart`: A part name of this package.
+- `PptxRendererOptions`: Options of `pptxRenderer` and `PptxViewer`.
+- `PptxViewer`: Shows a PowerPoint `.pptx` without a `FileSystemProvider`, drawn and checked like the registry entry (see `pptxRenderer`).
+- `PptxViewerProps`: Props of `PptxViewer`: the standalone viewer props, with this package's parts in `classNames`, and the renderer options.
+- `pptxRenderer`: Creates the registry entry for PowerPoint `.pptx` files up to 200 MiB: slides in a virtualized list (only the slides near the viewport are drawn), with zoom and a "Slide X of N" toolbar.

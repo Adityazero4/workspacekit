@@ -1,14 +1,17 @@
 packages:
   - 'packages/*'
+  - 'examples/*'
+  - 'apps/*'
 
 ignoredOptionalDependencies:
   - '@napi-rs/canvas'
+  - 'sharp'
 
 minimumReleaseAge: 10080
 trustPolicy: no-downgrade
 blockExoticSubdeps: true
 strictDepBuilds: true
-allowBuilds: {}
+allowBuilds: { esbuild: false }
 saveExact: true
 
 minimumReleaseAgeExclude:

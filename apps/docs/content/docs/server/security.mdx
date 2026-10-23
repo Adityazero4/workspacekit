@@ -1,0 +1,26 @@
+---
+title: Security
+description: What the handler enforces for you, and what only you can do.
+---
+
+## What the handler enforces
+
+- **A required `authorize`.** There is no default-open mode. Every operation asks it, once per affected path. A directory `move`, `copy` or `delete` asks for every descendant, and any denial rejects the whole operation. A directory `download` asks for every file and leaves out the denied ones.
+- **A root jail.** `nodeFsStore` normalizes every path, resolves it with `realpath` and checks the result against the root. `..` and symlinks that lead outside the root are rejected, and so is a dangling symlink.
+- **Hidden names on the server.** `nodeFsStore(root, { exclude })` hides excluded names from listings and search, and answers `not_found` for any path that contains one. This is not only a UI setting.
+- **Limits.** `maxWriteBytes`, `maxUploadBytes` and `readOnly`.
+- **A CSRF header.** Every request that is not a `GET` needs `X-FS-Request: 1`, which a cross-site form cannot send.
+- **Files never render in your origin.** `read` and `download` answer with `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`.
+
+## What only you can do
+
+- **Write `isSignedIn` properly.** It must verify a session or token on the request, not check that a header exists.
+- **Scope what each principal may see.** `list`, `search` and `stat` results are not filtered per entry, and `watch` is asked once, for the whole root. A principal who may see only part of the tree must be denied `'list'`, `'search'` and `'watch'`, or the hidden parts must be excluded in the store.
+- **Choose the tenant on the server.** Pick the store root from the verified session, not from a request parameter.
+- **Keep secrets out of the browser.** A token that grants access must be sent as an `httpOnly` cookie, or fetched by a function you pass as `httpAdapter`'s `headers`.
+
+## What the viewers do
+
+Untrusted documents are parsed with limits on size and work. DOCX output is sanitized, and links are limited to `http:`, `https:` and `mailto:`. HTML previews are frames sandboxed to `allow-scripts` only, so they run in an opaque origin. Nothing a renderer produces runs in your origin. Details are in each renderer package's README.
+
+See [policy](/docs/concepts/policy) for the interface side of the same decisions.

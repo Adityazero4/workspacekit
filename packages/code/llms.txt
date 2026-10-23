@@ -1,0 +1,33 @@
+# @scope/code
+
+> A code renderer for the file workspace: an editable CodeMirror 6 editor with syntax highlighting for code, configuration and data files.
+
+- API reference: https://docs.example.invalid/api/code
+- Install: `npm install @scope/code @scope/react react react-dom`
+
+## README sections
+
+- Install
+- Entry: `codeRenderer()` returns a renderer.
+- Standalone use: `CodeViewer` shows one file without a tree or a provider.
+- CSS: Import `@scope/react/styles.css` and `@scope/code/styles.css` once each.
+- Options: `nonce`: set on the `<style>` elements CodeMirror adds, for a strict `style-src` Content-Security-Policy.
+- Vite: No configuration is needed in a build or in the dev server.
+
+## Entry points
+
+- `@scope/code`
+- `@scope/code/styles.css` (stylesheet)
+
+## Exports of `@scope/code`
+
+- `CODE_MAX_BYTES`: The largest file the code renderer and the standalone `CodeViewer` open: 10 MiB.
+- `CODE_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `code-` prefix.
+- `CodeClassNames`: Extra class names per part of this package, merged after the part's own class.
+- `CodeEditor`: A code editor without a `FileSystemProvider`: CodeMirror 6 with syntax highlighting for `fileName` (or `language`), themed by the `--fs-*` tokens.
+- `CodeEditorProps`: Props of `CodeEditor`: a controlled `value`, with every standalone viewer prop except `src`.
+- `CodePart`: A part name of this package.
+- `CodeRendererOptions`: Options of `codeRenderer`.
+- `CodeViewer`: Shows a code file read-only without a `FileSystemProvider`.
+- `CodeViewerProps`: Props of `CodeViewer`: the standalone viewer props, plus `language` (a name or alias such as `python`, overriding the one picked from `fileName`) and `nonce` for CodeMirror's `<style>` elements under a strict CSP.
+- `codeRenderer`: Creates the registry entry for code, configuration and data files, up to 10 MiB, shown in an editable CodeMirror 6 editor (read-only when the viewer says so).

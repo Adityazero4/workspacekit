@@ -1,0 +1,209 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PUBLIC_PACKAGES, readDocsUrl } from '../../../scripts/agent-docs.mjs';
+import { resolveIncludePath } from '../lib/includePath.mjs';
+import { includeFilesOf, readPages } from './check-content.mjs';
+
+const FRONT_MATTER = /^---\n([\s\S]*?)\n---\n/;
+const SUMMARY_LINE = /^> (.+)$/m;
+const QUICK_START_URLS = ['/docs/getting-started/next', '/docs/getting-started/vite'];
+const CODING_AGENTS_URL = '/docs/coding-agents';
+const RECIPES_URL = '/docs/recipes/';
+const CORE_API_PAGE = path.join('apps', 'docs', 'content', 'api', 'core.md');
+const ADAPTER_CONTRACT_TYPES = [
+  'FileSystemAdapter',
+  'Entry',
+  'EntryKind',
+  'CallOptions',
+  'TransferOptions',
+  'ChangeEvent',
+  'FsError',
+  'FsErrorKind',
+];
+const HELPER_SOURCES = ['path.ts', 'errors.ts'];
+const EXPORTED_FUNCTION = /^export function (\w+)/gm;
+const CONTRACT_PREFACE = `Conventions every adapter follows:
+
+- \`list(path, { depth, signal })\` returns the descendants of \`path\` down to \`depth\` levels below it as one flat array with full paths from the root. \`depth: 1\` is the direct children. \`path\` itself is not included, and a missing folder throws \`not_found\`.
+- Return a \`kind: 'directory'\` entry for every folder in the window. An empty folder is a directory entry with nothing listed under it; there is no placeholder file. \`meta: { incomplete: true }\` means the children are unknown, not empty.
+- A file's \`size\` is its byte length; a directory has \`size: null\` or none. \`mtimeMs\` is the version and must change when the content changes; for a directory it is optional (a missing value sorts as 0).
+- The UI calls \`create(path, 'file')\` for a new empty file, then \`write\` for edits and autosave. \`write\` must also create a missing file. \`create\` on an existing path throws \`conflict\`.
+- Optional methods switch the UI on: \`create\` (New file, New folder), \`write\` (editing; without it the editors are read-only), \`move\` (rename, drag), \`copy\` (copy, paste, duplicate), \`delete\`, \`search\` (search box), \`upload\`, \`download\`, \`url\` (media and PDF streaming), \`stat\`, and \`watch\` (live updates; without it the workspace polls).`;
+const SAME_PAGE_LINK = /\[(`[^`]+`)\]\(#[^)]*\)/g;
+
+/**
+ * Splits a page into its front matter fields (`title`, `description`) and its body.
+ *
+ * @example
+ * const { title, body } = frontMatterOf('---\ntitle: S3 store\n---\n\nText.\n');
+ * console.log(title); // S3 store
+ */
+export function frontMatterOf(text) {
+  const match = FRONT_MATTER.exec(text);
+  if (!match) return { title: '', description: '', body: text };
+  const fields = Object.fromEntries(
+    match[1]
+      .split('\n')
+      .map((line) => [line.slice(0, line.indexOf(':')), line.slice(line.indexOf(':') + 1).trim()]),
+  );
+  return {
+    title: fields.title ?? '',
+    description: fields.description ?? '',
+    body: text.slice(match[0].length),
+  };
+}
+
+async function describePackage(root, folderName) {
+  const folder = path.join(root, 'packages', folderName);
+  const manifest = JSON.parse(await readFile(path.join(folder, 'package.json'), 'utf8'));
+  const llms = await readFile(path.join(folder, 'llms.txt'), 'utf8');
+  return { folderName, name: manifest.name, summary: SUMMARY_LINE.exec(llms)?.[1] ?? '' };
+}
+
+function pageLine(docsUrl, page, label = '') {
+  const { title, description } = frontMatterOf(page.text);
+  return `- [${label}${title}](${docsUrl}${page.url})${description ? `: ${description}` : ''}`;
+}
+
+function renderLlmsTxt(docsUrl, pages, packages) {
+  const byUrl = new Map(pages.map((page) => [page.url, page]));
+  const lines = [
+    '# File workspace',
+    '',
+    '> A React library that gives an app a file tree, search, tabs, upload and viewers over a directory on a server, with live updates when an agent changes files.',
+    '',
+  ];
+  lines.push('## Start here', '');
+  for (const url of QUICK_START_URLS) lines.push(pageLine(docsUrl, byUrl.get(url), 'Quick start: '));
+  lines.push(pageLine(docsUrl, byUrl.get(CODING_AGENTS_URL)));
+  lines.push('', '## Packages', '');
+  for (const { folderName, name, summary } of packages) {
+    lines.push(`- [${name}](${docsUrl}/api/${folderName}): ${summary}`);
+  }
+  lines.push('', '## Recipes', '');
+  for (const page of pages.filter((candidate) => candidate.url.startsWith(RECIPES_URL))) {
+    lines.push(pageLine(docsUrl, page));
+  }
+  lines.push('', '## Optional', '', `- [Every docs page as one file](${docsUrl}/llms-full.txt)`);
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Reads the files that a page's live `<Include>` tags embed, as fenced blocks. A file the `Include`
+ * component would refuse makes this throw, so a crafted tag cannot publish anything outside `examples/`.
+ *
+ * @example
+ * const sections = await embeddedFiles(process.cwd(), '<Include file="examples/recipes/src/theming.css" />');
+ */
+export async function embeddedFiles(root, body) {
+  const sections = [];
+  for (const file of includeFilesOf(body)) {
+    const code = (await readFile(await resolveIncludePath(root, file), 'utf8')).trimEnd();
+    sections.push(`Embedded file ${file}:\n\n\`\`\`\`${path.extname(file).slice(1)}\n${code}\n\`\`\`\``);
+  }
+  return sections;
+}
+
+/**
+ * Copies the sections for the adapter contract (`FileSystemAdapter`, `Entry`, the option types, `ChangeEvent`
+ * and the error kinds) out of the generated `@scope/core` API page, so an agent that reads only
+ * `llms-full.txt` has the exact signatures. Throws when the page or a section is missing: run
+ * `api-reference.mjs` first.
+ *
+ * @example
+ * const contract = await adapterContract(process.cwd());
+ */
+export async function adapterContract(root, corePage = CORE_API_PAGE) {
+  const page = await readFile(path.join(root, corePage), 'utf8').catch(() => {
+    throw new Error(`${corePage} is missing. Run node apps/docs/scripts/api-reference.mjs first.`);
+  });
+  const lines = page.split('\n');
+  const sections = ADAPTER_CONTRACT_TYPES.map((name) => {
+    const start = lines.findIndex((line) => line === `#### ${name}`);
+    if (start < 0) throw new Error(`${corePage} has no section for ${name}.`);
+    const length = lines.slice(start).findIndex((line, offset) => offset > 0 && line === '***');
+    const end = length < 0 ? lines.length : start + length;
+    return lines.slice(start, end).join('\n').replace(SAME_PAGE_LINK, '$1').trim();
+  });
+  const helpers = await coreHelpers(root, lines, corePage);
+  return `# The @scope/core adapter contract\n\n${CONTRACT_PREFACE}\n\nThe types below are copied from the API page for @scope/core.\n\n${sections.join('\n\n')}\n\n## Helpers exported by @scope/core\n\nUse these instead of building paths or errors by hand.\n\n${helpers}`;
+}
+
+async function coreHelpers(root, apiLines, corePage) {
+  const items = [];
+  for (const file of HELPER_SOURCES) {
+    const source = await readFile(path.join(root, 'packages', 'core', 'src', file), 'utf8');
+    for (const [, name] of source.matchAll(EXPORTED_FUNCTION)) {
+      const start = apiLines.findIndex((line) => line === `#### ${name}()`);
+      if (start < 0) throw new Error(`${corePage} has no section for ${name}().`);
+      const summary = apiLines.slice(start + 1).find((line) => line.trim() !== '' && !line.startsWith('>'));
+      items.push(`- \`${name}\`: ${summary.trim()}`);
+    }
+  }
+  return items.join('\n');
+}
+
+async function renderPage(root, docsUrl, page) {
+  const { title, body } = frontMatterOf(page.text);
+  const parts = [
+    `# ${title}`,
+    `Address: ${docsUrl}${page.url}`,
+    body.trim(),
+    ...(await embeddedFiles(root, body)),
+  ];
+  return parts.join('\n\n');
+}
+
+async function renderLlmsFullTxt(root, docsUrl, pages, packages, corePage) {
+  const intro = [
+    '# File workspace: all documentation pages',
+    `The API reference is not repeated here, except the @scope/core adapter contract at the end. Each package has its own page:\n\n${packages
+      .map(({ folderName, name }) => `- ${name}: ${docsUrl}/api/${folderName}`)
+      .join('\n')}`,
+  ];
+  const rendered = [];
+  for (const page of pages) rendered.push(await renderPage(root, docsUrl, page));
+  rendered.push(await adapterContract(root, corePage));
+  return `${[...intro, ...rendered].join('\n\n---\n\n')}\n`;
+}
+
+/**
+ * Builds the text of `llms.txt` (a curated map) and `llms-full.txt` (every docs page) from the pages under
+ * `content/docs`. The result depends only on the repository's files, so two builds are identical.
+ *
+ * `corePage` is the repository-relative path of the generated `@scope/core` API page that the adapter
+ * contract is copied from; tests point it at a small checked-in fixture.
+ *
+ * @example
+ * const { llmsTxt, llmsFullTxt } = await buildLlms(process.cwd());
+ */
+export async function buildLlms(root, corePage = CORE_API_PAGE) {
+  const docsUrl = await readDocsUrl(root);
+  const pages = await readPages(root);
+  const packages = [];
+  for (const folderName of PUBLIC_PACKAGES) packages.push(await describePackage(root, folderName));
+  return {
+    llmsTxt: renderLlmsTxt(docsUrl, pages, packages),
+    llmsFullTxt: await renderLlmsFullTxt(root, docsUrl, pages, packages, corePage),
+  };
+}
+
+/**
+ * Writes `public/llms.txt` and `public/llms-full.txt` for the site.
+ *
+ * @example
+ * await writeLlms(process.cwd());
+ */
+export async function writeLlms(root) {
+  const { llmsTxt, llmsFullTxt } = await buildLlms(root);
+  const publicFolder = path.join(root, 'apps', 'docs', 'public');
+  await mkdir(publicFolder, { recursive: true });
+  await writeFile(path.join(publicFolder, 'llms.txt'), llmsTxt);
+  await writeFile(path.join(publicFolder, 'llms-full.txt'), llmsFullTxt);
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
+  await writeLlms(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..'));
+}

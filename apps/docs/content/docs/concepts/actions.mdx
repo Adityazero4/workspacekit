@@ -1,0 +1,46 @@
+---
+title: Actions
+description: The context menu, the more-actions button and the keyboard shortcuts all render from one list of actions.
+---
+
+Built-in actions follow the adapter's capabilities, so a read-only adapter shows only the ones that still apply. Their ids are what `canPerform` receives:
+
+| Group     | Ids                                       |
+| --------- | ----------------------------------------- |
+| Open      | `open`                                    |
+| Create    | `newFile`, `newFolder`                    |
+| Edit      | `rename`, `duplicate`, `delete`           |
+| Clipboard | `cut`, `copy`, `paste`, `copyPath`        |
+| Transfer  | `download`, `uploadFiles`, `uploadFolder` |
+
+## Add your own
+
+An action is data: an `id`, a `label`, optionally an `icon`, a `group`, a `shortcut` and a `when(entry, context)` that decides whether it appears, and a `run(entry, context)`. The context gives you the file system, the tree and helpers such as `confirm`.
+
+```tsx
+import { createMemoryAdapter } from '@scope/core/memory';
+import { Workspace, type Action } from '@scope/workspace';
+import '@scope/workspace/styles.css';
+
+const adapter = createMemoryAdapter({ files: { 'README.md': '# Hello' } });
+
+const actions: Action[] = [
+  {
+    id: 'askAgent',
+    label: 'Ask the agent about this',
+    group: 'agent',
+    when: (entry) => entry.kind === 'file',
+    run: (entry) => {
+      console.log(`Ask about ${entry.path}`);
+    },
+  },
+];
+
+export function Files(): React.JSX.Element {
+  return <Workspace adapter={adapter} actions={actions} style={{ height: 480 }} />;
+}
+```
+
+Create the `actions` array once. Right-click a file below, or use its more-actions button, to run the action. `README.md` and `package.json` are protected by a [policy](/docs/concepts/policy).
+
+<ActionsDemo />

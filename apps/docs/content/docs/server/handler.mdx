@@ -1,0 +1,53 @@
+---
+title: The handler
+description: createFileHandler turns a store and an authorize callback into a function from Request to Response.
+---
+
+`createFileHandler({ store, authorize })` returns a handler that works in any server that speaks the Fetch API: Next.js route handlers, Hono, Bun or Deno. `nodeFsStore(root)` serves a directory and needs Node.js.
+
+```ts
+// app/api/files/[...path]/route.ts — Next.js; any Fetch-API server works the same way
+import { createFileHandler, nodeFsStore } from '@scope/server';
+
+const handler = createFileHandler({
+  store: nodeFsStore(process.env.AGENT_WORKSPACE_DIR!),
+  authorize: async (req, op, path) => isSignedIn(req), // required; no default-open
+});
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE };
+```
+
+The handler finds its route from the end of the URL path, so it works under any prefix. The client side is `httpAdapter('/api/files')` from `@scope/core/http`.
+
+## Run it without a framework
+
+The handler is a plain function, so it runs in a test or a script:
+
+```ts
+import { createFileHandler, nodeFsStore } from '@scope/server';
+
+const handler = createFileHandler({
+  store: nodeFsStore('/srv/workspace', { exclude: ['.git', 'node_modules'] }),
+  authorize: () => false,
+});
+
+export const response = await handler(new Request('http://localhost/api/files/list?path='));
+```
+
+`authorize` here denies everything. Replace it with your own check.
+
+## Options
+
+| Option                                | What it does                                                                                                                                                          |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authorize(request, operation, path)` | Required. A truthy result allows the request and a falsy one is a 403; return a boolean. `operation` is a key of the protocol's routes, such as `'list'` or `'write'` |
+| `readOnly`                            | Reject every mutating operation                                                                                                                                       |
+| `maxUploadBytes`, `maxWriteBytes`     | Size limits. Defaults are 1 GiB and 10 MiB                                                                                                                            |
+| `chunkSize`, `uploadTtlMs`            | Chunk size told to chunked-upload clients (8 MiB), and how long an idle upload session lives (1 hour)                                                                 |
+| `actor(request)`                      | The name of the principal making a request, `'user'` by default. A live-update stream marks a change as the watcher's own only when the actors match                  |
+| `watchHeartbeatMs`, `onError`         | The live-update ping interval (25 s), and a hook for unexpected failures, which answer with a generic 500                                                             |
+
+## Stores
+
+A `FileStore` is a small interface: `list`, `stat`, `read` (with an inclusive byte range), `write`, `create`, `move`, `copy` and `delete`, with optional `search` and `watch`. `nodeFsStore` implements it over a directory, including `watch` with Node's recursive `fs.watch`. For other backends see the [S3 recipe](/docs/recipes/s3). Without `watch`, clients poll.
+
+The complete route and page for Next.js are in the [server route recipe](/docs/recipes/server-route).

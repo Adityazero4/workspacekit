@@ -21,7 +21,7 @@ const REQUIRED_SETTINGS = {
   blockExoticSubdeps: (value) => value === true,
   strictDepBuilds: (value) => value === true,
   saveExact: (value) => value === true,
-  allowBuilds: (value) => isPlainObject(value) && Object.keys(value).length === 0,
+  allowBuilds: (value) => isPlainObject(value) && Object.values(value).every((allowed) => allowed === false),
   minimumReleaseAge: (value) => typeof value === 'number' && value >= MIN_RELEASE_AGE_MINUTES,
 };
 const EXCEPTION_KINDS = { 'release-age': 'minimumReleaseAgeExclude', trust: 'trustPolicyExclude' };
@@ -535,7 +535,8 @@ export function placeholderOwnerProblems(text) {
 
 /**
  * The required security settings that `pnpm-workspace.yaml` lacks or weakens. `settings` maps each setting
- * name to its value in the file; `allowBuilds` must be an empty object and `minimumReleaseAge` a number.
+ * name to its value in the file; `allowBuilds` may only refuse builds (every value `false`), and
+ * `minimumReleaseAge` must be a number.
  *
  * @example
  * settingProblems({ saveExact: true });

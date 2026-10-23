@@ -42,7 +42,8 @@ import { zipStream, type ZipEntry } from './zip';
  * The operation a request performs, as `authorize` sees it: a key of `ROUTES`.
  *
  * @example
- * const authorize = (req: Request, op: Operation): boolean => op === 'list' || op === 'read' || isAdmin(req);
+ * const authorize = async (req: Request, op: Operation): Promise<boolean> =>
+ *   isSignedIn(req) && (op === 'list' || op === 'read' || isAdmin(req));
  */
 export type Operation = keyof typeof ROUTES;
 
@@ -50,7 +51,11 @@ export type Operation = keyof typeof ROUTES;
  * Options for `createFileHandler`: the store, the per-path authorization callback, limits and hooks.
  *
  * @example
- * const options: FileHandlerOptions = { store: nodeFsStore(root), authorize: () => true, readOnly: true };
+ * const options: FileHandlerOptions = {
+ *   store: nodeFsStore(root),
+ *   authorize: async (req) => isSignedIn(req),
+ *   readOnly: true,
+ * };
  */
 export interface FileHandlerOptions {
   store: FileStore;
@@ -61,9 +66,10 @@ export interface FileHandlerOptions {
    * also ask once per descendant (any denial rejects the whole operation) and a directory `download` asks
    * once per file it would include (denied files are left out of the zip).
    *
-   * `list`, `search` and `stat` results are NOT filtered per entry: they reveal the names and metadata
-   * of everything under the start path. Principals scoped to part of the tree must be denied the
-   * `'list'` and `'search'` operations, or the hidden parts must be protected with the store's `exclude`.
+   * `list` and `search` results are NOT filtered per entry: they reveal the names and metadata of
+   * everything under the start path (`stat` is asked per path, so `authorize` can refuse it for a hidden
+   * path). Principals scoped to part of the tree must be denied `'list'`, `'search'` and `'watch'`, or the
+   * hidden parts must be protected with the store's `exclude`.
    */
   authorize(req: Request, op: Operation, path: string): boolean | Promise<boolean>;
   /** Reject every mutating operation with 403. */
@@ -785,7 +791,10 @@ class FileHandler {
  * zip64 support, so an archive too large for it is refused before the first byte.
  *
  * @example
- * const handler = createFileHandler({ store: nodeFsStore('/srv/workspace'), authorize: () => true });
+ * const handler = createFileHandler({
+ *   store: nodeFsStore('/srv/workspace'),
+ *   authorize: async (req) => isSignedIn(req),
+ * });
  * const response = await handler(new Request('http://localhost/api/files/list?path='));
  */
 export function createFileHandler(opts: FileHandlerOptions): (req: Request) => Promise<Response> {

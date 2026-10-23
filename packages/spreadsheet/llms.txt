@@ -1,0 +1,31 @@
+# @scope/spreadsheet
+
+> A spreadsheet renderer for the file workspace: .xlsx, .csv and .tsv in a virtualized grid with sheet tabs, search, frozen panes and merged cells.
+
+- API reference: https://docs.example.invalid/api/spreadsheet
+- Install: `npm install @scope/spreadsheet @scope/react react react-dom`
+
+## README sections
+
+- Install
+- Entry: `spreadsheetRenderer()` returns a renderer.
+- Standalone use: `SpreadsheetViewer` shows one file without a tree or a provider.
+- CSS: Import `@scope/react/styles.css` and `@scope/spreadsheet/styles.css` once each.
+- Options: `engines.xlsx`: loads SheetJS so `.xls`, `.xlsb` and `.ods` open too, as in `{ xlsx: () => import('xlsx') }`.
+- Vite: Set `worker: { format: 'es' }` (Vite 7 and 8): the reader worker is code-split, which Vite's default `iife` worker format rejects.
+
+## Entry points
+
+- `@scope/spreadsheet`
+- `@scope/spreadsheet/styles.css` (stylesheet)
+
+## Exports of `@scope/spreadsheet`
+
+- `SHEET_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `sheet-` prefix.
+- `SPREADSHEET_MAX_BYTES`: The largest spreadsheet the renderer and the standalone `SpreadsheetViewer` open: 50 MiB.
+- `SheetClassNames`: Extra class names per part of this package, merged after the part's own class.
+- `SheetPart`: A part name of this package.
+- `SpreadsheetRendererOptions`: Options of `spreadsheetRenderer` and `SpreadsheetViewer`.
+- `SpreadsheetViewer`: Shows a spreadsheet without a `FileSystemProvider`, read and drawn like the registry entry (see `spreadsheetRenderer`).
+- `SpreadsheetViewerProps`: Props of `SpreadsheetViewer`: the standalone viewer props, with this package's parts in `classNames`, and the renderer options (`engines`, `workerFactory`).
+- `spreadsheetRenderer`: Creates the registry entry for spreadsheets up to 50 MiB: `.xlsx` and `.xlsm` (read by our own bounded reader in a worker), `.csv` and `.tsv` (papaparse, in the same worker), and `.xls`, `.xlsb` and `.ods` through an injected SheetJS (`engines.xlsx`).

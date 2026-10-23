@@ -1,0 +1,33 @@
+# @scope/markdown
+
+> A Markdown renderer for the file workspace: an editable rendered view with a source mode, built on Lexical.
+
+- API reference: https://docs.example.invalid/api/markdown
+- Install: `npm install @scope/markdown @scope/code @scope/react react react-dom`
+
+## README sections
+
+- Install
+- Entry: `markdownRenderer()` returns a renderer.
+- Standalone use: `MarkdownEditor` shows one file without a tree or a provider.
+- CSS: Import `@scope/react/styles.css` and `@scope/markdown/styles.css` once each.
+- Options: `source`: the renderer that draws source mode.
+- Vite: No configuration is needed in a build or in the dev server.
+
+## Entry points
+
+- `@scope/markdown`
+- `@scope/markdown/styles.css` (stylesheet)
+
+## Exports of `@scope/markdown`
+
+- `MARKDOWN_MAX_BYTES`: The largest Markdown file the renderer reads: 10 MiB.
+- `MARKDOWN_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `md-` prefix.
+- `MarkdownClassNames`: Extra class names per part of this package, merged after the part's own class.
+- `MarkdownEditor`: A Markdown editor without a `FileSystemProvider`: the same WYSIWYG view as the registry entry (Lexical, loaded on first render), labelled "Contents of <fileName>" (or "File contents"), with the slash menu, the format toolbar (Alt+F10) and the Cmd/Ctrl+K link editor.
+- `MarkdownEditorProps`: Props of `MarkdownEditor`: a controlled `value`, with every standalone viewer prop except `src`.
+- `MarkdownMode`: The view modes of the Markdown renderer: the WYSIWYG `rendered` view (the default) and `source`.
+- `MarkdownPart`: A part name of this package.
+- `MarkdownRendererOptions`: Options of `markdownRenderer`.
+- `SourceEditorProps`: Props of the editor `MarkdownEditor` uses for source mode.
+- `markdownRenderer`: Creates the registry entry for Markdown files (`.md`, `.markdown`, `.mkd`, `.mdown`): an editable WYSIWYG view (Lexical, loaded when first shown) with a `source` mode.
