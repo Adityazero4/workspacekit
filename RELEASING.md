@@ -20,6 +20,10 @@ A security checklist for maintainers, to complete before the first publish and t
 - [ ] Before the first publish, remove every release-age exception, then run `pnpm install --frozen-lockfile`: it must pass with no exception left, which proves every locked version is older than 7 days.
 - [ ] Re-run `pnpm security:audit` (`pnpm audit --audit-level=moderate`) before the first publish. It needs the network, so it is not part of `pnpm check`.
 
+## Verification
+
+- [ ] `pnpm check:full` passes in CI: all three browsers and every perf budget. The local `pnpm check` runs Chromium only, two workers at a time, and no perf suites, so it stays light enough for a laptop; the full run is too heavy to share a machine with other work.
+
 ## Once the repository is on GitHub
 
 - [ ] Enable Dependabot alerts and Dependabot security updates.
