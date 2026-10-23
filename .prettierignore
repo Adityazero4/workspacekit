@@ -6,3 +6,5 @@ internal
 .superpowers
 pnpm-lock.yaml
 .playwright-mcp/
+THIRD_PARTY_NOTICES.md
+packages/markdown/test/fixtures

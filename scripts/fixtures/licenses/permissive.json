@@ -1,0 +1,46 @@
+{
+  "MIT": [
+    {
+      "name": "left-pad",
+      "versions": ["1.3.0"],
+      "paths": ["/repo/node_modules/.pnpm/left-pad@1.3.0/node_modules/left-pad"],
+      "license": "MIT",
+      "author": "azer",
+      "homepage": "https://github.com/stevemao/left-pad"
+    }
+  ],
+  "(MIT OR GPL-3.0-or-later)": [
+    {
+      "name": "jszip",
+      "versions": ["3.10.1"],
+      "paths": ["/repo/node_modules/.pnpm/jszip@3.10.1/node_modules/jszip"],
+      "license": "(MIT OR GPL-3.0-or-later)",
+      "author": "Stuart Knightley",
+      "homepage": "https://github.com/Stuk/jszip#readme"
+    }
+  ],
+  "MPL-2.0": [
+    {
+      "name": "mtx-decompressor",
+      "versions": ["1.0.0"],
+      "paths": ["/repo/node_modules/.pnpm/mtx-decompressor@1.0.0/node_modules/mtx-decompressor"],
+      "license": "MPL-2.0"
+    }
+  ],
+  "Unlicense": [
+    {
+      "name": "public-domain-thing",
+      "versions": ["2.0.0", "1.0.0"],
+      "paths": [],
+      "license": "Unlicense"
+    }
+  ],
+  "BSD-3-Clause": [
+    {
+      "name": "Zebra-upper",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "BSD-3-Clause"
+    }
+  ]
+}

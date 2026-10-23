@@ -1,0 +1,91 @@
+/* Default look of @scope/pptx. Everything lives in @layer fs, so any unlayered consumer CSS wins. Each slide
+   is drawn in the shadow root of its pptx-slide part, where these rules do not reach. */
+@layer fs {
+  [data-fs-part='pptx-viewer'] {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    font-family: var(--fs-font);
+    font-size: var(--fs-font-size);
+    color: var(--fs-fg);
+    background: var(--fs-bg);
+  }
+
+  [data-fs-part='pptx-toolbar'] {
+    display: flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--fs-border);
+  }
+
+  [data-fs-part='pptx-button'] {
+    padding: 2px 8px;
+    font: inherit;
+    color: var(--fs-fg);
+    background: transparent;
+    border: 1px solid var(--fs-border);
+    border-radius: var(--fs-radius);
+    cursor: pointer;
+  }
+
+  [data-fs-part='pptx-button']:hover {
+    background: var(--fs-bg-hover);
+  }
+
+  [data-fs-part='pptx-button']:focus-visible {
+    outline: 2px solid var(--fs-focus);
+    outline-offset: 1px;
+  }
+
+  [data-fs-part='pptx-zoom-level'] {
+    min-width: 4em;
+    color: var(--fs-muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-fs-part='pptx-slide-indicator'] {
+    margin-inline-start: auto;
+    color: var(--fs-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-fs-part='pptx-status'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  [data-fs-part='pptx-slide-error'] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    margin: 0;
+    padding: 16px;
+    color: var(--fs-muted);
+    text-align: center;
+  }
+
+  [data-fs-part='pptx-loading'],
+  [data-fs-part='pptx-error'] {
+    margin: 0;
+    padding: 24px 16px;
+    text-align: center;
+  }
+
+  [data-fs-part='pptx-loading'] {
+    color: var(--fs-muted);
+  }
+
+  [data-fs-part='pptx-error'] {
+    color: var(--fs-danger);
+  }
+}

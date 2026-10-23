@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "declaration": false, "isolatedDeclarations": false, "noEmit": true },
+  "include": ["../src", "../../spreadsheet/src/reader/fast-formula-parser.d.ts", "."]
+}

@@ -11,12 +11,14 @@ function parsedUrlOrNull(url: string): URL | null {
 }
 
 /**
- * The absolute form of an adapter-supplied URL when it is http, https or blob; `null` otherwise (such as
- * `javascript:` or `data:`), so the URL can never run script when it is downloaded or shown.
+ * The absolute form of `url` (an adapter's answer, a link inside a document) when it is http, https or
+ * blob; `null` otherwise (such as `javascript:` or `data:`), so the URL can never run script when it is
+ * followed, downloaded or shown.
  *
  * @example
- * ```ts
- * if (safeUrlOrNull(answer.url) === null) throw new FsError('invalid', 'unsafe URL');
+ * ```tsx
+ * const href = safeUrlOrNull(link.url);
+ * return href ? <a href={href} target="_blank" rel="noopener noreferrer">{link.text}</a> : link.text;
  * ```
  */
 export function safeUrlOrNull(url: string): string | null {

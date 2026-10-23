@@ -1,0 +1,237 @@
+/* Default look of @scope/spreadsheet. Everything lives in @layer fs, so any unlayered consumer CSS wins. */
+@layer fs {
+  [data-fs-part='sheet-grid-viewport'] {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    font-family: var(--fs-font);
+    font-size: var(--fs-font-size);
+    color: var(--fs-fg);
+    background: var(--fs-bg);
+    overscroll-behavior: contain;
+  }
+
+  [data-fs-part='sheet-grid'] {
+    position: relative;
+  }
+
+  [data-fs-part='sheet-grid-head'] {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+
+  [data-fs-part='sheet-row'] {
+    position: relative;
+    display: flex;
+  }
+
+  [data-fs-part='sheet-grid-body'] > [data-fs-part='sheet-row'] {
+    position: absolute;
+  }
+
+  [data-fs-part='sheet-corner'],
+  [data-fs-part='sheet-row-header'] {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    flex: none;
+    height: 100%;
+    box-sizing: border-box;
+    background: var(--fs-bg-hover);
+    border-right: 1px solid var(--fs-border);
+    border-bottom: 1px solid var(--fs-border);
+  }
+
+  [data-fs-part='sheet-row-header'] {
+    padding: 0 4px;
+    color: var(--fs-muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-fs-part='sheet-frozen'] {
+    position: sticky;
+    z-index: 2;
+    flex: none;
+    height: 100%;
+    background: var(--fs-bg);
+    box-shadow: 1px 0 0 var(--fs-border);
+  }
+
+  [data-fs-part='sheet-column-header'],
+  [data-fs-part='sheet-cell'] {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 0 4px;
+    overflow: hidden;
+    white-space: nowrap;
+    border-right: 1px solid var(--fs-border);
+    border-bottom: 1px solid var(--fs-border);
+  }
+
+  [data-fs-part='sheet-column-header'] {
+    color: var(--fs-muted);
+    text-align: center;
+    background: var(--fs-bg-hover);
+  }
+
+  [data-fs-part='sheet-cell'] {
+    background: var(--fs-bg);
+  }
+
+  [data-fs-part='sheet-cell'][aria-rowspan],
+  [data-fs-part='sheet-cell'][aria-colspan] {
+    z-index: 1;
+  }
+
+  [data-fs-part='sheet-cell'][data-selected] {
+    outline: 2px solid var(--fs-accent);
+    outline-offset: -2px;
+    z-index: 1;
+  }
+
+  [data-fs-part='sheet-cell']:focus-visible {
+    outline: 2px solid var(--fs-focus);
+    outline-offset: -2px;
+  }
+
+  [data-fs-part='sheet-grid-head'] [data-fs-part='sheet-row']:last-child {
+    box-shadow: 0 1px 0 var(--fs-border);
+  }
+
+  [data-fs-part='sheet-viewer'] {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    font-family: var(--fs-font);
+    font-size: var(--fs-font-size);
+    color: var(--fs-fg);
+    background: var(--fs-bg);
+  }
+
+  [data-fs-part='sheet-panel'] {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  [data-fs-part='sheet-toolbar'] {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--fs-border);
+  }
+
+  [data-fs-part='sheet-search'] {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  [data-fs-part='sheet-search-input'] {
+    padding: 2px 6px;
+    font: inherit;
+    color: var(--fs-fg);
+    background: var(--fs-bg);
+    border: 1px solid var(--fs-input-border);
+    border-radius: var(--fs-radius);
+  }
+
+  [data-fs-part='sheet-search-input']:focus-visible {
+    outline: 2px solid var(--fs-focus);
+    outline-offset: 1px;
+  }
+
+  [data-fs-part='sheet-search-status'],
+  [data-fs-part='sheet-selection'] {
+    color: var(--fs-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-fs-part='sheet-selection'] {
+    margin-inline-start: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-fs-part='sheet-notice'] {
+    flex: none;
+    margin: 0;
+    padding: 4px 8px;
+    color: var(--fs-muted);
+    border-bottom: 1px solid var(--fs-border);
+  }
+
+  [data-fs-part='sheet-tabs'] {
+    display: flex;
+    flex: none;
+    gap: 2px;
+    overflow-x: auto;
+    padding: 0 8px;
+    border-top: 1px solid var(--fs-border);
+  }
+
+  [data-fs-part='sheet-tab'] {
+    padding: 4px 12px;
+    font: inherit;
+    color: var(--fs-muted);
+    white-space: nowrap;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+  }
+
+  [data-fs-part='sheet-tab']:hover {
+    background: var(--fs-bg-hover);
+  }
+
+  [data-fs-part='sheet-tab'][data-selected] {
+    color: var(--fs-fg);
+    border-bottom-color: var(--fs-accent);
+  }
+
+  [data-fs-part='sheet-tab']:focus-visible {
+    outline: 2px solid var(--fs-focus);
+    outline-offset: -2px;
+  }
+
+  [data-fs-part='sheet-column-resizer'] {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 1;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  [data-fs-part='sheet-loading'],
+  [data-fs-part='sheet-empty'],
+  [data-fs-part='sheet-error'] {
+    margin: 0;
+    padding: 24px 16px;
+    text-align: center;
+  }
+
+  [data-fs-part='sheet-loading'],
+  [data-fs-part='sheet-empty'] {
+    color: var(--fs-muted);
+  }
+
+  [data-fs-part='sheet-error'] {
+    color: var(--fs-danger);
+  }
+}

@@ -1,15 +1,29 @@
 import { FsError, type DropEntry, type FileSystemAdapter } from '@scope/core';
 import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
-import axe from 'axe-core';
 import { afterEach, expect, test, vi } from 'vitest';
-import { commands, userEvent } from 'vitest/browser';
+import { commands } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import '../src/styles.css';
 import { useTabs } from '../src/tabs/useTabs';
 import { isMac } from '../src/tree/keyboard';
 import { Workspace } from '../src/workspace/Workspace';
 import { tiffBytes } from './fixtures/tiff';
-import { cssTransitionsToSettle } from './support/cssTransitionsToSettle';
+import {
+  activeTab,
+  activeTabName,
+  expandFocusedRow,
+  expectNoAxeViolations,
+  expectNoAxeViolationsInEitherColorScheme,
+  focusedRowName,
+  goToRow,
+  isTreeRow,
+  press,
+  rowNamed,
+  rowNames,
+  tabUntil,
+  THEMES,
+  TO_THE_END_OF_THE_TEXT,
+} from './support/keyboardOnly';
 
 const FILES = {
   'README.md': '# Workspace',
@@ -25,8 +39,6 @@ const FAILING_LIST = 'flaky/deeper';
 const FAILING_MOVE = 'README.md';
 const MOD = isMac() ? 'Meta' : 'Control';
 const withMod = (key: string): string => `{${MOD}>}${key}{/${MOD}}`;
-const THEMES = ['light', 'dark'] as const;
-const IS_WEBKIT = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Firefox/.test(navigator.userAgent);
 
 interface Session {
   adapter: MemoryAdapter;
@@ -104,13 +116,6 @@ afterEach(async () => {
 });
 
 const workspace = (): HTMLElement => document.querySelector<HTMLElement>('[data-fs-part=workspace]')!;
-const rows = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[role=treeitem]')];
-const labelOf = (row: Element): string | null | undefined =>
-  row.querySelector('[data-fs-part=tree-row-label]')?.textContent;
-const rowNames = (): Array<string | null | undefined> => rows().map(labelOf);
-const rowNamed = (name: string): HTMLElement | undefined => rows().find((row) => labelOf(row) === name);
-const focusedRowName = (): string | null | undefined =>
-  document.activeElement?.getAttribute('role') === 'treeitem' ? labelOf(document.activeElement) : undefined;
 const dialog = (): HTMLElement | null =>
   document.querySelector<HTMLElement>('[role=dialog], [role=alertdialog]');
 const dialogTitle = (): string | null | undefined =>
@@ -120,53 +125,8 @@ const tabNames = (): Array<string | null | undefined> =>
   [...document.querySelectorAll('[role=tab]')].map(
     (tab) => tab.querySelector('[data-fs-part=tab-label]')?.textContent,
   );
-const activeTab = (): HTMLElement | undefined =>
-  [...document.querySelectorAll<HTMLElement>('[role=tab]')].find(
-    (tab) => tab.getAttribute('aria-selected') === 'true',
-  );
-const activeTabName = (): string | null | undefined =>
-  activeTab()?.querySelector('[data-fs-part=tab-label]')?.textContent;
 const exists = async (adapter: MemoryAdapter, path: string): Promise<boolean> =>
   (await adapter.stat!(path)) !== null;
-const press = (keys: string): Promise<void> => userEvent.keyboard(keys);
-
-function tabKeys(direction: 'forwards' | 'backwards'): string {
-  const modifiers = [...(IS_WEBKIT ? ['Alt'] : []), ...(direction === 'backwards' ? ['Shift'] : [])];
-  return `${modifiers.map((key) => `{${key}>}`).join('')}{Tab}${modifiers
-    .map((key) => `{/${key}}`)
-    .reverse()
-    .join('')}`;
-}
-
-async function tabUntil(
-  reached: (element: Element) => boolean,
-  what: string,
-  direction: 'forwards' | 'backwards' = 'forwards',
-): Promise<void> {
-  for (let presses = 0; presses < 40; presses++) {
-    if (document.activeElement && reached(document.activeElement)) return;
-    await press(tabKeys(direction));
-  }
-  throw new Error(
-    `Tab never reached ${what}; focus is on ${document.activeElement?.outerHTML.slice(0, 120)}`,
-  );
-}
-
-const isTreeRow = (element: Element): boolean => element.getAttribute('role') === 'treeitem';
-
-async function goToRow(name: string): Promise<void> {
-  if (!isTreeRow(document.activeElement!)) await tabUntil(isTreeRow, 'the tree');
-  await press('{Home}');
-  for (let presses = 0; presses < 40 && focusedRowName() !== name; presses++) await press('{ArrowDown}');
-  expect(focusedRowName(), `arrowing down to "${name}"`).toBe(name);
-}
-
-async function expandFocusedRow(): Promise<void> {
-  const row = document.activeElement!;
-  await press('{ArrowRight}');
-  await expect.poll(() => row.getAttribute('aria-expanded')).toBe('true');
-}
-
 async function openMenuAndPick(label: string, beforePicking?: () => Promise<void>): Promise<void> {
   await press('{Shift>}{F10}{/Shift}');
   await expect.poll(menu).not.toBeNull();
@@ -182,25 +142,6 @@ async function openMenuAndPick(label: string, beforePicking?: () => Promise<void
 
 async function focusDialogButton(text: string): Promise<void> {
   await tabUntil((element) => element.tagName === 'BUTTON' && element.textContent === text, `"${text}"`);
-}
-
-async function expectNoAxeViolations(element: HTMLElement, state: string): Promise<void> {
-  const results = await axe.run(element);
-  const described = results.violations.map(
-    (violation) =>
-      `${state}: ${violation.id}: ${violation.help} (${violation.nodes.map((node) => node.target).join(', ')})`,
-  );
-  expect.soft(described).toEqual([]);
-}
-
-async function expectNoAxeViolationsInEitherColorScheme(element: HTMLElement, state: string): Promise<void> {
-  for (const colorScheme of THEMES) {
-    await commands.emulateMedia({ colorScheme });
-    await expect.poll(() => matchMedia('(prefers-color-scheme: dark)').matches).toBe(colorScheme === 'dark');
-    await cssTransitionsToSettle();
-    await expectNoAxeViolations(element, `${colorScheme} ${state}`);
-  }
-  await commands.emulateMedia({ colorScheme: null });
 }
 
 test('create a file and a folder, rename after a failed write, delete: keyboard only, through the menu and the dialogs', async () => {
@@ -503,7 +444,6 @@ test.each(THEMES)(
 const AFTER_AN_AUTOSAVE = { timeout: 4000 };
 const ONE_POLLING_INTERVAL_AND_MARGIN = { timeout: 8000 };
 const LOADING_THE_TIFF_CODE = { timeout: 5000 };
-const TO_THE_END_OF_THE_TEXT = isMac() ? '{Meta>}{ArrowDown}{/Meta}' : '{Control>}{End}{/Control}';
 const TIFF_PAGES = Array.from({ length: 6 }, () => ({ width: 200, height: 300 }));
 
 async function pngBytes(color: string): Promise<Uint8Array> {

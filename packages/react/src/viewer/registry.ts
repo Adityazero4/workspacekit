@@ -12,8 +12,7 @@ export type { ViewerError, ViewerErrorKind } from './errors';
  *
  * @example
  * ```ts
- * const info: FileInfo = fileInfo({ path: 'a/Notes.MD', name: 'Notes.MD', kind: 'file' });
- * info.extension; // 'md'
+ * const isMarkdown = (file: FileInfo): boolean => file.extension === 'md' || file.basename === 'readme';
  * ```
  */
 export interface FileInfo extends Entry {

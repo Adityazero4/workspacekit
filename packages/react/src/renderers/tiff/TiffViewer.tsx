@@ -77,6 +77,7 @@ interface TiffPageProps {
 }
 
 function PageMessage(props: { error: ViewerError; classNames: ClassNames | undefined }): React.JSX.Element {
+  'use no memo';
   return <p {...partProps('tiff-page-message', props.classNames)}>{props.error.message}</p>;
 }
 

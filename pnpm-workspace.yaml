@@ -1,2 +1,29 @@
 packages:
   - 'packages/*'
+
+ignoredOptionalDependencies:
+  - '@napi-rs/canvas'
+
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+strictDepBuilds: true
+allowBuilds: {}
+saveExact: true
+
+minimumReleaseAgeExclude:
+  - '@aiden0z/pptx-renderer@1.4.0'
+  - '@asamuzakjp/css-color@7.1.7'
+  - '@asamuzakjp/dom-selector@10.0.4'
+  - '@codemirror/autocomplete@6.20.4'
+  - '@codemirror/view@6.43.15'
+  - '@lezer/markdown@1.8.1'
+  - 'electron-to-chromium@1.5.459'
+  - 'lilconfig@3.1.4'
+  - 'numfmt@4.1.0'
+  - 'postcss-selector-parser@7.1.7'
+  - 'postcss@8.5.31'
+
+trustPolicyExclude:
+  - 'semver@6.3.1'
+  - 'undici-types@6.21.0'

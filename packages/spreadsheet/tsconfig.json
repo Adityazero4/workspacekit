@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": true,
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "skipLibCheck": true,
+    "paths": {
+      "@scope/core": ["../core/src/index.ts"],
+      "@scope/core/memory": ["../core/src/memory/index.ts"],
+      "@scope/react": ["../react/src/index.ts"],
+      "@scope/react/renderers": ["../react/src/renderers/index.ts"],
+      "@scope/react/renderer-kit": ["../react/src/renderer-kit/index.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}

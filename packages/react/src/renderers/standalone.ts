@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, type CSSProperties } from 'react';
-import type { ClassNames } from '../parts';
+import type { ClassNames, Part } from '../parts';
 import { viewerError, type ViewerError } from '../viewer/errors';
 import { mediaUrlOfBlob, safeUrlOrNull } from './safeUrls';
 import { useLatest } from './useLatest';
@@ -8,18 +8,19 @@ import { useLatest } from './useLatest';
 /**
  * Props every standalone renderer takes. `src` is a URL (fetched by the renderer) or the file's bytes, read
  * locally. `theme` pins the color scheme (`data-theme` on the root); `'system'` (the default) follows the
- * OS. No `FileSystemProvider` is needed.
+ * OS. No `FileSystemProvider` is needed. A renderer package passes its own part union as `P`, so
+ * `classNames` accepts exactly its parts.
  *
  * @example
  * ```tsx
  * const props: StandaloneViewerProps = { src: file, fileName: file.name, theme: 'dark' };
  * ```
  */
-export interface StandaloneViewerProps {
+export interface StandaloneViewerProps<P extends string = Part> {
   src: string | Blob | ArrayBuffer | Uint8Array;
   fileName?: string;
   className?: string;
-  classNames?: ClassNames;
+  classNames?: ClassNames<P>;
   style?: CSSProperties;
   theme?: 'light' | 'dark' | 'system';
   onError?: (error: ViewerError) => void;
@@ -53,7 +54,8 @@ export type StandaloneText = StandaloneFile<{ text: string; byteSize: number }>;
  *
  * @example
  * ```ts
- * const { file, isLoadingNewSource }: StandaloneSource = useStandaloneText(src, onError);
+ * const { file, isLoadingNewSource }: StandaloneSource<{ data: ArrayBuffer }> =
+ *   useStandaloneBytes(props.src, props.onError);
  * ```
  */
 export interface StandaloneSource<Ready = { text: string; byteSize: number }> {
@@ -78,41 +80,88 @@ export function themeAttribute(theme: StandaloneViewerProps['theme']): 'light' |
   return theme === 'light' || theme === 'dark' ? theme : undefined;
 }
 
+class LargerThanMaxBytes extends Error {}
+
+function refuseIfLargerThan(maxBytes: number, byteSize: number): void {
+  if (byteSize > maxBytes) {
+    throw new LargerThanMaxBytes(`${byteSize} bytes is over the ${maxBytes}-byte limit`);
+  }
+}
+
+async function bodyWithin(response: Response, maxBytes: number): Promise<ArrayBuffer> {
+  refuseIfLargerThan(maxBytes, Number(response.headers.get('content-length')));
+  const reader = (response.body ?? new Blob().stream()).getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  for (let read = await reader.read(); !read.done; read = await reader.read()) {
+    byteLength += read.value.byteLength;
+    if (byteLength > maxBytes) await reader.cancel().catch(() => undefined);
+    refuseIfLargerThan(maxBytes, byteLength);
+    chunks.push(read.value);
+  }
+  const body = new Uint8Array(byteLength);
+  for (let offset = 0, chunk = chunks.shift(); chunk; offset += chunk.byteLength, chunk = chunks.shift()) {
+    body.set(chunk, offset);
+  }
+  return body.buffer;
+}
+
 async function bytesOf(
   src: StandaloneViewerProps['src'],
   signal: AbortSignal,
+  maxBytes: number,
 ): Promise<ArrayBuffer | Uint8Array> {
   if (typeof src === 'string') {
     const response = await fetch(src, { signal });
     if (!response.ok) throw new Error(`GET ${src} answered ${response.status} ${response.statusText}`);
-    return response.arrayBuffer();
+    return bodyWithin(response, maxBytes);
   }
+  refuseIfLargerThan(maxBytes, src instanceof Blob ? src.size : src.byteLength);
   return src instanceof Blob ? src.arrayBuffer() : src;
+}
+
+const errorOfLoad = (thrown: unknown): ViewerError =>
+  thrown instanceof LargerThanMaxBytes ? viewerError('too_large', thrown) : viewerError('load_error', thrown);
+
+/**
+ * Options of `useStandaloneText` and `useStandaloneBytes`. `maxBytes` refuses a larger file as `too_large`:
+ * bytes and blobs are checked before they are read; a URL is checked by its `Content-Length` before its
+ * body is read, then by the bytes received as they arrive, so reading stops (and the body is cancelled) as
+ * soon as it passes `maxBytes`, whatever the header said.
+ *
+ * @example
+ * ```ts
+ * const options: StandaloneLoadOptions = { maxBytes: 10 * 1024 * 1024 };
+ * ```
+ */
+export interface StandaloneLoadOptions {
+  maxBytes?: number;
 }
 
 function useStandaloneFile<Ready>(
   src: StandaloneViewerProps['src'],
   onError: StandaloneViewerProps['onError'],
   readyFileOf: (bytes: ArrayBuffer | Uint8Array) => Ready,
+  maxBytes = Number.POSITIVE_INFINITY,
 ): StandaloneSource<Ready> {
   const [loaded, setLoaded] = useState<LoadedSource<Ready>>({ src: undefined, file: { status: 'loading' } });
   const reportError = useLatest(onError);
   useEffect(() => {
     const controller = new AbortController();
-    bytesOf(src, controller.signal).then(
+    bytesOf(src, controller.signal, maxBytes).then(
       (bytes) => {
         if (controller.signal.aborted) return;
         setLoaded({ src, file: { status: 'ready', ...readyFileOf(bytes) } });
       },
       (thrown: unknown) => {
         if (controller.signal.aborted) return;
-        const error = viewerError('load_error', thrown);
+        const error = errorOfLoad(thrown);
         setLoaded({ src, file: { status: 'error', error } });
         reportError.current?.(error);
       },
     );
     return () => controller.abort();
-  }, [src, reportError, readyFileOf]);
+  }, [src, reportError, readyFileOf, maxBytes]);
   return {
     file: loaded.file,
     isLoadingNewSource: loaded.src !== undefined && loaded.src !== src,
@@ -132,7 +181,8 @@ const ownArrayBuffer = (bytes: ArrayBuffer | Uint8Array): { data: ArrayBuffer } 
  * Loads a standalone renderer's `src` as UTF-8 text: fetches a URL (aborted when `src` changes or on
  * unmount) or decodes the given bytes. While a new `src` loads, the previous file is still returned, with
  * `isLoadingNewSource`, so a new `src` object with the same content (such as an inline `new Blob(…)`)
- * changes nothing on screen. A failure replaces the file with `load_error` and is passed to `onError`.
+ * changes nothing on screen. A failure replaces the file with `load_error` (`too_large` past
+ * `options.maxBytes`) and is passed to `onError`.
  *
  * @example
  * ```tsx
@@ -143,13 +193,16 @@ const ownArrayBuffer = (bytes: ArrayBuffer | Uint8Array): { data: ArrayBuffer } 
 export function useStandaloneText(
   src: StandaloneViewerProps['src'],
   onError: StandaloneViewerProps['onError'],
+  options?: StandaloneLoadOptions,
 ): StandaloneSource {
-  return useStandaloneFile(src, onError, decodedText);
+  return useStandaloneFile(src, onError, decodedText, options?.maxBytes);
 }
 
 /**
  * Loads a standalone renderer's `src` as an `ArrayBuffer`, like `useStandaloneText` but without decoding: a
- * `Uint8Array` is copied into a buffer of its own, an `ArrayBuffer` is used as given.
+ * `Uint8Array` is copied into a buffer of its own, an `ArrayBuffer` is used as given. With
+ * `options.maxBytes`, a larger file is `too_large` and is not read (a URL whose size is unknown is read only
+ * until it passes `maxBytes`).
  *
  * @example
  * ```tsx
@@ -160,8 +213,9 @@ export function useStandaloneText(
 export function useStandaloneBytes(
   src: StandaloneViewerProps['src'],
   onError: StandaloneViewerProps['onError'],
+  options?: StandaloneLoadOptions,
 ): StandaloneSource<{ data: ArrayBuffer }> {
-  return useStandaloneFile(src, onError, ownArrayBuffer);
+  return useStandaloneFile(src, onError, ownArrayBuffer, options?.maxBytes);
 }
 
 /**

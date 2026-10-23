@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import '../src/styles.css';
 import { VirtualPages } from '../src/renderers/pages/VirtualPages';
 import { TiffViewer } from '../src/renderers/tiff/TiffViewer';
+import type { Renderer } from '../src/viewer/registry';
 import type { WorkspaceController } from '../src/workspace/useWorkspace';
 import { Workspace } from '../src/workspace/Workspace';
 import { tiffBytes } from '../test/fixtures/tiff';
@@ -494,16 +495,11 @@ export interface PagesScroll {
   mostPagesMountedBeyondTheVisible: number;
 }
 
-export async function scrollVirtualPagesEndToEnd(): Promise<PagesScroll> {
-  const mounted = mountElement(
-    <VirtualPages
-      pageCount={PAGE_COUNT}
-      estimatePageSize={() => SCROLLED_PAGE_SIZE}
-      renderPage={({ index }) => <p>Page {index + 1}</p>}
-      overscan={PAGES_OVERSCAN}
-      aria-label={`${PAGE_COUNT} pages`}
-    />,
-  );
+export async function scrollPagesEndToEnd(
+  viewer: ReactNode,
+  isPageShown: (page: Element) => boolean = () => true,
+): Promise<PagesScroll> {
+  const mounted = mountElement(viewer);
   try {
     await waitUntil(mounted.container, () => mounted.container.querySelector(PAGE) !== null);
     const viewport = mounted.container.querySelector<HTMLElement>('[data-fs-part=pages-viewport]')!;
@@ -511,6 +507,10 @@ export async function scrollVirtualPagesEndToEnd(): Promise<PagesScroll> {
     const frames = await framesDuring(() =>
       scrollViewportToTheEnd(viewport, async () => {
         await nextFrame();
+        await framesUntil(() => {
+          const { visible } = pagesOnScreen(viewport);
+          return visible.length > 0 && visible.every(isPageShown);
+        }, 'drawing the visible pages');
         const { mounted: pages, visible } = pagesOnScreen(viewport);
         mostPagesMountedBeyondTheVisible = Math.max(
           mostPagesMountedBeyondTheVisible,
@@ -524,20 +524,29 @@ export async function scrollVirtualPagesEndToEnd(): Promise<PagesScroll> {
   }
 }
 
+export const scrollVirtualPagesEndToEnd = (): Promise<PagesScroll> =>
+  scrollPagesEndToEnd(
+    <VirtualPages
+      pageCount={PAGE_COUNT}
+      estimatePageSize={() => SCROLLED_PAGE_SIZE}
+      renderPage={({ index }) => <p>Page {index + 1}</p>}
+      overscan={PAGES_OVERSCAN}
+      aria-label={`${PAGE_COUNT} pages`}
+    />,
+  );
+
 export async function settledHeapMb(): Promise<number> {
   await mainThreadQuiet();
   collectGarbage();
   return usedHeapMb();
 }
 
-const currentTiffPage = (container: HTMLElement): number =>
+const pageNumberIn = (container: HTMLElement, indicatorPart: string): number =>
   Number(
-    /^Page (\d+)/.exec(
-      container.querySelector('[data-fs-part=tiff-page-indicator]')?.textContent ?? '',
-    )?.[1] ?? 0,
+    /^\D*(\d+)/.exec(container.querySelector(`[data-fs-part=${indicatorPart}]`)?.textContent ?? '')?.[1] ?? 0,
   );
 
-const isShown = (page: Element): boolean => {
+const isTiffPageShown = (page: Element): boolean => {
   const image = page.querySelector('img');
   if (image) return image.complete && image.naturalWidth > 0;
   return page.querySelector('[data-fs-part=tiff-page-message]') !== null;
@@ -545,42 +554,59 @@ const isShown = (page: Element): boolean => {
 
 export const manyPageTiff = (): ArrayBuffer => tiffBytes(Array.from({ length: PAGE_COUNT }, () => TIFF_PAGE));
 
-export async function tiffHeapWhileScrolling(
-  data: ArrayBuffer,
-): Promise<{ atTheCheckpointMb: number; atTheEndMb: number }> {
-  const mounted = mountElement(<TiffViewer src={data} fileName={`${PAGE_COUNT} pages.tiff`} />);
+export interface PagedViewer {
+  element: ReactNode;
+  checkpointPage: number;
+  isPageShown: (page: Element) => boolean;
+  pageIndicatorPart: string;
+  lastPageSelector: string;
+}
+
+export interface HeapWhileScrolling {
+  atTheCheckpointMb: number;
+  atTheEndMb: number;
+}
+
+export async function heapWhileScrollingPages(viewer: PagedViewer): Promise<HeapWhileScrolling> {
+  const mounted = mountElement(viewer.element);
   try {
     await waitUntil(mounted.container, () => mounted.container.querySelector(PAGE) !== null);
     const viewport = mounted.container.querySelector<HTMLElement>('[data-fs-part=pages-viewport]')!;
+    const currentPage = (): number => pageNumberIn(mounted.container, viewer.pageIndicatorPart);
     const visiblePagesShown = async (): Promise<void> => {
       await nextFrame();
       await framesUntil(() => {
         const { visible } = pagesOnScreen(viewport);
-        return visible.length > 0 && visible.every(isShown);
-      }, 'decoding the visible pages');
+        return visible.length > 0 && visible.every(viewer.isPageShown);
+      }, 'drawing the visible pages');
     };
     await visiblePagesShown();
     let atTheCheckpointMb: number | undefined;
     await scrollViewportToTheEnd(viewport, async () => {
       await visiblePagesShown();
-      if (
-        atTheCheckpointMb === undefined &&
-        currentTiffPage(mounted.container) >= TIFF_HEAP_CHECKPOINT_PAGE
-      ) {
+      if (atTheCheckpointMb === undefined && currentPage() >= viewer.checkpointPage) {
         atTheCheckpointMb = await settledHeapMb();
       }
     });
-    if (!mounted.container.querySelector(`img[alt^="Page ${PAGE_COUNT} of"]`)) {
-      const shown = [...mounted.container.querySelectorAll('img')].map((image) => image.alt).join(', ');
+    if (atTheCheckpointMb === undefined || !mounted.container.querySelector(viewer.lastPageSelector)) {
       throw new Error(
-        `the scroll stopped at ${viewport.scrollTop} of ${viewport.scrollHeight} px without the last page; shown: ${shown}`,
+        `the scroll stopped at page ${currentPage()} (${viewport.scrollTop} of ${viewport.scrollHeight} px) without the last page`,
       );
     }
-    return { atTheCheckpointMb: atTheCheckpointMb!, atTheEndMb: await settledHeapMb() };
+    return { atTheCheckpointMb, atTheEndMb: await settledHeapMb() };
   } finally {
     mounted.unmount();
   }
 }
+
+export const tiffHeapWhileScrolling = (data: ArrayBuffer): Promise<HeapWhileScrolling> =>
+  heapWhileScrollingPages({
+    element: <TiffViewer src={data} fileName={`${PAGE_COUNT} pages.tiff`} />,
+    checkpointPage: TIFF_HEAP_CHECKPOINT_PAGE,
+    isPageShown: isTiffPageShown,
+    pageIndicatorPart: 'tiff-page-indicator',
+    lastPageSelector: `img[alt^="Page ${PAGE_COUNT} of"]`,
+  });
 
 async function pngBytes(): Promise<Uint8Array> {
   const canvas = new OffscreenCanvas(64, 48);
@@ -648,9 +674,14 @@ export interface ControlledWorkspace extends MountedElement {
   controller: WorkspaceController;
 }
 
-export async function mountControlledWorkspace(adapter: FileSystemAdapter): Promise<ControlledWorkspace> {
+export async function mountControlledWorkspace(
+  adapter: FileSystemAdapter,
+  renderers?: Renderer[],
+): Promise<ControlledWorkspace> {
   const ref = createRef<WorkspaceController>();
-  const mounted = mountElement(<Workspace ref={ref} adapter={adapter} style={{ width: 900, height: 600 }} />);
+  const mounted = mountElement(
+    <Workspace ref={ref} adapter={adapter} renderers={renderers} style={{ width: 900, height: 600 }} />,
+  );
   await waitUntil(mounted.container, () => mounted.container.querySelector(ROW) !== null);
   return { ...mounted, controller: ref.current! };
 }
@@ -658,7 +689,7 @@ export async function mountControlledWorkspace(adapter: FileSystemAdapter): Prom
 const activeViewer = (container: HTMLElement): HTMLElement | null =>
   container.querySelector<HTMLElement>('[role=tabpanel]:not([hidden]) [data-fs-part=viewer]');
 
-const showsItsFile = (viewer: HTMLElement | null): boolean =>
+export const showsItsFile = (viewer: HTMLElement | null): boolean =>
   viewer !== null &&
   !viewer.hasAttribute('data-status') &&
   viewer.querySelector('[data-fs-part=viewer-loading]') === null &&
@@ -669,11 +700,12 @@ const tabCount = (container: HTMLElement): number => container.querySelectorAll(
 export async function openAndCloseEach(
   workspace: ControlledWorkspace,
   paths: readonly string[],
+  isShown: (viewer: HTMLElement | null) => boolean = showsItsFile,
 ): Promise<void> {
   const { container, controller } = workspace;
   for (const path of paths) {
     controller.open(path, 'pin');
-    await waitUntil(container, () => tabCount(container) > 0 && showsItsFile(activeViewer(container)));
+    await waitUntil(container, () => tabCount(container) > 0 && isShown(activeViewer(container)));
   }
   while (tabCount(container) > 0) {
     const tabsBefore = tabCount(container);

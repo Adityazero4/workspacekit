@@ -1,37 +1,24 @@
 // @vitest-environment node
 import { readdirSync, readFileSync } from 'node:fs';
 import { test, expect } from 'vitest';
+import { assertNoNestedRules } from '../../../scripts/css-nesting.mjs';
+import { filesReachableFrom, importsOf, modulesIn } from '../../../scripts/import-graph.mjs';
 
 // Runs against the output of `pnpm --filter @scope/react build`.
 const DIST = new URL('../dist/', import.meta.url);
 const distText = (file: string): string => readFileSync(new URL(file, DIST), 'utf8');
-const IMPORT_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|^import\s*)["']([^"']+)["']/gm;
-const DYNAMIC_IMPORT = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
-
-const COMMENT_LINE = /^\s*(?:\/\/|\/?\*).*$/gm;
-const specifiersOf = (code: string, pattern: RegExp): string[] =>
-  [...code.replace(COMMENT_LINE, '').matchAll(pattern)].map((match) => match[1]!);
 const resolveInDist = (fromFile: string, specifier: string): string =>
   new URL(specifier, new URL(fromFile, DIST)).href.slice(DIST.href.length);
-const modulesIn = (code: string): string[] =>
-  [...code.matchAll(/^\/\/#region (\S+)$/gm)].map((match) => match[1]!);
-
-function filesReachableFrom(entry: string): string[] {
-  const reached = new Set<string>();
-  const visit = (file: string): void => {
-    if (reached.has(file)) return;
-    reached.add(file);
-    for (const specifier of specifiersOf(distText(file), IMPORT_SPECIFIER)) {
-      if (specifier.startsWith('.')) visit(resolveInDist(file, specifier));
-    }
-  };
-  visit(entry);
-  return [...reached];
-}
+const allImportsOf = (file: string): string[] => {
+  const imports = importsOf(distText(file));
+  return [...imports.static, ...imports.dynamic];
+};
+const chunksLoadedBy = (entry: string): string[] =>
+  filesReachableFrom(DIST, entry, { throughDynamicImports: true });
 
 const dist = (): string => distText('index.js');
 const publicTypes = (): string => distText('index.d.ts');
-const mainBundle = (): string => filesReachableFrom('index.js').map(distText).join('\n');
+const mainBundle = (): string => chunksLoadedBy('index.js').map(distText).join('\n');
 
 const NEXT_TOP_LEVEL_LINE = /\n(?=[^\s})\]])/g;
 
@@ -146,13 +133,15 @@ test.each([
   expect(publicTypes()).not.toMatch(new RegExp(`\\b${name}\\b`));
 });
 
-const MODULES_THE_RENDERERS_SUBPATH_MAY_CONTAIN = [
+const MODULES_A_PROVIDER_FREE_SUBPATH_MAY_CONTAIN = [
   /^src\/renderers\/(?!directory\/)/,
+  /^src\/renderer-kit\//,
   /^src\/cx\.ts$/,
   /^src\/viewer\/errors\.ts$/,
+  /^src\/viewer\/registry\.ts$/,
   /^\\0rolldown\/runtime\.js$/,
 ];
-const PACKAGES_THE_RENDERERS_SUBPATH_MAY_IMPORT = new Set([
+const PACKAGES_A_PROVIDER_FREE_SUBPATH_MAY_IMPORT = new Set([
   'react',
   'react/jsx-runtime',
   'react/compiler-runtime',
@@ -172,23 +161,21 @@ const LIGHT_RENDERER_MODULES = [
 ];
 
 test('renderers subpath pulls in no tree, provider or Radix code; each renderer is its own chunk', () => {
-  const subpathFiles = filesReachableFrom('renderers/index.js');
+  const subpathFiles = chunksLoadedBy('renderers/index.js');
   expect(subpathFiles).not.toContain('index.js');
   const modules = subpathFiles.flatMap((file) => modulesIn(distText(file)));
   expect(modules).toContain('src/renderers/text/TextViewer.tsx');
   expect(
     modules.filter(
-      (module) => !MODULES_THE_RENDERERS_SUBPATH_MAY_CONTAIN.some((allowed) => allowed.test(module)),
+      (module) => !MODULES_A_PROVIDER_FREE_SUBPATH_MAY_CONTAIN.some((allowed) => allowed.test(module)),
     ),
   ).toEqual([]);
-  const packages = subpathFiles.flatMap((file) =>
-    specifiersOf(distText(file), IMPORT_SPECIFIER).filter((specifier) => !specifier.startsWith('.')),
-  );
-  expect(packages.filter((specifier) => !PACKAGES_THE_RENDERERS_SUBPATH_MAY_IMPORT.has(specifier))).toEqual(
+  const packages = subpathFiles.flatMap(allImportsOf).filter((specifier) => !specifier.startsWith('.'));
+  expect(packages.filter((specifier) => !PACKAGES_A_PROVIDER_FREE_SUBPATH_MAY_IMPORT.has(specifier))).toEqual(
     [],
   );
 
-  const rendererChunks = specifiersOf(distText('index.js'), DYNAMIC_IMPORT).map((specifier) =>
+  const rendererChunks = importsOf(distText('index.js')).dynamic.map((specifier) =>
     resolveInDist('index.js', specifier),
   );
   const chunkOf = (module: string): string[] =>
@@ -209,4 +196,113 @@ test('every client chunk keeps the use client directive', () => {
   );
   expect(javascriptFiles).toContain('renderers/index.js');
   for (const file of javascriptFiles) expect(distText(file).startsWith("'use client'"), file).toBe(true);
+});
+
+const RENDERER_KIT_EXPORTS = [
+  'ClassNames',
+  'FileInfo',
+  'MATCH_SCORE',
+  'MatchScore',
+  'PageGeometry',
+  'Part',
+  'Renderer',
+  'RendererInput',
+  'RendererProps',
+  'RendererSource',
+  'StaleNotice',
+  'StaleNoticeProps',
+  'StandaloneFile',
+  'StandaloneLoadOptions',
+  'StandaloneRoot',
+  'StandaloneRootProps',
+  'StandaloneSource',
+  'StandaloneViewerProps',
+  'ViewerError',
+  'ViewerErrorKind',
+  'VirtualPages',
+  'VirtualPagesHandle',
+  'VirtualPagesProps',
+  'defineRenderer',
+  'lineBreakOf',
+  'mediaUrlOfBlob',
+  'partProps',
+  'safeUrlOrNull',
+  'stepZoom',
+  'useSettledAnnouncement',
+  'useStandaloneBytes',
+  'viewerError',
+  'withLfLineBreaks',
+  'withLineBreak',
+  'zoomTowards',
+];
+
+function declarationFilesReachableFrom(entry: string): string[] {
+  const reached = new Set<string>();
+  const visit = (file: string): void => {
+    if (reached.has(file)) return;
+    reached.add(file);
+    for (const specifier of allImportsOf(file).filter((candidate) => candidate.startsWith('.'))) {
+      visit(resolveInDist(file, specifier).replace(/\.js$/, '.d.ts'));
+    }
+  };
+  visit(entry);
+  return [...reached];
+}
+
+const exportedNamesOf = (declarationFile: string): string[] => {
+  const text = distText(declarationFile);
+  const listed = /^export \{([^}]*)\};\s*$/m.exec(text)?.[1]?.split(',') ?? [];
+  const declared = [...text.matchAll(/^export declare (?:function|const|class) (\w+)/gm)].map(
+    (match) => match[1]!,
+  );
+  return [
+    ...listed.map((name) =>
+      name
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)
+        .at(-1)!,
+    ),
+    ...declared,
+  ];
+};
+
+const docCommentOf = (name: string, declarationFiles: string[]): string | undefined => {
+  const declaration = new RegExp(
+    String.raw`/\*\*((?:(?!\*/)[\s\S])*)\*/\s*(?:export\s+)?(?:declare\s+)?(?:function|const|interface|type|class)\s+${name}\b`,
+  );
+  return declarationFiles.map((file) => declaration.exec(distText(file))?.[1]).find(Boolean);
+};
+
+test('renderer-kit subpath exports exactly the documented helpers and types renderer packages build on', () => {
+  expect(exportedNamesOf('renderer-kit/index.d.ts').sort()).toEqual([...RENDERER_KIT_EXPORTS].sort());
+});
+
+test('renderer-kit subpath pulls in no tree, provider or Radix code', () => {
+  const kitFiles = chunksLoadedBy('renderer-kit/index.js');
+  expect(kitFiles).not.toContain('index.js');
+  const modules = kitFiles.flatMap((file) => modulesIn(distText(file)));
+  expect(modules).toContain('src/renderers/StandaloneRoot.tsx');
+  expect(
+    modules.filter(
+      (module) => !MODULES_A_PROVIDER_FREE_SUBPATH_MAY_CONTAIN.some((allowed) => allowed.test(module)),
+    ),
+  ).toEqual([]);
+  const packages = kitFiles.flatMap(allImportsOf).filter((specifier) => !specifier.startsWith('.'));
+  expect(packages.filter((specifier) => !PACKAGES_A_PROVIDER_FREE_SUBPATH_MAY_IMPORT.has(specifier))).toEqual(
+    [],
+  );
+});
+
+test.each(exportedNamesOf('renderer-kit/index.d.ts'))(
+  'renderer-kit export %s has TSDoc with exactly one @example',
+  (name) => {
+    const doc = docCommentOf(name, declarationFilesReachableFrom('renderer-kit/index.d.ts'));
+    expect(doc, `no TSDoc found on the declaration of ${name} in the kit's .d.ts files`).toBeDefined();
+    expect(doc!.match(/@example/g), name).toHaveLength(1);
+  },
+);
+
+test('the shipped styles.css has no nested rules (Ruling P4-6)', () => {
+  expect(() => assertNoNestedRules(distText('styles.css'), 'dist/styles.css')).not.toThrow();
 });

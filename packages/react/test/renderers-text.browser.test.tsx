@@ -543,6 +543,63 @@ test('standalone TextViewer fetches a URL, aborts on unmount and reports a faile
   expect(document.querySelector('[role=alert]')!.textContent).toBe(onError.mock.calls[0]![0].message);
 });
 
+test('standalone TextViewer refuses a file over 10 MiB as too_large without reading it', async () => {
+  const huge = new Blob([new Uint8Array(10 * MIB + 1)]);
+  const read = vi.spyOn(Blob.prototype, 'arrayBuffer');
+  const onError = vi.fn();
+  const blobView = await render(<TextViewer src={huge} fileName="huge.log" onError={onError} />);
+  await expect.poll(() => onError.mock.calls.length).toBe(1);
+  expect(onError.mock.calls[0]![0]).toMatchObject({ kind: 'too_large' });
+  expect(read).not.toHaveBeenCalled();
+  await blobView.unmount();
+
+  const body = vi.fn(() => Promise.resolve(new ArrayBuffer(0)));
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    ok: true,
+    headers: new Headers({ 'content-length': String(10 * MIB + 1) }),
+    arrayBuffer: body,
+  } as unknown as Response);
+  const urlError = vi.fn();
+  await render(<TextViewer src="https://example.test/huge.log" onError={urlError} />);
+  await expect.poll(() => urlError.mock.calls.length).toBe(1);
+  expect(urlError.mock.calls[0]![0]).toMatchObject({ kind: 'too_large' });
+  expect(body).not.toHaveBeenCalled();
+});
+
+test('standalone TextViewer stops reading a URL body without Content-Length once it passes 10 MiB', async () => {
+  const CHUNK_BYTES = MIB;
+  const TOTAL_BYTES = 30 * MIB;
+  let pulledBytes = 0;
+  let isCancelled = false;
+  let releaseCancel = (): void => {};
+  const cancelHeld = new Promise<void>((resolve) => {
+    releaseCancel = resolve;
+  });
+  const chunkedBody = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        pulledBytes += CHUNK_BYTES;
+        controller.enqueue(new Uint8Array(CHUNK_BYTES));
+        if (pulledBytes >= TOTAL_BYTES) controller.close();
+      },
+      cancel() {
+        isCancelled = true;
+        return cancelHeld;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(chunkedBody));
+  const onError = vi.fn();
+  await render(<TextViewer src="https://example.test/chunked.log" onError={onError} />);
+  await expect.poll(() => isCancelled).toBe(true);
+  expect(pulledBytes).toBeLessThanOrEqual(10 * MIB + CHUNK_BYTES);
+  expect(onError).not.toHaveBeenCalled();
+  releaseCancel();
+  await expect.poll(() => onError.mock.calls.length).toBe(1);
+  expect(onError.mock.calls[0]![0]).toMatchObject({ kind: 'too_large' });
+});
+
 test('standalone TextViewer: value controls the text and onChange reports edits', async () => {
   const onChange = vi.fn();
   const screen = await render(

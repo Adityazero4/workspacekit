@@ -137,6 +137,61 @@ test('form control borders reach 3:1 against their background in light and dark'
   }
 });
 
+const SYNTAX_TOKENS = [
+  'keyword',
+  'string',
+  'number',
+  'comment',
+  'function',
+  'type',
+  'variable',
+  'operator',
+  'tag',
+  'attribute',
+].map((name) => `--fs-syntax-${name}`);
+
+const BACKGROUNDS_BEHIND_CODE = ['--fs-bg', '--fs-bg-selected', '--fs-flash'];
+
+function expectSyntaxTokensReadableIn(themed: Element, label: string): void {
+  for (const background of BACKGROUNDS_BEHIND_CODE) {
+    const backgroundColor = getComputedStyle(themed).getPropertyValue(background);
+    for (const token of SYNTAX_TOKENS) {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${token}, transparent)`;
+      probe.style.backgroundColor = backgroundColor;
+      themed.append(probe);
+      const style = getComputedStyle(probe);
+      expect(style.color, `${label} ${token} is defined`).not.toBe('rgba(0, 0, 0, 0)');
+      expect(
+        contrast(style.color, style.backgroundColor),
+        `${label} ${token} on ${background}`,
+      ).toBeGreaterThanOrEqual(4.5);
+      probe.remove();
+    }
+  }
+}
+
+test('every --fs-syntax-* token reaches 4.5:1 on --fs-bg, --fs-bg-selected and --fs-flash, in every theme', async () => {
+  for (const theme of ['light', 'dark'] as const) {
+    const { unmount } = await render(<div data-theme={theme} />);
+    expectSyntaxTokensReadableIn(document.querySelector(`[data-theme=${theme}]`)!, `data-theme=${theme}`);
+    await unmount();
+  }
+  try {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await commands.emulateMedia({ colorScheme });
+      const { unmount } = await render(<div data-testid="no-theme-attribute" />);
+      expectSyntaxTokensReadableIn(
+        document.querySelector('[data-testid=no-theme-attribute]')!,
+        `prefers-color-scheme: ${colorScheme}`,
+      );
+      await unmount();
+    }
+  } finally {
+    await commands.emulateMedia({ colorScheme: null });
+  }
+});
+
 test('a flashing row pulses with --fs-flash, distinct from focus and selection, and holds it without motion', async () => {
   await render(
     <div data-fs-part="tree-row" data-selected="" data-focused="" data-flash="">

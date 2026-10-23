@@ -7,3 +7,4 @@ internal/
 .superpowers/
 .vitest
 .playwright-mcp/
+.claude/worktrees/
