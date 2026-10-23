@@ -6,7 +6,7 @@ Please report vulnerabilities privately through GitHub: open the repository's **
 **Report a vulnerability** (GitHub private vulnerability reporting). Do not open a public issue for a
 security problem.
 
-If the **Report a vulnerability** button is not available yet, open a GitHub issue titled "Security contact request" that asks for a private way to reach a maintainer. Do not put any details of the vulnerability in the issue.
+If the **Report a vulnerability** button is not available yet, email adityajain042001@gmail.com instead. Do not open a public issue with any details of the vulnerability.
 
 Include the affected package and version, what an attacker can do, and steps or a file that reproduce it.
 
