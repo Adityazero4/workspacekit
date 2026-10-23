@@ -1,9 +1,8 @@
-# Replace @OWNER with the maintainers' GitHub user or team before the first push.
-/.github/ @OWNER
-/scripts/check-supply-chain* @OWNER
-/supply-chain-exceptions.json @OWNER
-/pnpm-workspace.yaml @OWNER
-/pnpm-lock.yaml @OWNER
-.npmrc @OWNER
-**/package.json @OWNER
-**/.pnpmfile.* @OWNER
+/.github/ @Adityazero4
+/scripts/check-supply-chain* @Adityazero4
+/supply-chain-exceptions.json @Adityazero4
+/pnpm-workspace.yaml @Adityazero4
+/pnpm-lock.yaml @Adityazero4
+.npmrc @Adityazero4
+**/package.json @Adityazero4
+**/.pnpmfile.* @Adityazero4
