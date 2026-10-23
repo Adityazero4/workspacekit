@@ -1,0 +1,7 @@
+@import '@scope/react/styles.css';
+@import '@scope/code/styles.css';
+@import '@scope/docx/styles.css';
+@import '@scope/markdown/styles.css';
+@import '@scope/pdf/styles.css';
+@import '@scope/pptx/styles.css';
+@import '@scope/spreadsheet/styles.css';

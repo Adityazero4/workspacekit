@@ -1,0 +1,42 @@
+/* Default look of @scope/docx. Everything lives in @layer fs, so any unlayered consumer CSS wins. The
+   document's own styles live in its shadow root and cannot reach these parts. */
+@layer fs {
+  [data-fs-part='docx-viewer'] {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    font-family: var(--fs-font);
+    font-size: var(--fs-font-size);
+    color: var(--fs-fg);
+    background: var(--fs-bg);
+  }
+
+  [data-fs-part='docx-document'] {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    contain: paint;
+  }
+
+  [data-fs-part='docx-document']:focus-visible {
+    outline: 2px solid var(--fs-focus);
+    outline-offset: -2px;
+  }
+
+  [data-fs-part='docx-loading'],
+  [data-fs-part='docx-error'] {
+    margin: 0;
+    padding: 24px 16px;
+    text-align: center;
+  }
+
+  [data-fs-part='docx-loading'] {
+    color: var(--fs-muted);
+  }
+
+  [data-fs-part='docx-error'] {
+    color: var(--fs-danger);
+  }
+}

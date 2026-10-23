@@ -1,0 +1,98 @@
+{
+  "MIT": [
+    {
+      "name": "left-pad",
+      "versions": ["1.3.0"],
+      "paths": [],
+      "license": "MIT"
+    }
+  ],
+  "GPL-3.0-only": [
+    {
+      "name": "hyperformula",
+      "versions": ["3.5.0"],
+      "paths": [],
+      "license": "GPL-3.0-only"
+    }
+  ],
+  "LGPL-2.1": [
+    {
+      "name": "lesser-lib",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "LGPL-2.1"
+    }
+  ],
+  "UNLICENSED": [
+    {
+      "name": "@kandiforge/pptx-renderer",
+      "versions": ["0.1.0"],
+      "paths": [],
+      "license": "UNLICENSED"
+    }
+  ],
+  "Unknown": [
+    {
+      "name": "no-licence-field",
+      "versions": ["0.0.1"],
+      "paths": [],
+      "license": "Unknown"
+    }
+  ],
+  "GPLv2": [
+    {
+      "name": "gpl-v2-spelling",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "GPLv2"
+    }
+  ],
+  "GPLv3": [
+    {
+      "name": "gpl-v3-spelling",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "GPLv3"
+    }
+  ],
+  "LGPLv3": [
+    {
+      "name": "lgpl-v3-spelling",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "LGPLv3"
+    }
+  ],
+  "AGPLv3": [
+    {
+      "name": "agpl-v3-spelling",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "AGPLv3"
+    }
+  ],
+  "GPL3": [
+    {
+      "name": "gpl-3-spelling",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "GPL3"
+    }
+  ],
+  "GNU General Public License v3": [
+    {
+      "name": "gnu-long-name",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "GNU General Public License v3"
+    }
+  ],
+  "GPL-3.0-or-later": [
+    {
+      "name": "jszip",
+      "versions": ["1.0.0"],
+      "paths": [],
+      "license": "GPL-3.0-or-later"
+    }
+  ]
+}

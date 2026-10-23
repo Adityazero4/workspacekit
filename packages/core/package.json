@@ -25,6 +25,7 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit -p .",
-    "lint:pkg": "publint && attw --pack . --profile esm-only"
+    "lint:pkg": "publint && attw --pack . --profile esm-only",
+    "size": "size-limit"
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "file-system",
   "private": true,
-  "packageManager": "pnpm@11.20.0",
+  "packageManager": "pnpm@11.20.0+sha512.9a6f330a95b66446ea088faf1521405a8a01f07fde7124cc9958dfed52d4bb436737e65b08f85f37b46fcba375092558ac51262b816844b22f63406ed166bfee",
   "type": "module",
   "engines": {
     "node": ">=22.19"
@@ -11,31 +11,38 @@
     "test:perf": "vitest run --config vitest.perf.config.ts --no-file-parallelism",
     "test:perf:react": "vitest run --config packages/react/vitest.perf.config.ts --no-file-parallelism",
     "test:browser": "vitest run --project 'react:browser*'",
-    "size": "pnpm --filter @scope/core exec size-limit && pnpm --filter @scope/react exec size-limit",
+    "size": "pnpm -r size",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "check:forbidden": "node scripts/check-forbidden.mjs",
     "check:comments": "node scripts/check-comments.mjs",
+    "check:licenses": "node scripts/check-licenses.mjs",
+    "check:supply-chain": "node scripts/check-supply-chain.mjs",
+    "security:audit": "pnpm audit --audit-level=moderate",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:comments && node --test scripts/check-forbidden.test.mjs scripts/check-comments.test.mjs && pnpm build && pnpm vitest run && pnpm test:perf && pnpm test:perf:react && pnpm -r lint:pkg && pnpm size && pnpm check:forbidden && ! grep -q \"node:\" packages/core/dist/index.js && pnpm --filter @scope/server smoke:dist"
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:comments && pnpm check:licenses && pnpm check:supply-chain && node --test scripts/check-forbidden.test.mjs scripts/check-comments.test.mjs scripts/check-licenses.test.mjs scripts/check-supply-chain.test.mjs scripts/import-graph.test.mjs scripts/css-nesting.test.mjs && pnpm build && pnpm vitest run && pnpm test:perf && pnpm test:perf:react && pnpm test:perf:code && pnpm test:perf:spreadsheet && pnpm test:perf:workspace && pnpm -r lint:pkg && pnpm size && pnpm check:forbidden && ! grep -q \"node:\" packages/core/dist/index.js && pnpm --filter @scope/server smoke:dist && pnpm --filter @scope/workspace consumer:dist",
+    "test:perf:code": "vitest run --config packages/code/vitest.perf.config.ts --no-file-parallelism",
+    "test:perf:spreadsheet": "vitest run --config packages/spreadsheet/vitest.perf.config.ts --no-file-parallelism",
+    "test:perf:workspace": "vitest run --config packages/workspace/vitest.perf.config.ts --no-file-parallelism"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.5",
-    "@eslint/js": "^10.0.1",
-    "@size-limit/preset-small-lib": "^14.2.0",
-    "eslint": "^10.13.0",
-    "eslint-plugin-jsx-a11y": "^6.10.2",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.13.0",
-    "prettier": "^3.9.10",
-    "publint": "^0.3.25",
-    "size-limit": "^14.2.0",
-    "tsdown": "^0.23.1",
+    "@arethetypeswrong/cli": "0.18.5",
+    "@eslint/js": "10.0.1",
+    "@size-limit/preset-small-lib": "14.2.0",
+    "eslint": "10.13.0",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "publint": "0.3.25",
+    "size-limit": "14.2.0",
+    "tsdown": "0.23.1",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.71.2",
-    "vitest": "^5.0.5"
+    "typescript-eslint": "8.71.2",
+    "vitest": "5.0.5",
+    "yaml": "2.9.1"
   }
 }

@@ -1,0 +1,130 @@
+/* Default look of @scope/pdf. Everything lives in @layer fs, so any unlayered consumer CSS wins. The build
+   appends pdf.js's own page, text-layer and annotation-layer rules, scoped under the pdf-viewer part. */
+@layer fs {
+  [data-fs-part='pdf-viewer'] {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    font-family: var(--fs-font);
+    font-size: var(--fs-font-size);
+    color: var(--fs-fg);
+    background: var(--fs-bg);
+  }
+
+  [data-fs-part='pdf-toolbar'] {
+    display: flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--fs-border);
+  }
+
+  [data-fs-part='pdf-button'] {
+    padding: 2px 8px;
+    font: inherit;
+    color: var(--fs-fg);
+    background: transparent;
+    border: 1px solid var(--fs-border);
+    border-radius: var(--fs-radius);
+    cursor: pointer;
+  }
+
+  [data-fs-part='pdf-button']:hover {
+    background: var(--fs-bg-hover);
+  }
+
+  [data-fs-part='pdf-button']:focus-visible,
+  [data-fs-part='pdf-password-input']:focus-visible {
+    outline: 2px solid var(--fs-focus);
+    outline-offset: 1px;
+  }
+
+  [data-fs-part='pdf-zoom-level'] {
+    min-width: 4em;
+    color: var(--fs-muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-fs-part='pdf-page-indicator'] {
+    margin-inline-start: auto;
+    color: var(--fs-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-fs-part='pdf-status'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  [data-fs-part='pdf-page'] {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  [data-fs-part='pdf-page-error'] {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 16px;
+    color: var(--fs-muted);
+    text-align: center;
+    background: var(--fs-bg);
+  }
+
+  [data-fs-part='pdf-password'] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    max-width: 360px;
+    margin: 24px auto;
+    padding: 0 16px;
+  }
+
+  [data-fs-part='pdf-password-label'],
+  [data-fs-part='pdf-password-input'],
+  [data-fs-part='pdf-password-error'] {
+    flex-basis: 100%;
+  }
+
+  [data-fs-part='pdf-password-input'] {
+    padding: 4px 8px;
+    font: inherit;
+    color: var(--fs-fg);
+    background: var(--fs-bg);
+    border: 1px solid var(--fs-input-border);
+    border-radius: var(--fs-radius);
+  }
+
+  [data-fs-part='pdf-password-error'] {
+    margin: 0;
+    color: var(--fs-danger);
+  }
+
+  [data-fs-part='pdf-loading'],
+  [data-fs-part='pdf-error'] {
+    margin: 0;
+    padding: 24px 16px;
+    text-align: center;
+  }
+
+  [data-fs-part='pdf-loading'] {
+    color: var(--fs-muted);
+  }
+
+  [data-fs-part='pdf-error'] {
+    color: var(--fs-danger);
+  }
+}

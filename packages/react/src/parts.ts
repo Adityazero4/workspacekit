@@ -298,11 +298,13 @@ export const PARTS: readonly [
 export type Part = (typeof PARTS)[number];
 
 /**
- * Extra class names per part, merged after the part's own class.
+ * Extra class names per part, merged after the part's own class. A renderer package passes its own part
+ * union as `P`, so its `classNames` accepts exactly its parts.
  *
  * @example
  * ```ts
  * const classNames: ClassNames = { 'tree-row': 'my-row', tab: 'my-tab' };
+ * type PdfClassNames = ClassNames<'pdf-viewer' | 'pdf-page'>;
  * ```
  */
-export type ClassNames = Partial<Record<Part, string>>;
+export type ClassNames<P extends string = Part> = Partial<Record<P, string>>;

@@ -6,17 +6,11 @@ import type { RendererProps } from '../../viewer/registry';
 import { useStandaloneText, type StandaloneViewerProps } from '../standalone';
 import { StandaloneRoot } from '../StandaloneRoot';
 import { useLatest } from '../useLatest';
+import { lineBreakOf, withLfLineBreaks, withLineBreak } from '../lineBreaks';
 import { LineView } from './LineView';
 
 const EDITABLE_MAX_BYTES = 1024 * 1024;
-const CR_LF_OR_CR = /\r\n?/g;
-
-const withLfLineBreaks = (text: string): string => text.replace(CR_LF_OR_CR, '\n');
-
-const firstLineBreakIsCrLf = (text: string): boolean => {
-  const firstLineFeed = text.indexOf('\n');
-  return firstLineFeed > 0 && text[firstLineFeed - 1] === '\r';
-};
+const TEXT_RENDERER_MAX_BYTES = 10 * 1024 * 1024;
 
 /**
  * Props of the standalone `TextViewer`. `value`, when set, is the text shown instead of the loaded file (a
@@ -95,9 +89,6 @@ function syncWithSource(sync: SourceSync): number | undefined {
   return replaceKeepingScrollAndSelection(textarea, editorText);
 }
 
-const withLineBreak = (typed: string, lineBreak: string): string =>
-  lineBreak === '\n' ? typed : typed.replaceAll('\n', lineBreak);
-
 interface TextEditorProps extends Omit<TextBodyProps, 'byteSize'> {
   onLocalEditsChange: (hasLocalEdits: boolean) => void;
 }
@@ -105,7 +96,7 @@ interface TextEditorProps extends Omit<TextBodyProps, 'byteSize'> {
 function TextEditor(props: TextEditorProps): React.JSX.Element {
   const { text, isControlled, holdEdits, label, readOnly, onLocalEditsChange, classNames } = props;
   const editorText = withLfLineBreaks(text);
-  const lineBreak = firstLineBreakIsCrLf(text) ? '\r\n' : '\n';
+  const lineBreak = lineBreakOf(text);
   const [initialText] = useState(editorText);
   const editor = useRef<HTMLTextAreaElement>(null);
   const textFromSource = useRef(editorText);
@@ -163,7 +154,8 @@ function TextBody(props: TextBodyProps): React.JSX.Element {
  * edit is reported for the wrong file: a URL being fetched makes the editor read-only, and an edit made
  * while bytes are decoded is reported only if the new file has the same text (otherwise the editor shows
  * the new file). Edits keep the file's line endings: when its first line break is CRLF, `onChange`
- * receives CRLF text. A file that grows past 1 MiB while edited stays in the editor.
+ * receives CRLF text. A file that grows past 1 MiB while edited stays in the editor. A file over 10 MiB (the
+ * text renderer's limit) is `too_large` and is not read.
  *
  * @example
  * ```tsx
@@ -172,7 +164,7 @@ function TextBody(props: TextBodyProps): React.JSX.Element {
  */
 export function TextViewer(props: TextViewerProps): React.JSX.Element {
   const { src, fileName, classNames, onError, value, onChange } = props;
-  const { file, isLoadingNewSource } = useStandaloneText(src, onError);
+  const { file, isLoadingNewSource } = useStandaloneText(src, onError, { maxBytes: TEXT_RENDERER_MAX_BYTES });
   return (
     <StandaloneRoot
       part="text-viewer"

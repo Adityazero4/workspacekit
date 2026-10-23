@@ -6,7 +6,16 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 const SOURCE = ['packages/*/src/**/*.{ts,tsx}'];
-const REACT = ['packages/react/**/*.{ts,tsx}'];
+const REACT = [
+  'packages/react/**/*.{ts,tsx}',
+  'packages/code/**/*.{ts,tsx}',
+  'packages/pdf/**/*.{ts,tsx}',
+  'packages/docx/**/*.{ts,tsx}',
+  'packages/workspace/**/*.{ts,tsx}',
+  'packages/pptx/**/*.{ts,tsx}',
+  'packages/markdown/**/*.{ts,tsx}',
+  'packages/spreadsheet/**/*.{ts,tsx}',
+];
 
 export default defineConfig([
   {
@@ -17,6 +26,7 @@ export default defineConfig([
       '.vitest/**',
       'internal/**',
       '.superpowers/**',
+      '.claude/**',
     ],
   },
   {

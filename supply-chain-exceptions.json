@@ -1,0 +1,78 @@
+[
+  {
+    "spec": "@aiden0z/pptx-renderer@1.4.0",
+    "kind": "release-age",
+    "reason": "Direct dependency of @scope/pptx; reviewed and tested at this version, published 2026-10-18.",
+    "expires": "2026-10-25"
+  },
+  {
+    "spec": "@asamuzakjp/css-color@7.1.7",
+    "kind": "release-age",
+    "reason": "Transitive of the jsdom test stack; locked version published 2026-10-17.",
+    "expires": "2026-10-24"
+  },
+  {
+    "spec": "@asamuzakjp/dom-selector@10.0.4",
+    "kind": "release-age",
+    "reason": "Transitive of the jsdom test stack; locked version published 2026-10-17.",
+    "expires": "2026-10-24"
+  },
+  {
+    "spec": "@codemirror/autocomplete@6.20.4",
+    "kind": "release-age",
+    "reason": "Transitive of the CodeMirror editor in @scope/code; published 2026-10-19.",
+    "expires": "2026-10-26"
+  },
+  {
+    "spec": "@codemirror/view@6.43.15",
+    "kind": "release-age",
+    "reason": "Direct dependency of @scope/code; reviewed and tested at this version, published 2026-10-19.",
+    "expires": "2026-10-26"
+  },
+  {
+    "spec": "@lezer/markdown@1.8.1",
+    "kind": "release-age",
+    "reason": "Transitive of the CodeMirror editor in @scope/code; published 2026-10-19.",
+    "expires": "2026-10-26"
+  },
+  {
+    "spec": "electron-to-chromium@1.5.459",
+    "kind": "release-age",
+    "reason": "Transitive browserslist data; locked version published 2026-10-17.",
+    "expires": "2026-10-24"
+  },
+  {
+    "spec": "lilconfig@3.1.4",
+    "kind": "release-age",
+    "reason": "Transitive config loader; locked version published 2026-10-16.",
+    "expires": "2026-10-23"
+  },
+  {
+    "spec": "numfmt@4.1.0",
+    "kind": "release-age",
+    "reason": "Direct dependency of @scope/spreadsheet; reviewed and tested at this version, published 2026-10-20.",
+    "expires": "2026-10-27"
+  },
+  {
+    "spec": "postcss-selector-parser@7.1.7",
+    "kind": "release-age",
+    "reason": "Transitive of postcss-nesting; locked version published 2026-10-20.",
+    "expires": "2026-10-27"
+  },
+  {
+    "spec": "postcss@8.5.31",
+    "kind": "release-age",
+    "reason": "Direct dev dependency for the CSS build; reviewed and tested at this version, published 2026-10-18.",
+    "expires": "2026-10-25"
+  },
+  {
+    "spec": "semver@6.3.1",
+    "kind": "trust",
+    "reason": "2023 ReDoS backport published by npm CLI maintainer lukekarrys without provenance after later versions had it; verified legitimate."
+  },
+  {
+    "spec": "undici-types@6.21.0",
+    "kind": "trust",
+    "reason": "Published in 2024 by undici lead matteo.collina without provenance after later versions had it; verified legitimate."
+  }
+]
