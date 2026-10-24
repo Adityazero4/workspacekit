@@ -49,18 +49,17 @@ function probe(): AgentProbe {
 }
 
 /**
- * In test builds, counts every change the agent announces on `adapter`; does nothing otherwise.
+ * In test builds, counts every batch of changes the agent makes on `adapter` (events whose `actor` is
+ * `'agent'`), however it writes them; does nothing otherwise.
  *
  * @example
  * countAgentWrites(adapter);
  */
 export function countAgentWrites(adapter: MemoryAdapter): void {
   if (!IS_TEST_BUILD) return;
-  const announce = adapter.emit.bind(adapter);
-  adapter.emit = (events) => {
-    probe().writes += 1;
-    announce(events);
-  };
+  adapter.watch?.((events) => {
+    if (events.some((event) => event.actor === 'agent')) probe().writes += 1;
+  });
 }
 
 /**
