@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,16 +125,20 @@ function packFolder(root, folder, scratch) {
   const unpacked = path.join(out, 'unpacked');
   execFileSync('mkdir', ['-p', unpacked]);
   execFileSync('tar', ['-xzf', tarball, '-C', unpacked]);
-  return { files: new Map(readTree(unpacked)), bytes: statSync(tarball).size };
+  return { files: new Map(readTree(unpacked)), bytes: statSync(tarball).size, tarball };
 }
 
 const invokedPathWithSymlinksResolved = process.argv[1] && realpathSync(process.argv[1]);
 if (invokedPathWithSymlinksResolved === fileURLToPath(import.meta.url)) {
   const root = REPOSITORY_ROOT;
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'check-pack-'));
+  const outIndex = process.argv.indexOf('--out');
+  const keepTarballsIn = outIndex === -1 ? undefined : path.resolve(process.argv[outIndex + 1] ?? '');
+  if (keepTarballsIn) mkdirSync(keepTarballsIn, { recursive: true });
   let failed = false;
   for (const folder of PUBLIC_PACKAGES) {
-    const { files, bytes } = packFolder(root, folder, scratch);
+    const { files, bytes, tarball } = packFolder(root, folder, scratch);
+    if (keepTarballsIn) copyFileSync(tarball, path.join(keepTarballsIn, path.basename(tarball)));
     process.stdout.write(`${folder}: ${(bytes / 1024).toFixed(1)} KiB, ${files.size} files\n`);
     for (const problem of packProblems(files)) {
       console.error(`  ${folder}: ${problem}`);

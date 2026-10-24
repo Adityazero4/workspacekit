@@ -1,5 +1,7 @@
 /.github/ @Adityazero4
 /scripts/check-supply-chain* @Adityazero4
+/scripts/check-pack* @Adityazero4
+/scripts/release* @Adityazero4
 /supply-chain-exceptions.json @Adityazero4
 /pnpm-workspace.yaml @Adityazero4
 /pnpm-lock.yaml @Adityazero4

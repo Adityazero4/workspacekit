@@ -8,10 +8,37 @@ A security checklist for maintainers, to complete before the first publish and t
 - [ ] Publish only from CI, with npm trusted publishing (OIDC) and `--provenance`. Never use a long-lived `NPM_TOKEN`.
 - [ ] The npm organisation and every maintainer account have 2FA on, and the packages require 2FA to publish.
 - [ ] Every GitHub Action is pinned to a full commit SHA, with the tag in a trailing comment.
-- [ ] Workflows set `permissions: {}` at the top and grant each job only what it needs; only the publish job gets `id-token: write`.
+- [ ] Workflows set `permissions: {}` at the top and grant each job only what it needs; only `release.yml`'s `publish` job and `pages.yml`'s `deploy` job get `id-token: write`, and each runs in an environment (`check:supply-chain` enforces both).
 - [ ] `main` and release tags are protected (required reviews and checks, no force pushes, no tag deletion).
 - [ ] Branch protection on `main` requires code-owner review, so a pull request cannot approve changes to the security gate on its own.
 - [ ] When the packages stop being `private`, each `package.json` gets `publishConfig` with `access: public` and `provenance: true`.
+
+## Cutting a release
+
+`release.yml` runs when a `v*` tag is pushed. Its `check` job confirms the tag matches every public package's version (`scripts/release.mjs check`) and runs `pnpm check:full` and `check:forbidden`. Its `publish` job then waits for approval in the `npm` environment. It installs npm 11.21.1, checked against its published sha512, and builds. It packs and audits the tarballs (`scripts/check-pack.mjs --out`) and publishes exactly those, skipping any version already on npm, so a failed run can simply be re-run.
+
+Provenance needs a public repository: npm attaches it only to packages published from one.
+
+- [ ] Create a GitHub environment named `npm` with yourself as a required reviewer.
+- [ ] One reviewed commit sets every public package to the release version, with `"private": false` and `"publishConfig": { "access": "public", "provenance": true }`. `RELEASE_TAG=v0.1.0 node scripts/release.mjs check` must print nothing.
+- [ ] Tag that commit on `main` and push the tag: `git tag v0.1.0 && git push origin v0.1.0`. A version with `-` (such as `0.2.0-rc.1`) is published under the `next` dist-tag, never `latest`.
+- [ ] Approve the `publish` job in the Actions tab once `check` is green.
+
+### The first publish
+
+npm configures a trusted publisher in a package's settings, so the package must exist first. The first release therefore uses a short-lived token, once:
+
+- [ ] On npmjs.com, create a granular access token with read and write access to the `@workspacekit` scope only, expiring in 7 days.
+- [ ] Add it as the `NPM_TOKEN` secret of the `npm` environment (not as a repository secret), then cut the release as above.
+- [ ] For each of the 12 packages, open its settings on npmjs.com and add a trusted publisher:
+  - GitHub Actions;
+  - owner `Adityazero4`, repository `workspacekit`;
+  - workflow `release.yml`, environment `npm`.
+
+  A new trusted publisher must complete a publish within 2 days, so set these up close to the next release.
+
+- [ ] Delete the `NPM_TOKEN` secret and revoke the token on npmjs.com. From then on, `release.mjs` publishes through OIDC.
+- [ ] In each package's settings, require two-factor authentication and disallow tokens.
 
 ## Dependencies
 
