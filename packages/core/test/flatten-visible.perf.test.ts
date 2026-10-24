@@ -12,7 +12,7 @@ const env = (globalThis as { process?: { env: Record<string, string | undefined>
 const BUDGET_MS = 150 * Number(env.PERF_BUDGET_SCALE ?? 1);
 
 // Wall-clock budget: median of 3 runs, so one run slowed by parallel test load does not fail it. PERF_BUDGET_SCALE
-// (CI sets 1.5) scales it; CI_SLOW=1 skips it.
+// (CI sets 2) scales it; CI_SLOW=1 skips it.
 test.skipIf(env.CI_SLOW)('flattenVisible handles 100k entries under 150ms', () => {
   const entries: Entry[] = [];
   const dirs = new Set<string>();
