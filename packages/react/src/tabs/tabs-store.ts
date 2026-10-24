@@ -202,11 +202,15 @@ export function remapTabs(state: TabsState, from: string, to: string): TabsState
  */
 export function isDeletedFromTree(snapshot: TreeSnapshot, path: string, root: string): boolean {
   if (!isSameOrDescendant(path, root)) return false;
-  for (let current = path; current !== root; current = parentPath(current)) {
+  let current = path;
+  while (current !== root) {
     if (snapshot.pending.has(current)) return false;
-    if (statusOf(snapshot.tree, parentPath(current)) !== 'loaded') continue;
-    const entry = entryAt(snapshot.tree, current);
-    return entry === undefined || (current !== path && entry.kind === 'file');
+    const parent = parentPath(current);
+    if (statusOf(snapshot.tree, parent) === 'loaded') {
+      const entry = entryAt(snapshot.tree, current);
+      return entry === undefined || (current !== path && entry.kind === 'file');
+    }
+    current = parent;
   }
   return false;
 }

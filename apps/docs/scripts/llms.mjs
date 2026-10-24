@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { realpathSync } from 'node:fs';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PUBLIC_PACKAGES, readDocsUrl } from '../../../scripts/agent-docs.mjs';
@@ -11,7 +11,8 @@ const SUMMARY_LINE = /^> (.+)$/m;
 const QUICK_START_URLS = ['/docs/getting-started/next', '/docs/getting-started/vite'];
 const CODING_AGENTS_URL = '/docs/coding-agents';
 const RECIPES_URL = '/docs/recipes/';
-const CORE_API_PAGE = path.join('apps', 'docs', 'content', 'api', 'core.md');
+const API_FOLDER = path.join('apps', 'docs', 'content', 'api');
+const CORE_API_PAGE = path.join(API_FOLDER, 'core.md');
 const ADAPTER_CONTRACT_TYPES = [
   'FileSystemAdapter',
   'Entry',
@@ -70,9 +71,9 @@ function pageLine(docsUrl, page, label = '') {
 function renderLlmsTxt(docsUrl, pages, packages) {
   const byUrl = new Map(pages.map((page) => [page.url, page]));
   const lines = [
-    '# File workspace',
+    '# workspacekit',
     '',
-    '> A React library that gives an app a file tree, search, tabs, upload and viewers over a directory on a server, with live updates when an agent changes files.',
+    '> workspacekit is an open-source (Apache-2.0) React library that gives an app a file tree, search, tabs, upload and viewers over a directory on a server, with live updates when an agent changes files.',
     '',
   ];
   lines.push('## Start here', '');
@@ -170,7 +171,7 @@ async function renderPage(root, docsUrl, page) {
 
 async function renderLlmsFullTxt(root, docsUrl, pages, packages, corePage) {
   const intro = [
-    '# File workspace: all documentation pages',
+    '# workspacekit: all documentation pages',
     `The API reference is not repeated here, except the @workspacekit/core adapter contract at the end. Each package has its own page:\n\n${packages
       .map(({ folderName, name }) => `- ${name}: ${docsUrl}/api/${folderName}`)
       .join('\n')}`,
@@ -181,39 +182,86 @@ async function renderLlmsFullTxt(root, docsUrl, pages, packages, corePage) {
   return `${[...intro, ...rendered].join('\n\n---\n\n')}\n`;
 }
 
+async function readApiPages(root) {
+  const folder = path.join(root, API_FOLDER);
+  if (!existsSync(folder)) return [];
+  const files = (await readdir(folder)).filter((file) => file.endsWith('.md')).sort();
+  const pages = [];
+  for (const file of files) {
+    const name = file.replace(/\.md$/, '');
+    pages.push({
+      url: name === 'index' ? '/api' : `/api/${name}`,
+      text: await readFile(path.join(folder, file), 'utf8'),
+    });
+  }
+  return pages;
+}
+
+function notFoundMarkdown(docsUrl) {
+  return [
+    '# Page not found',
+    '',
+    'There is no workspacekit page at this address.',
+    '',
+    `- [Home](${docsUrl}/)`,
+    `- [Documentation](${docsUrl}/docs)`,
+    `- [Site map for agents](${docsUrl}/llms.txt)`,
+    '',
+  ].join('\n');
+}
+
+async function renderMarkdownPages(root, docsUrl, pages, llmsTxt) {
+  const files = new Map([
+    ['index.md', llmsTxt],
+    ['404.md', notFoundMarkdown(docsUrl)],
+  ]);
+  for (const page of [...pages, ...(await readApiPages(root))]) {
+    files.set(`${page.url.slice(1)}.md`, `${await renderPage(root, docsUrl, page)}\n`);
+  }
+  return files;
+}
+
 /**
- * Builds the text of `llms.txt` (a curated map) and `llms-full.txt` (every docs page) from the pages under
- * `content/docs`. The result depends only on the repository's files, so two builds are identical.
+ * Builds the text of `llms.txt` (a curated map), `llms-full.txt` (every docs page) and one Markdown file per
+ * page, keyed by its path under the site (`docs/styling.md`, `index.md` for the home page, `404.md`), from
+ * the pages under `content/docs` and `content/api`. Agents that ask for `text/markdown` are served these.
+ * The result depends only on the repository's files and `NEXT_PUBLIC_SITE_URL`, so two builds are identical.
  *
  * `corePage` is the repository-relative path of the generated `@workspacekit/core` API page that the adapter
  * contract is copied from; tests point it at a small checked-in fixture.
  *
  * @example
- * const { llmsTxt, llmsFullTxt } = await buildLlms(process.cwd());
+ * const { llmsTxt, llmsFullTxt, markdownPages } = await buildLlms(process.cwd());
  */
 export async function buildLlms(root, corePage = CORE_API_PAGE) {
-  const docsUrl = await readDocsUrl(root);
+  const docsUrl = process.env.NEXT_PUBLIC_SITE_URL ?? (await readDocsUrl(root));
   const pages = await readPages(root);
   const packages = [];
   for (const folderName of PUBLIC_PACKAGES) packages.push(await describePackage(root, folderName));
+  const llmsTxt = renderLlmsTxt(docsUrl, pages, packages);
   return {
-    llmsTxt: renderLlmsTxt(docsUrl, pages, packages),
+    llmsTxt,
     llmsFullTxt: await renderLlmsFullTxt(root, docsUrl, pages, packages, corePage),
+    markdownPages: await renderMarkdownPages(root, docsUrl, pages, llmsTxt),
   };
 }
 
 /**
- * Writes `public/llms.txt` and `public/llms-full.txt` for the site.
+ * Writes `public/llms.txt`, `public/llms-full.txt` and the per-page Markdown files for the site.
  *
  * @example
  * await writeLlms(process.cwd());
  */
 export async function writeLlms(root) {
-  const { llmsTxt, llmsFullTxt } = await buildLlms(root);
+  const { llmsTxt, llmsFullTxt, markdownPages } = await buildLlms(root);
   const publicFolder = path.join(root, 'apps', 'docs', 'public');
   await mkdir(publicFolder, { recursive: true });
   await writeFile(path.join(publicFolder, 'llms.txt'), llmsTxt);
   await writeFile(path.join(publicFolder, 'llms-full.txt'), llmsFullTxt);
+  for (const [file, text] of markdownPages) {
+    await mkdir(path.dirname(path.join(publicFolder, file)), { recursive: true });
+    await writeFile(path.join(publicFolder, file), text);
+  }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {

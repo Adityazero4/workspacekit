@@ -1,0 +1,77 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile",
+  "buildCommand": "cd ../.. && pnpm build && pnpm --filter @workspacekit/docs-site build:site",
+  "outputDirectory": "out",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "headers": {
+        "Vary": "Accept"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/(?:index\\.html)?$",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown.*"
+        }
+      ],
+      "dest": "/index.md",
+      "headers": {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Vary": "Accept"
+      }
+    },
+    {
+      "src": "^/((?:docs|api)(?:/[^.]*?)?)/?$",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown.*"
+        }
+      ],
+      "dest": "/$1.md",
+      "headers": {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Vary": "Accept"
+      },
+      "check": true
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "handle": "error"
+    },
+    {
+      "src": "/(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/markdown.*"
+        }
+      ],
+      "status": 404,
+      "dest": "/404.md",
+      "headers": {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Vary": "Accept"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "status": 404,
+      "dest": "/404.html",
+      "headers": {
+        "Vary": "Accept"
+      }
+    }
+  ]
+}

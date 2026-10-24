@@ -68,3 +68,16 @@ test('frontMatterOf splits the title and description from the body', () => {
   const parsed = frontMatterOf('---\ntitle: S3 store\ndescription: Serve a bucket.\n---\n\nBody.\n');
   assert.deepEqual(parsed, { title: 'S3 store', description: 'Serve a bucket.', body: '\nBody.\n' });
 });
+
+test('every docs page has a Markdown copy, with llms.txt as the home page and a 404 page', async () => {
+  const { llmsTxt, markdownPages } = await buildLlms(ROOT, CORE_FIXTURE);
+  assert.equal(markdownPages.get('index.md'), llmsTxt);
+  assert.match(markdownPages.get('404.md'), /^# Page not found\n/);
+  for (const page of await readPages(ROOT)) {
+    const { title } = frontMatterOf(page.text);
+    assert.ok(
+      markdownPages.get(`${page.url.slice(1)}.md`)?.startsWith(`# ${title}\n`),
+      `Markdown for ${page.url}`,
+    );
+  }
+});

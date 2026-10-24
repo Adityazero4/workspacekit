@@ -61,6 +61,7 @@ async function expectNoAxeViolations(page: Page): Promise<void> {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
+  await page.locator('#demo-heading').scrollIntoViewIfNeeded();
 });
 
 test('the landing demo renders the sample files', async ({ page }) => {
@@ -114,11 +115,8 @@ test('the site loads nothing from another origin', async ({ page, baseURL }) => 
   expect(foreign).toEqual([]);
 });
 
-for (const colorScheme of ['light', 'dark'] as const) {
-  test(`axe finds no violations in ${colorScheme} mode`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme });
-    await page.goto('/');
-    await expect(treeRow(page, 'README.md')).toBeVisible();
-    await expectNoAxeViolations(page);
-  });
-}
+test('axe finds no violations', async ({ page }) => {
+  await page.goto('/');
+  await expect(treeRow(page, 'README.md')).toBeVisible();
+  await expectNoAxeViolations(page);
+});

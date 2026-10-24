@@ -3,7 +3,6 @@ import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { sampleFiles } from '@workspacekit/demo-kit';
 import { allRenderers, FileSystemProvider, FileViewer } from '@workspacekit/workspace';
 import '@workspacekit/workspace/styles.css';
-import { useTheme } from 'fumadocs-ui/provider/base';
 import { useState, type KeyboardEvent } from 'react';
 
 const GALLERY: readonly { label: string; path: string }[] = [
@@ -35,7 +34,6 @@ function nextTabIndex(key: string, index: number): number | null {
 export function RendererGallery(): React.JSX.Element {
   const [adapter] = useState(() => createMemoryAdapter({ files: sampleFiles() }));
   const [selected, setSelected] = useState(0);
-  const { resolvedTheme } = useTheme();
   const current = GALLERY[selected] ?? GALLERY[0]!;
   const moveFocus = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
     const target = nextTabIndex(event.key, index);
@@ -68,7 +66,7 @@ export function RendererGallery(): React.JSX.Element {
         id="gallery-panel"
         role="tabpanel"
         aria-labelledby={`gallery-tab-${selected}`}
-        data-theme={resolvedTheme === 'dark' || resolvedTheme === 'light' ? resolvedTheme : undefined}
+        data-theme="dark"
         className="h-[480px] overflow-hidden rounded-lg border border-fd-border"
       >
         <FileSystemProvider adapter={adapter}>

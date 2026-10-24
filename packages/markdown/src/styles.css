@@ -31,6 +31,53 @@
     box-shadow: inset 0 0 0 2px var(--fs-focus);
   }
 
+  /* Set explicitly because CSS resets such as Tailwind's preflight strip heading sizes, margins and bullets. */
+  [data-fs-part='md-editor'] :is(h1, h2, h3, h4, h5, h6) {
+    margin: 0.9em 0 0.4em;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  [data-fs-part='md-editor'] h1 {
+    font-size: 1.6em;
+  }
+
+  [data-fs-part='md-editor'] h2 {
+    font-size: 1.3em;
+  }
+
+  [data-fs-part='md-editor'] h3 {
+    font-size: 1.12em;
+  }
+
+  [data-fs-part='md-editor'] :is(h4, h5, h6) {
+    font-size: 1em;
+  }
+
+  [data-fs-part='md-editor'] > [contenteditable] > :first-child {
+    margin-top: 0;
+  }
+
+  [data-fs-part='md-editor'] :is(p, ul, ol, blockquote, table, .fs-md-code-block) {
+    margin-block: 0 0.75em;
+  }
+
+  [data-fs-part='md-editor'] :is(ul, ol) {
+    padding-left: 1.5em;
+  }
+
+  [data-fs-part='md-editor'] ul {
+    list-style: disc;
+  }
+
+  [data-fs-part='md-editor'] ol {
+    list-style: decimal;
+  }
+
+  [data-fs-part='md-editor'] li {
+    margin: 0.2em 0;
+  }
+
   [data-fs-part='md-editor'] a {
     color: var(--fs-accent);
   }

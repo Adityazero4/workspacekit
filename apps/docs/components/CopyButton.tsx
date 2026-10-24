@@ -31,7 +31,7 @@ export function CopyButton(props: { text: string; label: string }): React.JSX.El
       type="button"
       aria-label={props.label}
       onClick={() => void copy()}
-      className="rounded-md border border-fd-border px-2 py-1 text-xs font-medium text-fd-foreground hover:bg-fd-accent"
+      className="rounded-md border border-current/20 px-2 py-1 text-xs font-medium text-current hover:bg-current/10"
     >
       {outcome === 'copied' ? 'Copied' : outcome === 'failed' ? 'Copy failed' : 'Copy'}
     </button>

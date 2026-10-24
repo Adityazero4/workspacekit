@@ -8,3 +8,6 @@ public/llms-full.txt
 
 # written by next dev for coding agents
 AGENTS.md
+public/*.md
+public/docs
+public/api

@@ -2,8 +2,7 @@ import { gradientImage, salesWorkbook, welcomeDocument } from './binarySamples';
 
 const README = `# Demo project
 
-A small project for trying the file workspace. Open a file in the tree to see how it renders, and edit
-anything: changes save on their own.
+A small project for trying the file workspace. Open a file in the tree to see how it renders, and edit anything: changes save on their own.
 
 - \`src/index.ts\` is a TypeScript module.
 - \`data/sales.csv\` and \`data/sales.xlsx\` are spreadsheets.

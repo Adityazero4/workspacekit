@@ -88,8 +88,10 @@ const isSameRequest = (first: SearchRequest, second: SearchRequest): boolean =>
  * ```
  */
 export function isUnderAHiddenName(path: string, root: string, hiddenNames: ReadonlySet<string>): boolean {
-  for (let ancestor = path; ancestor !== root && ancestor !== ''; ancestor = parentPath(ancestor)) {
+  let ancestor = path;
+  while (ancestor !== root && ancestor !== '') {
     if (hiddenNames.has(basename(ancestor))) return true;
+    ancestor = parentPath(ancestor);
   }
   return false;
 }

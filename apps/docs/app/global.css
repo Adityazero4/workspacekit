@@ -4,6 +4,257 @@
 
 @source '../node_modules/fumadocs-ui/dist/**/*.js';
 
-:root:not(.dark) {
-  --color-fd-muted-foreground: hsl(0, 0%, 36%);
+@theme inline {
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, monospace;
+  --color-paper: var(--wk-paper);
+  --color-surface: var(--wk-surface);
+  --color-ink: var(--wk-ink);
+  --color-graphite: var(--wk-graphite);
+  --color-rule: var(--wk-rule);
+  --color-accent: var(--wk-accent);
+  --color-accent-soft: var(--wk-accent-soft);
+  --color-band: var(--wk-band);
+}
+
+:root {
+  --wk-paper: #000000;
+  --wk-surface: #0a0a0b;
+  --wk-ink: #f0f0f0;
+  --wk-graphite: #a1a4a5;
+  --wk-rule: #1d1d20;
+  --wk-accent: #ff7a64;
+  --wk-accent-soft: rgb(255 94 98 / 0.18);
+  --wk-band: #050506;
+  --wk-shadow: 0 0 0 1px rgb(255 255 255 / 0.02), 0 30px 80px -30px rgb(0 0 0 / 0.9);
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--wk-ink) 22%, transparent) transparent;
+}
+
+:root {
+  --color-fd-background: var(--wk-paper);
+  --color-fd-foreground: var(--wk-ink);
+  --color-fd-card: var(--wk-surface);
+  --color-fd-card-foreground: var(--wk-ink);
+  --color-fd-popover: var(--wk-surface);
+  --color-fd-popover-foreground: var(--wk-ink);
+  --color-fd-primary: var(--wk-ink);
+  --color-fd-primary-foreground: var(--wk-paper);
+  --color-fd-secondary: color-mix(in oklab, var(--wk-ink) 4%, var(--wk-paper));
+  --color-fd-secondary-foreground: var(--wk-ink);
+  --color-fd-muted: color-mix(in oklab, var(--wk-ink) 4%, var(--wk-paper));
+  --color-fd-muted-foreground: var(--wk-graphite);
+  --color-fd-accent: color-mix(in oklab, var(--wk-ink) 6%, var(--wk-paper));
+  --color-fd-accent-foreground: var(--wk-ink);
+  --color-fd-border: var(--wk-rule);
+  --color-fd-ring: var(--wk-accent);
+}
+
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.04em;
+  }
+
+  ::selection {
+    background: var(--wk-accent-soft);
+  }
+}
+
+.wk-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-code), ui-monospace, monospace;
+  font-size: 0.8rem;
+  color: var(--wk-graphite);
+}
+
+.wk-muted-phrase {
+  color: var(--wk-graphite);
+}
+
+.wk-gradient-text {
+  background: linear-gradient(
+    180deg,
+    var(--wk-ink) 35%,
+    color-mix(in oklab, var(--wk-ink) 80%, var(--wk-paper))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wk-sunset-text {
+  background: linear-gradient(100deg, #ff5e62 10%, #ff9966 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wk-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.wk-panel {
+  position: relative;
+  background: var(--wk-surface);
+  border: 1px solid var(--wk-rule);
+  box-shadow: var(--wk-shadow);
+}
+
+.wk-panel::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--wk-ink) 45%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.wk-card {
+  background: var(--wk-surface);
+  border: 1px solid var(--wk-rule);
+  box-shadow: var(--wk-shadow);
+}
+
+.wk-wire {
+  position: absolute;
+  top: 2.25rem;
+  bottom: 0;
+  left: 1.125rem;
+  width: 1px;
+  overflow: hidden;
+  background: var(--wk-rule);
+}
+
+@media (min-width: 1024px) {
+  .wk-wire {
+    top: 1.125rem;
+    right: 1rem;
+    bottom: auto;
+    left: 2.75rem;
+    width: auto;
+    height: 1px;
+  }
+}
+
+.wk-demo.wk-demo [data-fs-part='workspace'] {
+  --fs-font: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --fs-bg: var(--wk-surface);
+  --fs-bg-hover: color-mix(in oklab, var(--wk-ink) 5%, var(--wk-surface));
+  --fs-bg-selected: var(--wk-accent-soft);
+  --fs-border: var(--wk-rule);
+  --fs-input-border: color-mix(in oklab, var(--wk-ink) 14%, var(--wk-surface));
+  --fs-fg: var(--wk-ink);
+  --fs-muted: var(--wk-graphite);
+  --fs-accent: var(--wk-accent);
+  --fs-focus: var(--wk-accent);
+  --fs-changed: var(--wk-accent);
+  --fs-flash: var(--wk-accent-soft);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wk-arrive {
+    animation: wk-arrive 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  .wk-pulse {
+    animation: wk-pulse 1.6s ease-in-out infinite;
+  }
+
+  .wk-rise {
+    animation: wk-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--wk-delay, 0ms);
+  }
+
+  @supports (animation-timeline: view()) {
+    .wk-reveal,
+    .wk-reveal-each > * {
+      animation: wk-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 80%;
+    }
+
+    .wk-reveal {
+      animation-name: wk-reveal-soft;
+    }
+  }
+}
+
+@keyframes wk-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    background-color: var(--wk-accent-soft);
+  }
+  60% {
+    background-color: var(--wk-accent-soft);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes wk-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Motion moves and sharpens but never fades, so text keeps its full contrast at every frame. */
+@keyframes wk-rise {
+  from {
+    transform: translateY(20px);
+    filter: blur(10px);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes wk-reveal {
+  from {
+    transform: translateY(32px);
+    filter: blur(6px);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes wk-reveal-soft {
+  from {
+    transform: translateY(8px);
+    filter: blur(8px);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
 }
