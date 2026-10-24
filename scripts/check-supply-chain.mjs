@@ -426,6 +426,8 @@ const ALLOWED_ACTIONS = [
   'actions/dependency-review-action',
   'actions/upload-pages-artifact',
   'actions/deploy-pages',
+  'actions/upload-artifact',
+  'actions/download-artifact',
 ];
 const PAGES_WRITE_SCOPES = ['pages', 'id-token'];
 const UNTRUSTED_TRIGGERS = ['pull_request', 'pull_request_target'];

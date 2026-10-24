@@ -12,7 +12,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PUBLIC_PACKAGES } from './agent-docs.mjs';
+import { PUBLIC_PACKAGES } from './public-packages.mjs';
 
 const ALLOWED =
   /^package\/(package\.json|README\.md|AGENTS\.md|llms\.txt|LICENSE|NOTICE|dist\/.+|templates\/.+)$/;

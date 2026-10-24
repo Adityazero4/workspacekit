@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -29,6 +30,8 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/release.mjs check
+      - name: The tagged commit is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
       - run: pnpm --filter @workspacekit/react exec playwright install --with-deps
       - run: pnpm check:full
@@ -37,14 +40,14 @@ jobs:
           FORBIDDEN_PATTERNS: ${{ secrets.FORBIDDEN_PATTERNS }}
         run: pnpm check:forbidden
 
-  publish:
+  pack:
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: npm
     permissions:
       contents: read
-      id-token: write
+    outputs:
+      sums: ${{ steps.sums.outputs.sums }}
     env:
       pnpm_config_ignore_pnpmfile: 'true'
       pnpm_config_verify_deps_before_run: 'false'
@@ -56,6 +59,35 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+      - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - run: pnpm build
+      - name: Pack and audit the tarballs to publish
+        run: node scripts/check-pack.mjs --out "$RUNNER_TEMP/release"
+      - id: sums
+        name: Hash the tarballs
+        run: echo "sums=$(cd "$RUNNER_TEMP/release" && sha256sum -- *.tgz | base64 -w0)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-tarballs
+          path: ${{ runner.temp }}/release/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
       - name: npm 11.21.1, checked against its published sha512
         run: |
           curl -fsSLo "$RUNNER_TEMP/npm.tgz" https://registry.npmjs.org/npm/-/npm-11.21.1.tgz
@@ -63,15 +95,20 @@ jobs:
             'YTzL6QBEJXyHcTu0JiUc7RKMp+mzlJtl7rGLmERaXUQeFHIMc9atdr6G9M9C8vDWbv40epoTQAzNL2/PtZVDhQ=='
           npm install --global --ignore-scripts "$RUNNER_TEMP/npm.tgz"
           npm --version
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-tarballs
+          path: ${{ runner.temp }}/release
+      - name: The tarballs are the ones the pack job hashed
+        env:
+          SUMS: ${{ needs.pack.outputs.sums }}
+        run: cd "$RUNNER_TEMP/release" && echo "$SUMS" | base64 -d | sha256sum --check --strict
       - name: Tag and versions agree
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/release.mjs check
-      - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
-      - run: pnpm build
-      - name: Pack and audit the tarballs to publish
-        run: node scripts/check-pack.mjs --out "$RUNNER_TEMP/release"
       - name: Publish what is not on npm yet
         env:
+          RELEASE_TAG: ${{ github.ref_name }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/release.mjs publish "$RUNNER_TEMP/release"
