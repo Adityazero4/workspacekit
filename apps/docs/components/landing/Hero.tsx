@@ -56,8 +56,9 @@ function Pitch(): React.JSX.Element {
         Files your agent writes, <span className="wk-sunset-text">live</span> for your users
       </h1>
       <p style={delay(120)} className="wk-rise max-w-[48ch] text-lg leading-relaxed text-fd-muted-foreground">
-        A React file tree, search, tabs, upload and real viewers for PDF, Word, PowerPoint, spreadsheets,
-        Markdown and code, over a folder on your server. Every change your agent makes shows up as it happens.
+        workspacekit is an open-source React library: a file tree, search, tabs, upload and real viewers for
+        PDF, Word, PowerPoint, spreadsheets, Markdown and code, over a folder on your server. Every change
+        your agent makes shows up as it happens.
       </p>
       <div style={delay(240)} className="wk-rise flex flex-col items-start gap-4 sm:flex-row sm:items-center">
         <InstallCommand tone="dark" command={STARTER} />

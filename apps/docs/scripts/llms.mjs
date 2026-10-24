@@ -70,9 +70,9 @@ function pageLine(docsUrl, page, label = '') {
 function renderLlmsTxt(docsUrl, pages, packages) {
   const byUrl = new Map(pages.map((page) => [page.url, page]));
   const lines = [
-    '# File workspace',
+    '# workspacekit',
     '',
-    '> A React library that gives an app a file tree, search, tabs, upload and viewers over a directory on a server, with live updates when an agent changes files.',
+    '> workspacekit is an open-source (Apache-2.0) React library that gives an app a file tree, search, tabs, upload and viewers over a directory on a server, with live updates when an agent changes files.',
     '',
   ];
   lines.push('## Start here', '');

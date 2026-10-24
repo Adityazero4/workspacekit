@@ -20,7 +20,11 @@ export const metadata: Metadata = {
 
 const STRUCTURED_DATA = JSON.stringify({
   '@context': 'https://schema.org',
-  '@type': 'SoftwareSourceCode',
+  '@type': ['SoftwareSourceCode', 'SoftwareApplication'],
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Any',
+  isAccessibleForFree: true,
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   name: 'workspacekit',
   description:
     'A React file workspace for agent apps: file tree, search, tabs, upload and viewers over a directory on your server, with live updates.',

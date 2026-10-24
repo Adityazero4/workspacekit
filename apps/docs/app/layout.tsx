@@ -59,6 +59,9 @@ export default function RootLayout({ children }: { children: ReactNode }): React
       className={`${sans.variable} ${mono.variable} ${serif.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <link rel="alternate" type="text/markdown" title="llms.txt" href={`${SITE_URL}/llms.txt`} />
+      </head>
       <body className="flex min-h-screen flex-col">
         <RootProvider search={{ enabled: false }} theme={{ forcedTheme: 'dark', defaultTheme: 'dark' }}>
           {children}

@@ -2,6 +2,11 @@ import { Label, Title } from './Type';
 
 const QUESTIONS: readonly { question: string; answer: string }[] = [
   {
+    question: 'What is workspacekit?',
+    answer:
+      'An open-source React library that shows the files an AI agent writes: a file tree, search, tabs, upload and viewers for PDF, Word, PowerPoint, spreadsheets, Markdown and code, over a folder on your server, updating live as the agent works.',
+  },
+  {
     question: 'Who is it for?',
     answer:
       'Teams building agent apps in React, where people need to see, open and manage the files an agent writes: reports, spreadsheets, documents, code.',
@@ -9,7 +14,7 @@ const QUESTIONS: readonly { question: string; answer: string }[] = [
   {
     question: 'Do I need Next.js?',
     answer:
-      'No. The browser part is a React component, and the handler runs on any server that speaks the Fetch API: Next.js, Remix, Hono or plain Node. There is a Vite guide too.',
+      'No. The browser part of workspacekit is a React component, and the handler runs on any server that speaks the Fetch API: Next.js, Remix, Hono or plain Node. There is a Vite guide too.',
   },
   {
     question: 'Where do the files live?',
@@ -19,7 +24,7 @@ const QUESTIONS: readonly { question: string; answer: string }[] = [
   {
     question: 'How does my agent connect to it?',
     answer:
-      'It does not have to. The agent writes to the folder as it already does, and the workspace sees the change and shows it.',
+      'It does not have to. The agent writes to the folder as it already does, and workspacekit sees the change and shows it within a moment.',
   },
   {
     question: 'Can people see files they should not?',
@@ -28,9 +33,20 @@ const QUESTIONS: readonly { question: string; answer: string }[] = [
   },
   {
     question: 'What does it cost?',
-    answer: 'Nothing. It is open source under the Apache-2.0 licence, with no account and no hosted service.',
+    answer:
+      'Nothing. workspacekit is open source under the Apache-2.0 licence, with no account and no hosted service.',
   },
 ];
+
+const FAQ_STRUCTURED_DATA = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: QUESTIONS.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: { '@type': 'Answer', text: item.answer },
+  })),
+});
 
 /**
  * Short answers to the questions people ask before trying it.
@@ -41,6 +57,7 @@ const QUESTIONS: readonly { question: string; answer: string }[] = [
 export function Faq(): React.JSX.Element {
   return (
     <section aria-labelledby="faq-heading" className="border-t border-fd-border">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: FAQ_STRUCTURED_DATA }} />
       <div className="mx-auto grid w-full max-w-7xl gap-14 px-5 py-28 sm:px-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <div className="flex flex-col gap-6">
           <Label>/faq</Label>
