@@ -59,9 +59,11 @@ function $importTable(
   const alignments = delimiterAlignments(delimiterRow) ?? [];
   const rows = [tableCells(header)];
   let end = startLineIndex + 2;
-  for (let row = tableRowContent(lines[end] ?? ''); row !== null; row = tableRowContent(lines[end] ?? '')) {
+  let row = tableRowContent(lines[end] ?? '');
+  while (row !== null) {
     rows.push(tableCells(row));
     end++;
+    row = tableRowContent(lines[end] ?? '');
   }
   const width = rows.reduce((widest, cells) => Math.max(widest, cells.length), alignments.length);
   const table = $createTableNode();

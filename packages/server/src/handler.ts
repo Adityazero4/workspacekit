@@ -357,13 +357,15 @@ class RecentWrites {
   async #parentsToBeCreated(targets: string[]): Promise<string[]> {
     const missing: string[] = [];
     for (const target of targets) {
-      for (let ancestor = parentPath(target); ancestor !== ''; ancestor = parentPath(ancestor)) {
+      let ancestor = parentPath(target);
+      while (ancestor !== '') {
         const exists = await this.#store.stat(ancestor).then(
           (entry) => entry !== null,
           () => true,
         );
         if (exists) break;
         missing.push(ancestor);
+        ancestor = parentPath(ancestor);
       }
     }
     return missing;

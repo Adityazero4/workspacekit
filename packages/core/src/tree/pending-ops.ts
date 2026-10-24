@@ -39,14 +39,13 @@ export class PendingTreeOps {
 
   /** The tree to read `path` from: flushes the queue first when it touches `path` or one of its ancestors. */
   treeAfterFlushingOpsTouching(path: string): TreeData {
-    for (let ancestorOrSelf = path; ; ancestorOrSelf = parentPath(ancestorOrSelf)) {
-      if (this.#touched.has(ancestorOrSelf)) {
-        this.#tree = applyBatch(this.#tree, this.#ops.splice(0));
-        this.#touched.clear();
-        break;
-      }
-      if (ancestorOrSelf === '') break;
+    let ancestorOrSelf = path;
+    while (!this.#touched.has(ancestorOrSelf)) {
+      if (ancestorOrSelf === '') return this.#tree;
+      ancestorOrSelf = parentPath(ancestorOrSelf);
     }
+    this.#tree = applyBatch(this.#tree, this.#ops.splice(0));
+    this.#touched.clear();
     return this.#tree;
   }
 
