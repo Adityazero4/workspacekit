@@ -23,7 +23,7 @@ export default defineConfig({
       commands: {
         emulateMedia: async (
           ctx,
-          opts: { colorScheme?: 'light' | 'dark' | null; reducedMotion?: 'reduce' | null },
+          opts: { colorScheme?: 'light' | 'dark' | null; reducedMotion?: 'reduce' | 'no-preference' | null },
         ) => {
           await ctx.page.emulateMedia(opts);
         },

@@ -426,6 +426,8 @@ const ALLOWED_ACTIONS = [
   'actions/dependency-review-action',
   'actions/upload-pages-artifact',
   'actions/deploy-pages',
+  'actions/upload-artifact',
+  'actions/download-artifact',
 ];
 const PAGES_WRITE_SCOPES = ['pages', 'id-token'];
 const UNTRUSTED_TRIGGERS = ['pull_request', 'pull_request_target'];
@@ -513,6 +515,14 @@ function dispatchProblems(name, job, workflowPermissions, dispatchTriggers) {
   ];
 }
 
+function environmentProblems(name, job, workflowPermissions) {
+  const permissions = job?.permissions === undefined ? workflowPermissions : job.permissions;
+  if (!isPlainObject(permissions) || permissions['id-token'] !== 'write' || job?.environment) return [];
+  return [
+    `workflow job ${name} holds id-token: write without an environment, so no reviewer gates what it can sign or publish`,
+  ];
+}
+
 /**
  * Problems in a workflow that let pnpm load a pnpmfile or re-run install with its lifecycle scripts, or that
  * run code this check does not know. For each step that runs `pnpm`, the effective env (workflow, then job,
@@ -522,7 +532,8 @@ function dispatchProblems(name, job, workflowPermissions, dispatchTriggers) {
  * full 40-hex commit SHA is a problem. So is any `write` permission (or `write-all`) except `pages` and
  * `id-token`, and those two in a workflow that a `pull_request` or `pull_request_target` can trigger. A job
  * holding either of them in a workflow that `workflow_dispatch` or `repository_dispatch` can trigger must
- * have an `if:` that requires `github.ref == 'refs/heads/main'`, alone or joined with `&&`.
+ * have an `if:` that requires `github.ref == 'refs/heads/main'`, alone or joined with `&&`, and a job holding
+ * `id-token: write` must name an `environment`, whose protection rules gate it.
  *
  * @example
  * workflowProblems('jobs:\n  a:\n    steps:\n      - run: pnpm audit\n');
@@ -543,6 +554,7 @@ export function workflowProblems(text) {
     ...Object.entries(workflow.jobs).flatMap(([name, job]) => [
       ...jobProblems(name, job, workflowEnv, untrustedTriggers),
       ...dispatchProblems(name, job, workflow.permissions, dispatchTriggers),
+      ...environmentProblems(name, job, workflow.permissions),
     ]),
   ];
 }

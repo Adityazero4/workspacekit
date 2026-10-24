@@ -628,7 +628,7 @@ test('a job that calls a reusable workflow is reported', () => {
 const CI_WORKFLOW = (extra = '') =>
   `on:\n  pull_request:\npermissions: {}\njobs:\n  check:\n    permissions:\n      contents: read\n${BOTH_ENV}${extra}    steps:\n      - uses: actions/checkout@${SHA}\n      - run: pnpm check:full\n`;
 const PAGES_WORKFLOW = (trigger) =>
-  `on:\n  ${trigger}:\npermissions: {}\njobs:\n  deploy:\n    permissions:\n      pages: write\n      id-token: write\n    steps:\n      - uses: actions/deploy-pages@${SHA}\n`;
+  `on:\n  ${trigger}:\npermissions: {}\njobs:\n  deploy:\n    environment: github-pages\n    permissions:\n      pages: write\n      id-token: write\n    steps:\n      - uses: actions/deploy-pages@${SHA}\n`;
 
 test('accepts the upload-pages-artifact and deploy-pages actions', () => {
   assert.deepEqual(workflowProblems(PAGES_WORKFLOW('push')), []);
@@ -682,6 +682,7 @@ test('every .yml and .yaml file in the workflows folder is checked, named by its
   assert.deepEqual(allWorkflowProblems(new URL('./fixtures/workflows/', import.meta.url), { required: [] }), [
     'release.yaml: workflow job publish step 1 uses actions/checkout@v4, which is not an allowed action pinned to a full commit SHA',
     `release.yaml: ${DISPATCH_PROBLEM('publish', 'id-token: write', 'workflow_dispatch')}`,
+    `release.yaml: ${NO_ENVIRONMENT('publish')}`,
   ]);
 });
 
@@ -744,7 +745,20 @@ test('write scopes granted at the workflow level count for jobs that set no perm
   const text = `on: workflow_dispatch\npermissions:\n  id-token: write\njobs:\n  publish:\n    steps:\n      - uses: actions/deploy-pages@${SHA}\n`;
   assert.deepEqual(workflowProblems(text), [
     DISPATCH_PROBLEM('publish', 'id-token: write', 'workflow_dispatch'),
+    NO_ENVIRONMENT('publish'),
   ]);
+});
+
+const NO_ENVIRONMENT = (job) =>
+  `workflow job ${job} holds id-token: write without an environment, so no reviewer gates what it can sign or publish`;
+
+test('a job holding id-token: write must name an environment', () => {
+  const tagged = `on:\n  push:\n    tags: ['v*']\npermissions: {}\njobs:\n  publish:\n    permissions:\n      id-token: write\n    steps:\n      - uses: actions/checkout@${SHA}\n`;
+  assert.deepEqual(workflowProblems(tagged), [NO_ENVIRONMENT('publish')]);
+  assert.deepEqual(
+    workflowProblems(tagged.replace('    permissions:', '    environment: npm\n    permissions:')),
+    [],
+  );
 });
 
 test('ci.yml and pages.yml keep the shapes the release checklist relies on', () => {

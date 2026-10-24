@@ -3,27 +3,9 @@ import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { PUBLIC_PACKAGES } from './public-packages.mjs';
 
-/**
- * The folders under `packages/` that ship `README.md`, `AGENTS.md` and `llms.txt`.
- *
- * @example
- * for (const folder of PUBLIC_PACKAGES) console.log(`packages/${folder}/llms.txt`);
- */
-export const PUBLIC_PACKAGES = [
-  'core',
-  'server',
-  'react',
-  'code',
-  'pdf',
-  'docx',
-  'pptx',
-  'spreadsheet',
-  'markdown',
-  'workspace',
-  'demo-kit',
-  'create-workspace',
-];
+export { PUBLIC_PACKAGES };
 
 const SHIPPED_DOCS = ['README.md', 'AGENTS.md', 'llms.txt'];
 const BLOCK_START = '<!-- common-mistakes:start -->';

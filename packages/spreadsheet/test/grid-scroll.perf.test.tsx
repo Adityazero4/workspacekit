@@ -10,7 +10,7 @@ const COLS = 500;
 const MERGES = 1_000;
 const WARM_UP_RUNS = 1;
 const MEDIAN_RUNS = 5;
-const BUDGET_MS = 50;
+const BUDGET_MS = 50 * Number(process.env.PERF_BUDGET_SCALE);
 
 const nextFrame = (): Promise<number> => new Promise((resolve) => requestAnimationFrame(resolve));
 const median = (values: number[]): number =>
