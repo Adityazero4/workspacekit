@@ -45,7 +45,7 @@ export function ChangeFlow(): React.JSX.Element {
           and says so once.
         </p>
       </div>
-      <ol className="mt-16 grid lg:grid-cols-4">
+      <ol className="wk-reveal-each mt-16 grid lg:grid-cols-4">
         {STEPS.map((step, index) => (
           <li key={step.title} className="relative flex gap-5 pb-12 lg:flex-col lg:gap-6 lg:pr-10 lg:pb-0">
             <span className="z-10 grid size-9 shrink-0 place-items-center rounded-full border border-fd-border bg-fd-background font-mono text-xs text-fd-muted-foreground">

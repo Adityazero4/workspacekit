@@ -18,31 +18,23 @@
 }
 
 :root {
-  --wk-paper: #ffffff;
-  --wk-surface: #ffffff;
-  --wk-ink: #0f172a;
-  --wk-graphite: #64748b;
-  --wk-rule: #e2e8f0;
-  --wk-accent: #2563eb;
-  --wk-accent-soft: rgb(37 99 235 / 0.1);
-  --wk-band: #f8fafc;
-  --wk-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 20px 50px -24px rgb(15 23 42 / 0.2);
+  --wk-paper: #000000;
+  --wk-surface: #0a0a0b;
+  --wk-ink: #f0f0f0;
+  --wk-graphite: #a1a4a5;
+  --wk-rule: #1d1d20;
+  --wk-accent: #ff7a64;
+  --wk-accent-soft: rgb(255 94 98 / 0.18);
+  --wk-band: #050506;
+  --wk-shadow: 0 0 0 1px rgb(255 255 255 / 0.02), 0 30px 80px -30px rgb(0 0 0 / 0.9);
 }
 
-.dark {
-  --wk-paper: #0b1120;
-  --wk-surface: #0f172a;
-  --wk-ink: #e2e8f0;
-  --wk-graphite: #94a3b8;
-  --wk-rule: #1e293b;
-  --wk-accent: #60a5fa;
-  --wk-accent-soft: rgb(96 165 250 / 0.16);
-  --wk-band: #0d1527;
-  --wk-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 20px 50px -24px rgb(0 0 0 / 0.6);
+html {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--wk-ink) 22%, transparent) transparent;
 }
 
-:root,
-.dark {
+:root {
   --color-fd-background: var(--wk-paper);
   --color-fd-foreground: var(--wk-ink);
   --color-fd-card: var(--wk-surface);
@@ -88,11 +80,58 @@
   gap: 0.45rem;
   font-family: var(--font-code), ui-monospace, monospace;
   font-size: 0.8rem;
-  color: var(--wk-accent);
+  color: var(--wk-graphite);
 }
 
 .wk-muted-phrase {
   color: var(--wk-graphite);
+}
+
+.wk-gradient-text {
+  background: linear-gradient(
+    180deg,
+    var(--wk-ink) 35%,
+    color-mix(in oklab, var(--wk-ink) 80%, var(--wk-paper))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wk-sunset-text {
+  background: linear-gradient(100deg, #ff5e62 10%, #ff9966 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wk-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.wk-panel {
+  position: relative;
+  background: var(--wk-surface);
+  border: 1px solid var(--wk-rule);
+  box-shadow: var(--wk-shadow);
+}
+
+.wk-panel::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--wk-ink) 45%, transparent),
+    transparent
+  );
+  pointer-events: none;
 }
 
 .wk-card {
@@ -147,8 +186,21 @@
   }
 
   .wk-rise {
-    animation: wk-rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation: wk-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
     animation-delay: var(--wk-delay, 0ms);
+  }
+
+  @supports (animation-timeline: view()) {
+    .wk-reveal,
+    .wk-reveal-each > * {
+      animation: wk-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 80%;
+    }
+
+    .wk-reveal {
+      animation-name: wk-reveal-soft;
+    }
   }
 }
 
@@ -173,13 +225,36 @@
   }
 }
 
+/* Motion moves and sharpens but never fades, so text keeps its full contrast at every frame. */
 @keyframes wk-rise {
   from {
-    opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(20px);
+    filter: blur(10px);
   }
   to {
-    opacity: 1;
     transform: none;
+    filter: none;
+  }
+}
+
+@keyframes wk-reveal {
+  from {
+    transform: translateY(32px);
+    filter: blur(6px);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes wk-reveal-soft {
+  from {
+    transform: translateY(8px);
+    filter: blur(8px);
+  }
+  to {
+    transform: none;
+    filter: none;
   }
 }

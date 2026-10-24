@@ -38,9 +38,9 @@ export function Title(props: {
   return (
     <h2
       id={props.id}
-      className={`max-w-[24ch] text-[clamp(2rem,4vw,3rem)] leading-[1.08] text-fd-foreground ${props.className ?? ''}`}
+      className={`wk-gradient-text wk-reveal max-w-[24ch] text-balance text-[clamp(2.2rem,4.4vw,3.5rem)] leading-[1.05] font-medium tracking-[-0.05em] ${props.className ?? ''}`}
     >
-      {props.lead} <span className="wk-muted-phrase">{props.rest}</span>
+      {props.lead} {props.rest}
     </h2>
   );
 }

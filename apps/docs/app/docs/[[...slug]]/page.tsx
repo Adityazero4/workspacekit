@@ -1,5 +1,6 @@
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layouts/docs/page';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Include } from '../../../components/Include';
 import {
@@ -11,6 +12,7 @@ import {
 } from '../../../components/LiveExamples';
 import { LiveWorkspace } from '../../../components/LiveWorkspace';
 import { RendererGallery } from '../../../components/RendererGallery';
+import { openGraph } from '../../../lib/layoutOptions';
 import { source } from '../../../lib/source';
 
 const MDX_COMPONENTS = {
@@ -62,14 +64,19 @@ export function generateStaticParams(): { slug: string[] }[] {
 }
 
 /**
- * The title and description of the page, from its front matter.
+ * The title, description and canonical link of the page, from its front matter.
  *
  * @example
  * const metadata = await generateMetadata({ params });
  */
-export async function generateMetadata(props: PageProps): Promise<{ title: string; description?: string }> {
+export async function generateMetadata(props: PageProps): Promise<Metadata> {
   const { slug } = await props.params;
   const page = source.getPage(slug);
   if (!page) notFound();
-  return { title: page.data.title, description: page.data.description };
+  return {
+    title: page.data.title,
+    description: page.data.description,
+    alternates: { canonical: page.url },
+    openGraph: openGraph({ title: page.data.title, description: page.data.description, url: page.url }),
+  };
 }

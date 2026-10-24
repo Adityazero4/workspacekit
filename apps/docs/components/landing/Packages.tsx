@@ -12,7 +12,7 @@ const PACKAGES: readonly { name: string; what: string }[] = [
     what: 'The adapter contract and tree store, plus HTTP and in-memory adapters.',
   },
   { name: '@workspacekit/react', what: 'The components alone, for your own layout or your own viewers.' },
-  { name: '@workspacekit/pdf, docx, pptx, …', what: 'One viewer each, if you want only some of them.' },
+  { name: '@workspacekit/pdf, docx, pptx and more', what: 'One viewer each, if you want only some of them.' },
   { name: '@workspacekit/create-workspace', what: 'A starter project for Next.js or Vite, in one command.' },
 ];
 
@@ -36,7 +36,7 @@ export function Layers(): React.JSX.Element {
             storage, layout or viewers.
           </p>
         </div>
-        <dl className="border-t border-fd-border">
+        <dl className="wk-reveal-each border-t border-fd-border">
           {PACKAGES.map((item) => (
             <div
               key={item.name}

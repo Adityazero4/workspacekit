@@ -52,16 +52,19 @@ export function Inside(): React.JSX.Element {
             rest="Finished, tested and accessible."
           />
         </div>
-        <ul className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="wk-reveal-each mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {INCLUDED.map((item) => (
             <li key={item.title} className="wk-card flex flex-col gap-3 rounded-xl p-6">
-              <span className="font-mono text-[0.8rem] text-accent">{item.path}</span>
+              <span className="font-mono text-[0.8rem] text-fd-muted-foreground">{item.path}</span>
               <h3 className="text-lg text-fd-foreground">{item.title}</h3>
               <p className="text-[0.95rem] leading-relaxed text-fd-muted-foreground">{item.body}</p>
             </li>
           ))}
         </ul>
-        <Link href="/docs" className="mt-10 inline-block text-sm font-medium text-accent hover:underline">
+        <Link
+          href="/docs"
+          className="mt-10 inline-block text-sm font-medium text-fd-foreground hover:underline"
+        >
           Read the documentation <span aria-hidden="true">→</span>
         </Link>
       </div>

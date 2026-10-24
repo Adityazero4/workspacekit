@@ -46,7 +46,7 @@ export function Faq(): React.JSX.Element {
           <Label>/faq</Label>
           <Title id="faq-heading" lead="Questions people" rest="ask first." />
         </div>
-        <div className="border-t border-fd-border">
+        <div className="wk-reveal-each border-t border-fd-border">
           {QUESTIONS.map((item) => (
             <details key={item.question} className="group border-b border-fd-border">
               <summary className="flex items-center justify-between gap-6 py-5 text-lg text-fd-foreground [&::-webkit-details-marker]:hidden">

@@ -5,7 +5,6 @@ import { Workspace } from '@workspacekit/workspace';
 import '@workspacekit/workspace/styles.css';
 import { useEffect, useRef, useState } from 'react';
 import type { WorkspaceController } from '@workspacekit/react';
-import { useSiteTheme } from '../lib/useSiteTheme';
 import { AGENT_INTERVAL_MS, AGENT_SCRIPT, countAgentWrites, markAgentRunning } from '../lib/agentProbe';
 import { AgentActivity } from './AgentActivity';
 
@@ -50,19 +49,8 @@ const FIRST_FILE_DELAY_MS = 300;
 function useFirstFileOpen(controller: React.RefObject<WorkspaceController | null>, isOn: boolean): void {
   useEffect(() => {
     if (!isOn) return;
-    let isCurrent = true;
-    const timer = setTimeout(() => {
-      void controller.current
-        ?.reveal(FIRST_FILE)
-        .then(() => {
-          if (isCurrent) controller.current?.open(FIRST_FILE, 'pin');
-        })
-        .catch(() => undefined);
-    }, FIRST_FILE_DELAY_MS);
-    return () => {
-      isCurrent = false;
-      clearTimeout(timer);
-    };
+    const timer = setTimeout(() => controller.current?.open(FIRST_FILE, 'pin'), FIRST_FILE_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [controller, isOn]);
 }
 
@@ -102,7 +90,6 @@ export function LiveWorkspace(props: { activity?: boolean }): React.JSX.Element 
   const [isPaused, setIsPaused] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const isVisible = useIsVisible(container);
-  const theme = useSiteTheme();
   const controller = useRef<WorkspaceController>(null);
   useAgentWhile(adapter, isVisible && !isPaused);
   useFirstFileOpen(controller, props.activity === true);
@@ -110,7 +97,7 @@ export function LiveWorkspace(props: { activity?: boolean }): React.JSX.Element 
     <Workspace
       adapter={adapter}
       ref={controller}
-      theme={theme ?? 'system'}
+      theme="dark"
       style={{ height: props.activity ? 420 : 520 }}
       defaultFollow={props.activity === true}
     />

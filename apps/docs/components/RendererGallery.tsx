@@ -4,7 +4,6 @@ import { sampleFiles } from '@workspacekit/demo-kit';
 import { allRenderers, FileSystemProvider, FileViewer } from '@workspacekit/workspace';
 import '@workspacekit/workspace/styles.css';
 import { useState, type KeyboardEvent } from 'react';
-import { useSiteTheme } from '../lib/useSiteTheme';
 
 const GALLERY: readonly { label: string; path: string }[] = [
   { label: 'PDF', path: 'docs/welcome.pdf' },
@@ -35,7 +34,6 @@ function nextTabIndex(key: string, index: number): number | null {
 export function RendererGallery(): React.JSX.Element {
   const [adapter] = useState(() => createMemoryAdapter({ files: sampleFiles() }));
   const [selected, setSelected] = useState(0);
-  const theme = useSiteTheme();
   const current = GALLERY[selected] ?? GALLERY[0]!;
   const moveFocus = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
     const target = nextTabIndex(event.key, index);
@@ -68,7 +66,7 @@ export function RendererGallery(): React.JSX.Element {
         id="gallery-panel"
         role="tabpanel"
         aria-labelledby={`gallery-tab-${selected}`}
-        data-theme={theme}
+        data-theme="dark"
         className="h-[480px] overflow-hidden rounded-lg border border-fd-border"
       >
         <FileSystemProvider adapter={adapter}>

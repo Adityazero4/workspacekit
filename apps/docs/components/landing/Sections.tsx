@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { BROWSER_SNIPPET, SERVER_SNIPPET } from '../../lib/snippets';
-import { REPOSITORY_URL } from '../../lib/layoutOptions';
+import { GitHubIcon, NpmIcon } from '../BrandIcons';
+import { NPM_URL, REPOSITORY_URL } from '../../lib/layoutOptions';
 import { RendererGallery } from '../RendererGallery';
 import { Code } from './Code';
 import { InstallCommand } from './Hero';
@@ -98,7 +99,7 @@ export function Comparison(): React.JSX.Element {
         <Label>/build-or-install</Label>
         <Title id="compare-heading" lead="The part of your app" rest="you should not have to build." />
       </div>
-      <dl className="mt-14 border-t border-fd-border">
+      <dl className="wk-reveal-each mt-14 border-t border-fd-border">
         {COMPARISON.map((row) => (
           <div
             key={row.need}
@@ -110,7 +111,7 @@ export function Comparison(): React.JSX.Element {
               {row.diy}
             </dd>
             <dd className="text-[0.95rem] leading-relaxed text-fd-foreground">
-              <span className="mb-1.5 block text-xs font-medium text-accent">With workspacekit</span>
+              <span className="mb-1.5 block text-xs font-medium text-fd-foreground">With workspacekit</span>
               {row.kit}
             </dd>
           </div>
@@ -137,7 +138,7 @@ export function Security(): React.JSX.Element {
             An agent’s folder often holds things only some people may see. The handler has no open mode: you
             decide, per request and per path.
           </p>
-          <ul className="mt-2 flex flex-col">
+          <ul className="wk-reveal-each mt-2 flex flex-col">
             {GUARANTEES.map((guarantee) => (
               <li
                 key={guarantee}
@@ -169,22 +170,29 @@ export function QuickStart(): React.JSX.Element {
         <Label>/quick-start</Label>
         <Title id="start-heading" lead="Running in" rest="three steps." />
       </div>
-      <ol className="mt-14 grid gap-10 lg:grid-cols-3">
-        <li className="flex min-w-0 flex-col gap-4 border-t border-fd-border pt-6">
-          <span className="font-mono text-xs text-fd-muted-foreground">01</span>
-          <h3 className="text-xl">Install the packages.</h3>
-          <InstallCommand />
-        </li>
-        <li className="flex min-w-0 flex-col gap-4 border-t border-fd-border pt-6">
-          <span className="font-mono text-xs text-fd-muted-foreground">02</span>
-          <h3 className="text-xl">Expose a folder on the server.</h3>
-          <Code lang="ts" label="Step 2: the server route" code={SERVER_SNIPPET} />
-        </li>
-        <li className="flex min-w-0 flex-col gap-4 border-t border-fd-border pt-6">
-          <span className="font-mono text-xs text-fd-muted-foreground">03</span>
-          <h3 className="text-xl">Render it in the browser.</h3>
-          <Code lang="tsx" label="Step 3: the browser page" code={BROWSER_SNIPPET} />
-        </li>
+      <ol className="wk-reveal-each mt-14 flex flex-col">
+        {[
+          { title: 'Install the packages.', body: <InstallCommand /> },
+          {
+            title: 'Expose a folder on the server.',
+            body: <Code lang="ts" label="Step 2: the server route" code={SERVER_SNIPPET} />,
+          },
+          {
+            title: 'Render it in the browser.',
+            body: <Code lang="tsx" label="Step 3: the browser page" code={BROWSER_SNIPPET} />,
+          },
+        ].map((step, index) => (
+          <li
+            key={step.title}
+            className="grid min-w-0 gap-4 border-t border-fd-border py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-10"
+          >
+            <div className="flex flex-col gap-3">
+              <span className="font-mono text-xs text-fd-muted-foreground">0{index + 1}</span>
+              <h3 className="text-xl">{step.title}</h3>
+            </div>
+            <div className="min-w-0">{step.body}</div>
+          </li>
+        ))}
       </ol>
     </Section>
   );
@@ -210,8 +218,21 @@ export function Closing(): React.JSX.Element {
             >
               Add it to your app <span aria-hidden="true">→</span>
             </Link>
-            <a href={REPOSITORY_URL} className="text-sm text-fd-muted-foreground hover:text-fd-foreground">
+            <a
+              href={REPOSITORY_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-fd-muted-foreground hover:text-fd-foreground"
+            >
               Source on GitHub <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              href={NPM_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-fd-muted-foreground hover:text-fd-foreground"
+            >
+              Package on npm <span aria-hidden="true">↗</span>
             </a>
           </div>
         </div>
@@ -219,15 +240,30 @@ export function Closing(): React.JSX.Element {
       <footer className="border-t border-fd-border">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-fd-muted-foreground sm:px-8">
           <p>workspacekit is open source under the Apache-2.0 licence.</p>
-          <nav aria-label="Footer" className="flex gap-6">
+          <nav aria-label="Footer" className="flex items-center gap-6">
             <Link href="/docs" className="hover:text-fd-foreground">
               Docs
             </Link>
             <a href={`${BASE_PATH}/llms.txt`} className="hover:text-fd-foreground">
               llms.txt
             </a>
-            <a href={REPOSITORY_URL} className="hover:text-fd-foreground">
-              GitHub
+            <a
+              href={REPOSITORY_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="GitHub"
+              className="hover:text-fd-foreground"
+            >
+              <GitHubIcon />
+            </a>
+            <a
+              href={NPM_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="npm"
+              className="hover:text-fd-foreground"
+            >
+              <NpmIcon />
             </a>
           </nav>
         </div>
