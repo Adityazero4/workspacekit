@@ -58,7 +58,7 @@ npm configures a trusted publisher in a package's settings, so the package must 
 
 ## Verification
 
-- [ ] `pnpm check:full` passes in CI: all three browsers and every perf budget. The local `pnpm check` runs Chromium only, one test worker and one package at a time, and no perf suites, so it stays light enough for a laptop; the full run is too heavy to share a machine with other work.
+- [ ] `pnpm check:full` passes in CI: all three browsers and every perf budget. CI sets `PERF_BUDGET_SCALE=1.5`, because shared runners are slower than a developer machine. Locally the budgets apply as written; raise the scale only for slow hardware, never to hide a regression. The local `pnpm check` runs Chromium only, one test worker and one package at a time, and no perf suites, so it stays light enough for a laptop; the full run is too heavy to share a machine with other work.
 
 - [ ] Build the docs site again without `NEXT_PUBLIC_DOCS_TEST` before deploying it: `pnpm test:e2e:docs` writes a test build (with the test hooks) into `apps/docs/out`, and that folder must not be what you upload.
 

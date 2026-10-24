@@ -7,13 +7,16 @@ import {
 
 const productionReactLikeTheShippedApp = { 'process.env.NODE_ENV': JSON.stringify('production') };
 const skipOnSlowMachines = { 'process.env.CI_SLOW': JSON.stringify(process.env.CI_SLOW ?? '') };
+const perfBudgetScale = {
+  'process.env.PERF_BUDGET_SCALE': JSON.stringify(process.env.PERF_BUDGET_SCALE ?? '1'),
+};
 const BENCH_PAGE_TIMEOUT_MS = 600_000;
 const chromiumFlagsForGcAndExactHeapSizes = ['--js-flags=--expose-gc', '--enable-precise-memory-info'];
 
 export default defineConfig({
   root: import.meta.dirname,
   resolve: testAgainstWorkspaceSourcesWithoutABuild,
-  define: { ...productionReactLikeTheShippedApp, ...skipOnSlowMachines },
+  define: { ...productionReactLikeTheShippedApp, ...skipOnSlowMachines, ...perfBudgetScale },
   oxc: { jsx: { runtime: 'automatic', development: false } },
   plugins: [compileReactSourcesLikeTheBuild()],
   optimizeDeps: { include: ['react', 'react/jsx-runtime', 'react/compiler-runtime', 'react-dom/client'] },

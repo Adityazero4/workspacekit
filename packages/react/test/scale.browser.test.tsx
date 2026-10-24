@@ -58,7 +58,8 @@ function reportSamples(line: string): void {
 const formatted = (samples: readonly number[]): string =>
   samples.map((sample) => (Number.isInteger(sample) ? String(sample) : sample.toFixed(3))).join(', ');
 
-function expectMedianAtMost(samples: number[], budget: number, label: string): void {
+function expectMedianAtMost(samples: number[], unscaledBudget: number, label: string): void {
+  const budget = unscaledBudget * Number(process.env.PERF_BUDGET_SCALE);
   const message = `${label}: median of [${formatted(samples)}]`;
   reportSamples(`${message} = ${formatted([median(samples)])}, budget ≤ ${budget}`);
   expect.soft(median(samples), message).toBeLessThanOrEqual(budget);
