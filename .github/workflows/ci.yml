@@ -7,16 +7,19 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check:
+  static:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 20
     permissions:
       contents: read
     env:
       pnpm_config_ignore_pnpmfile: 'true'
       pnpm_config_verify_deps_before_run: 'false'
-      PERF_BUDGET_SCALE: '1.5'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -26,10 +29,126 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
-      - run: pnpm --filter @workspacekit/react exec playwright install --with-deps
-      - run: pnpm check:full
+      - run: pnpm check:static
       - name: Forbidden strings
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         env:
           FORBIDDEN_PATTERNS: ${{ secrets.FORBIDDEN_PATTERNS }}
         run: pnpm check:forbidden
+
+  docs-and-dist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      pnpm_config_ignore_pnpmfile: 'true'
+      pnpm_config_verify_deps_before_run: 'false'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - run: pnpm build
+      - run: pnpm check:docs
+      - run: pnpm check:dist
+
+  unit:
+    name: unit (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      pnpm_config_ignore_pnpmfile: 'true'
+      pnpm_config_verify_deps_before_run: 'false'
+      BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - run: pnpm --filter @workspacekit/react exec playwright install --with-deps "$BROWSER"
+      - run: pnpm build
+      - name: Node tests and Chromium
+        if: matrix.browser == 'chromium'
+        run: pnpm exec vitest run --project '!*(firefox)' --project '!*(webkit)' --maxWorkers=2
+      - name: Firefox or WebKit
+        if: matrix.browser != 'chromium'
+        run: pnpm exec vitest run --project "*($BROWSER)" --maxWorkers=2
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      pnpm_config_ignore_pnpmfile: 'true'
+      pnpm_config_verify_deps_before_run: 'false'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - run: pnpm --filter @workspacekit/react exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm test:e2e
+
+  perf:
+    name: perf (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [test:perf, test:perf:react, test:perf:code, test:perf:spreadsheet, test:perf:workspace]
+    env:
+      pnpm_config_ignore_pnpmfile: 'true'
+      pnpm_config_verify_deps_before_run: 'false'
+      PERF_BUDGET_SCALE: '1.5'
+      SUITE: ${{ matrix.suite }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - run: pnpm --filter @workspacekit/react exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm "$SUITE"
+
+  check:
+    if: always()
+    needs: [static, docs-and-dist, unit, e2e, perf]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job above succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then exit 1; fi
+          done
