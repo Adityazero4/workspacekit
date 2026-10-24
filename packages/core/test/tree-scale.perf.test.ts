@@ -14,7 +14,7 @@ import {
 import { createVisibleRowIndex } from '../src/tree/visible';
 import type { Entry } from '../src/types';
 
-// Generous wall-clock budgets (Node 22). Each figure is the median of 3 runs. PERF_BUDGET_SCALE (CI sets 1.5) scales them;
+// Generous wall-clock budgets (Node 22). Each figure is the median of 3 runs. PERF_BUDGET_SCALE (CI sets 2) scales them;
 // CI_SLOW=1 skips them.
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 const PERF_BUDGET_SCALE = Number(env.PERF_BUDGET_SCALE ?? 1);

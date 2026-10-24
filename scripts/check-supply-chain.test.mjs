@@ -763,12 +763,33 @@ test('a job holding id-token: write must name an environment', () => {
 
 test('ci.yml and pages.yml keep the shapes the release checklist relies on', () => {
   const read = (name) => readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
-  assert.match(read('ci'), /pnpm check:full/);
-  assert.match(read('ci'), /pnpm --filter @workspacekit\/react exec playwright install --with-deps/);
   const pages = read('pages');
   assert.match(pages, /NEXT_PUBLIC_BASE_PATH: \/workspacekit/);
   assert.doesNotMatch(pages, /NEXT_PUBLIC_DOCS_TEST/);
   assert.doesNotMatch(pages, /pull_request/);
+});
+
+test('ci.yml runs every part of check:full in parallel jobs, and its check job waits for all of them', () => {
+  const ci = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const partsOf = (script) => script.split('&&').map((part) => part.trim().replace(/^pnpm /, ''));
+  const coveredElsewhere = new Set(['test:all-browsers', 'check:perf']);
+  for (const part of partsOf(scripts['check:full']).filter((part) => !coveredElsewhere.has(part))) {
+    assert.match(ci, new RegExp(`run: pnpm ${part}\\n`), part);
+  }
+  const shards = [...ci.matchAll(/- \{ browser: (\w+), shard: (\d+\/\d+) \}/g)].map(
+    (match) => `${match[1]} ${match[2]}`,
+  );
+  assert.deepEqual(shards, ['chromium 1/1', 'firefox 1/3', 'firefox 2/3', 'firefox 3/3', 'webkit 1/1']);
+  assert.equal(ci.match(/--shard="\$SHARD"/g)?.length, 2);
+  assert.match(ci, /--project '!\*\(firefox\)' --project '!\*\(webkit\)'/);
+  assert.match(ci, /--project "\*\(\$BROWSER\)"/);
+  const suites = ci.match(/suite: \[(.*)\]/)?.[1].split(', ');
+  assert.deepEqual(suites, partsOf(scripts['check:perf']));
+  assert.ok(
+    ci.includes('\n  check:\n    if: always()\n    needs: [static, docs-and-dist, unit, e2e, perf]\n'),
+  );
+  assert.match(ci, /if \[ "\$result" != success \]; then exit 1; fi/);
 });
 
 test('effectiveSettings runs pnpm with its pnpmfile ignored', () => {
