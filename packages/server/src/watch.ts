@@ -2,7 +2,7 @@ import { watch as fsWatch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename } from 'node:path';
-import type { ChangeEvent, Entry } from '@scope/core';
+import type { ChangeEvent, Entry } from '@workspacekit/core';
 
 /**
  * What `probe` learns about a path from one stat: its birth time and the entry a listing would show for it

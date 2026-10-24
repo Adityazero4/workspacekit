@@ -1,0 +1,6 @@
+@workspacekit/demo-kit AgentStep
+@workspacekit/demo-kit DEFAULT_AGENT_SCRIPT
+@workspacekit/demo-kit DOCS_URL
+@workspacekit/demo-kit SimulateAgentOptions
+@workspacekit/demo-kit sampleFiles
+@workspacekit/demo-kit simulateAgent

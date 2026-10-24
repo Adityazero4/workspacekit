@@ -1,39 +1,39 @@
-# @scope/workspace
+# @workspacekit/workspace
 
-The one-install preset: `Workspace` with every renderer, plus the whole `@scope/react` API.
+The one-install preset: `Workspace` with every renderer, plus the whole `@workspacekit/react` API.
 
 ## Install
 
 ```sh
-npm install @scope/workspace @scope/core react react-dom
+npm install @workspacekit/workspace @workspacekit/core react react-dom
 ```
 
-`@scope/workspace/styles.css` is a list of bare `@import`s (one per package), so it needs a bundler that resolves them, such as Vite or Next.js. Install `@scope/core` yourself because your code imports `@scope/core/http`: a package manager with strict resolution, such as pnpm, only lets an app import what is in its own `package.json`.
+`@workspacekit/workspace/styles.css` is a list of bare `@import`s (one per package), so it needs a bundler that resolves them, such as Vite or Next.js. Install `@workspacekit/core` yourself because your code imports `@workspacekit/core/http`: a package manager with strict resolution, such as pnpm, only lets an app import what is in its own `package.json`.
 
 ## Entry
 
 ```tsx
 // page.tsx
 'use client';
-import { Workspace } from '@scope/workspace';
-import { httpAdapter } from '@scope/core/http';
-import '@scope/workspace/styles.css';
+import { Workspace } from '@workspacekit/workspace';
+import { httpAdapter } from '@workspacekit/core/http';
+import '@workspacekit/workspace/styles.css';
 
 export default function Files() {
   return <Workspace adapter={httpAdapter('/api/files')} />;
 }
 ```
 
-Pair it with `createFileHandler` from `@scope/server` on the server. `Workspace` fills its parent, so give the parent a height.
+Pair it with `createFileHandler` from `@workspacekit/server` on the server. `Workspace` fills its parent, so give the parent a height.
 
 ## Standalone use
 
-To show one file without the tree, put `FileViewer` inside a `FileSystemProvider` and give it `allRenderers()`. Both come from this package, which re-exports `@scope/react`.
+To show one file without the tree, put `FileViewer` inside a `FileSystemProvider` and give it `allRenderers()`. Both come from this package, which re-exports `@workspacekit/react`.
 
 ```tsx
-import { allRenderers, FileSystemProvider, FileViewer } from '@scope/workspace';
-import { httpAdapter } from '@scope/core/http';
-import '@scope/workspace/styles.css';
+import { allRenderers, FileSystemProvider, FileViewer } from '@workspacekit/workspace';
+import { httpAdapter } from '@workspacekit/core/http';
+import '@workspacekit/workspace/styles.css';
 
 const adapter = httpAdapter('/api/files');
 const renderers = allRenderers();
@@ -49,19 +49,19 @@ export function Preview({ path }: { path: string }): React.JSX.Element {
 
 ## CSS
 
-Import `@scope/workspace/styles.css` once. It pulls in the stylesheet of every package, in layer order, so you never import the per-package ones. Everything is in `@layer fs`, so your own CSS wins.
+Import `@workspacekit/workspace/styles.css` once. It pulls in the stylesheet of every package, in layer order, so you never import the per-package ones. Everything is in `@layer fs`, so your own CSS wins.
 
-## Why `@scope/react` is a dependency
+## Why `@workspacekit/react` is a dependency
 
-`@scope/react` is a dependency here, not a peer. The preset re-exports it and owns its version, so the renderer packages it installs always match it.
+`@workspacekit/react` is a dependency here, not a peer. The preset re-exports it and owns its version, so the renderer packages it installs always match it.
 
 ## Renderer options
 
 `Workspace` uses `allRenderers()`. To configure a renderer package, pass its options to `allRenderers` and give the result to `Workspace`; the precedence order stays the same:
 
 ```tsx
-import { httpAdapter } from '@scope/core/http';
-import { allRenderers, Workspace } from '@scope/workspace';
+import { httpAdapter } from '@workspacekit/core/http';
+import { allRenderers, Workspace } from '@workspacekit/workspace';
 
 const nonce = document.querySelector('meta[name="csp-nonce"]')?.getAttribute('content') ?? undefined;
 
@@ -95,25 +95,25 @@ export default defineConfig({
   plugins: [react()],
   worker: { format: 'es' },
   optimizeDeps: {
-    exclude: ['@scope/pdf', '@scope/spreadsheet'],
+    exclude: ['@workspacekit/pdf', '@workspacekit/spreadsheet'],
     include: [
-      '@scope/workspace > @scope/spreadsheet > papaparse',
-      '@scope/workspace > @scope/spreadsheet > saxes',
-      '@scope/workspace > @scope/spreadsheet > numfmt',
-      '@scope/workspace > @scope/spreadsheet > fast-formula-parser',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > papaparse',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > saxes',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > numfmt',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > fast-formula-parser',
     ],
   },
 });
 ```
 
-If you install `@scope/spreadsheet` directly rather than through this package, drop the `@scope/workspace > ` prefix.
+If you install `@workspacekit/spreadsheet` directly rather than through this package, drop the `@workspacekit/workspace > ` prefix.
 
 ## pdf.js data files
 
-Without them, JPX and JBIG2 images are missing and PDFs that do not embed their CJK or standard fonts draw with fallback glyphs. Serve pdf.js's `cmaps/`, `standard_fonts/` and `wasm/` directories (from `pdfjs-dist` 6.4.299, the version `@scope/pdf` pins) from your origin, for instance by copying them into Vite's `public/pdfjs/`, and pass their URLs:
+Without them, JPX and JBIG2 images are missing and PDFs that do not embed their CJK or standard fonts draw with fallback glyphs. Serve pdf.js's `cmaps/`, `standard_fonts/` and `wasm/` directories (from `pdfjs-dist` 6.4.299, the version `@workspacekit/pdf` pins) from your origin, for instance by copying them into Vite's `public/pdfjs/`, and pass their URLs:
 
 ```ts
-import { allRenderers } from '@scope/workspace';
+import { allRenderers } from '@workspacekit/workspace';
 
 export const renderers = allRenderers({
   pdf: {
@@ -126,4 +126,4 @@ export const renderers = allRenderers({
 });
 ```
 
-Every export is documented with an example in the [API reference](https://docs.example.invalid/api/workspace).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/workspace).

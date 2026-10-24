@@ -1,5 +1,5 @@
 'use client';
-import type { DroppedItem, Entry } from '@scope/core';
+import type { DroppedItem, Entry } from '@workspacekit/core';
 import type { VirtualItem } from '@tanstack/react-virtual';
 import {
   useEffect,

@@ -14,7 +14,7 @@ import {
   type UploadProgress,
   type UploadResult,
   type Uploader,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { entryOnTheServer } from '../actions/serverEntry';
 import { isUnchangedSince, replaceRefusedMessage, type ConflictQueue } from '../dialogs/conflicts';
 import { useUiValue, type Notice } from '../provider/hooks';

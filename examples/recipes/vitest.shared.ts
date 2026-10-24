@@ -4,14 +4,14 @@ import { testAgainstWorkspaceSourcesWithoutABuild } from '../../packages/workspa
 const serverSource = fileURLToPath(new URL('../../packages/server/src/index.ts', import.meta.url));
 
 /**
- * Vitest options that resolve `@scope/*` imports to the packages' sources, so tests need no build.
+ * Vitest options that resolve `@workspacekit/*` imports to the packages' sources, so tests need no build.
  *
  * @example
  * export default defineConfig({ resolve: testAgainstWorkspaceSources });
  */
 export const testAgainstWorkspaceSources: typeof testAgainstWorkspaceSourcesWithoutABuild = {
   alias: [
-    { find: /^@scope\/server$/, replacement: serverSource },
+    { find: /^@workspacekit\/server$/, replacement: serverSource },
     ...testAgainstWorkspaceSourcesWithoutABuild.alias,
   ],
 };

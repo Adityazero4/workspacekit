@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { generateShape, type TreeShape } from '../src/memory';
+import { generateShape, type TreeShape } from '../src/memory/generate';
 import { basename, parentPath } from '../src/path';
 import {
   applyBatch,

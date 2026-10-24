@@ -1,4 +1,4 @@
-# @scope/pdf
+# @workspacekit/pdf
 
 A PDF renderer for the file workspace, drawn by pdf.js one page at a time, with selectable text, links, zoom and a password prompt.
 
@@ -7,21 +7,21 @@ It opens .pdf up to 200 MiB. pdf.js loads the first time such a file opens, so i
 ## Install
 
 ```sh
-npm install @scope/pdf @scope/react react react-dom
+npm install @workspacekit/pdf @workspacekit/react react react-dom
 ```
 
-`@scope/react` and `react` are peer dependencies. If you want every renderer at once, install `@scope/workspace` instead.
+`@workspacekit/react` and `react` are peer dependencies. If you want every renderer at once, install `@workspacekit/workspace` instead.
 
 ## Entry
 
 `pdfRenderer()` returns a renderer. Add it before `lightRenderers` so it wins for its own files, and pass the array to `Workspace`. Create the array once, at module level.
 
 ```tsx
-import { httpAdapter } from '@scope/core/http';
-import { lightRenderers, Workspace } from '@scope/react';
-import { pdfRenderer } from '@scope/pdf';
-import '@scope/react/styles.css';
-import '@scope/pdf/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { lightRenderers, Workspace } from '@workspacekit/react';
+import { pdfRenderer } from '@workspacekit/pdf';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/pdf/styles.css';
 
 const adapter = httpAdapter('/api/files');
 const renderers = [pdfRenderer(), ...lightRenderers];
@@ -36,9 +36,9 @@ export default function Files(): React.JSX.Element {
 `PdfViewer` shows one file without a tree or a provider.
 
 ```tsx
-import { PdfViewer } from '@scope/pdf';
-import '@scope/react/styles.css';
-import '@scope/pdf/styles.css';
+import { PdfViewer } from '@workspacekit/pdf';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/pdf/styles.css';
 
 export function Preview(): React.JSX.Element {
   return <PdfViewer src="/files/report.pdf" fileName="report.pdf" />;
@@ -49,7 +49,7 @@ export function Preview(): React.JSX.Element {
 
 ## CSS
 
-Import `@scope/react/styles.css` and `@scope/pdf/styles.css` once each. Both live in `@layer fs` and use only `--fs-*` tokens. With `@scope/workspace`, its single `@scope/workspace/styles.css` covers every package.
+Import `@workspacekit/react/styles.css` and `@workspacekit/pdf/styles.css` once each. Both live in `@layer fs` and use only `--fs-*` tokens. With `@workspacekit/workspace`, its single `@workspacekit/workspace/styles.css` covers every package.
 
 ## Options
 
@@ -70,11 +70,11 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['@scope/pdf'],
+    exclude: ['@workspacekit/pdf'],
   },
 });
 ```
 
 The data files in `assets` are not bundled. Serve pdf.js's `cmaps/`, `standard_fonts/` and `wasm/` directories (from `pdfjs-dist` 6.4.299) from your own origin, for instance from Vite's `public/pdfjs/`.
 
-Every export is documented with an example in the [API reference](https://docs.example.invalid/api/pdf).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/pdf).

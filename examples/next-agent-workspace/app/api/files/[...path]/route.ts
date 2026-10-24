@@ -1,4 +1,4 @@
-import { createFileHandler, nodeFsStore } from '@scope/server';
+import { createFileHandler, nodeFsStore } from '@workspacekit/server';
 import { isSignedIn } from '../../../../lib/auth';
 
 /**

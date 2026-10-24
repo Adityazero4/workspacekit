@@ -1,9 +1,16 @@
 {
-  "name": "@scope/create-workspace",
+  "name": "@workspacekit/create-workspace",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
   "author": "Aditya Jain <adityajain042001@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Adityazero4/workspacekit.git",
+    "directory": "packages/create-workspace"
+  },
+  "homepage": "https://adityazero4.github.io/workspacekit",
+  "bugs": "https://github.com/Adityazero4/workspacekit/issues",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -17,7 +24,9 @@
     "templates",
     "README.md",
     "AGENTS.md",
-    "llms.txt"
+    "llms.txt",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     ".": {

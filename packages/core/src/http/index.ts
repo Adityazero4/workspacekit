@@ -1,6 +1,9 @@
 import { FsError, kindForStatus, toFsError } from '../errors';
 import type { FsErrorKind } from '../errors';
 import { normalizePath } from '../path';
+import { docsLink } from '../docs';
+import { withPolling } from '../polling';
+import type { PollingOptions } from '../polling';
 import { CSRF_HEADER, IF_MTIME_HEADER, ROUTES, parseRoute } from '../protocol';
 import type {
   CreateBody,
@@ -40,16 +43,38 @@ export interface HttpAdapterOptions {
    */
   reconnectDelaysMs?: number[];
   /**
-   * Called when `watch` gives up on a permanent failure (HTTP 400, 403, 404 or 501), and once per run of
+   * Called once when `watch` gives up on a permanent failure (HTTP 400, 403, 404 or 501), with a message
+   * saying that the adapter now polls instead (see `polling`), and once per run of
    * consecutive 401s, which it keeps retrying (a sign-in may fix it) at the longest reconnect delay, but
    * never sooner than 5 s.
    */
   onWatchError?: (e: FsError) => void;
+  /**
+   * How the adapter polls once `watch` has stopped for good. `paths` is used when `watch` is not given
+   * `pollPaths`, and defaults to the root folder only; the other options are those of `withPolling`,
+   * including its default interval. By default it polls nothing while the browser tab is hidden and polls
+   * at once when the tab shows again; `isPaused` and `resumeSignal` replace that. Unless `giveUpWhenDenied`
+   * is set, polling stops after 3 rounds in a row whose listings are all refused, and `onWatchError` hears
+   * of it once.
+   */
+  polling?: Partial<PollingOptions>;
 }
 
 const MAX_SSE_UTF16_UNITS = 1_048_576;
+
+const tabIsHidden = (): boolean => typeof document !== 'undefined' && document.hidden;
+
+const pollWhenTheTabShows = (poll: () => void): (() => void) => {
+  if (typeof document === 'undefined') return () => undefined;
+  const pollIfShown = (): void => {
+    if (!document.hidden) poll();
+  };
+  document.addEventListener('visibilitychange', pollIfShown);
+  return () => document.removeEventListener('visibilitychange', pollIfShown);
+};
 const STATUSES_RETRY_CANNOT_FIX = new Set([400, 403, 404, 501]);
 const UNAUTHORIZED = 401;
+const MOST_DENIED_POLLING_ROUNDS = 3;
 const SERVICE_UNAVAILABLE = 503;
 const SHORTEST_SIGN_IN_RETRY_MS = 5000;
 const LONGEST_RETRY_AFTER_MS = 60_000;
@@ -338,6 +363,16 @@ type WatchFailure = { stop: true } | { stop: false; retryAfterMs?: number };
 const httpStatusOf = (error: unknown): number | undefined =>
   error instanceof FsError ? error.status : undefined;
 
+function watchStoppedNotice(error: FsError): FsError {
+  const message = `${error.message} (HTTP ${error.status}). Watching stopped, polling instead. See ${docsLink('concepts/adapter', 'live-updates')}`;
+  return new FsError(error.kind, message, { status: error.status });
+}
+
+function stoppedPollingNotice(options: HttpAdapterOptions, error: FsError): void {
+  const message = `Polling stopped: listing was refused ${MOST_DENIED_POLLING_ROUNDS} times in a row (${error.message}). Live updates are off until the page is reloaded. See ${docsLink('concepts/adapter', 'live-updates')}`;
+  callIsolated(options.onWatchError, new FsError(error.kind, message, { status: error.status }));
+}
+
 function handleWatchFailure(
   error: unknown,
   options: HttpAdapterOptions,
@@ -346,7 +381,7 @@ function handleWatchFailure(
 ): WatchFailure {
   if (!(error instanceof FsError) || error.status === undefined) return { stop: false };
   if (STATUSES_RETRY_CANNOT_FIX.has(error.status)) {
-    callIsolated(options.onWatchError, error);
+    callIsolated(options.onWatchError, watchStoppedNotice(error));
     return { stop: true };
   }
   if (error.status !== UNAUTHORIZED) return { stop: false, retryAfterMs: watchRetryAfterMsOf.get(error) };
@@ -359,7 +394,7 @@ async function keepWatching(
   options: HttpAdapterOptions,
   onChange: (events: ChangeEvent[]) => void,
   signal: AbortSignal,
-): Promise<void> {
+): Promise<'stopped for good' | 'aborted'> {
   const delays = options.reconnectDelaysMs?.length ? options.reconnectDelaysMs : DEFAULT_RECONNECT_DELAYS_MS;
   const longestDelay = Math.max(...delays);
   let attempt = 0;
@@ -376,17 +411,18 @@ async function keepWatching(
         response.body !== null && (await readEventStream(response.body, signal, onChange));
       if (serverProvedHealthy) attempt = 0;
     } catch (error) {
-      if (signal.aborted) return;
+      if (signal.aborted) return 'aborted';
       mayHaveMissedChanges = true;
       const failure = handleWatchFailure(error, options, longestDelay, previousFailureStatus);
       previousFailureStatus = httpStatusOf(error);
-      if (failure.stop) return;
+      if (failure.stop) return 'stopped for good';
       retryAfterMs = failure.retryAfterMs;
     }
     const step = delays[Math.min(attempt++, delays.length - 1)] ?? 1000;
     const backoff = retryAfterMs === undefined ? step : Math.max(retryAfterMs, step, SHORTEST_RETRY_AFTER_MS);
     if (!signal.aborted) await sleepUnlessAborted(backoff, signal);
   }
+  return 'aborted';
 }
 
 function uploadTransport(client: HttpClient): UploadTransport {
@@ -523,24 +559,47 @@ function writingMethods(client: HttpClient): WritingMethods {
  * `XMLHttpRequest` in browsers for real progress. `watch` keeps a server-sent event stream open: it
  * reconnects with backoff (reset only after the server delivers a frame), delivers a `resync` event after
  * every reconnect because changes may have been missed, and drops oversized lines or frames (over 1 MiB) by
- * reconnecting. A throwing listener never tears down the stream.
+ * reconnecting. A throwing listener never tears down the stream. When watching stops for good (HTTP 400,
+ * 403, 404 or 501) it polls through `withPolling` instead, and says so once through `onWatchError`.
  *
  * @example
  * ```ts
- * const adapter = httpAdapter('/api/files', { credentials: 'include' });
+ * const adapter = httpAdapter('/api/files', {
+ *   credentials: 'include',
+ *   polling: { intervalMs: 5000, paths: () => ['', 'src'] },
+ * });
  * const unwatch = adapter.watch!((events) => store.applyChanges(events));
  * ```
  */
 export function httpAdapter(baseUrl: string, opts: HttpAdapterOptions = {}): FileSystemAdapter {
   const client = new HttpClient(baseUrl, opts);
+  const polled = withPolling(
+    { ...readingMethods(client), ...writingMethods(client), upload: uploadTransport(client) },
+    {
+      paths: () => [''],
+      isPaused: tabIsHidden,
+      resumeSignal: pollWhenTheTabShows,
+      giveUpWhenDenied: {
+        rounds: MOST_DENIED_POLLING_ROUNDS,
+        onGiveUp: (error) => stoppedPollingNotice(opts, error),
+      },
+      ...opts.polling,
+    },
+  );
   return {
-    ...readingMethods(client),
-    ...writingMethods(client),
-    upload: uploadTransport(client),
-    watch(onChange) {
+    ...polled,
+    watch(onChange, watchOptions) {
       const controller = new AbortController();
-      void keepWatching(client, opts, onChange, controller.signal);
-      return () => controller.abort();
+      let stopPolling: (() => void) | undefined;
+      void keepWatching(client, opts, onChange, controller.signal).then((outcome) => {
+        if (outcome !== 'stopped for good' || controller.signal.aborted) return;
+        callIsolated(onChange, [{ type: 'resync', path: '' }]);
+        stopPolling = polled.watch!(onChange, watchOptions);
+      });
+      return () => {
+        controller.abort();
+        stopPolling?.();
+      };
     },
   };
 }

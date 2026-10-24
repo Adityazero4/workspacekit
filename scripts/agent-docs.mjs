@@ -64,7 +64,7 @@ export function defineConfig(config: UserConfig): UserConfig;
 `;
 const AMBIENT_DECLARATIONS = 'declare function isSignedIn(request: Request): boolean | Promise<boolean>;\n';
 const THIRD_PARTY_TYPES = ['react', 'react-dom', '@types/react', '@types/react-dom', '@types/node'];
-const SCOPED_SPECIFIER = /(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+)['"](@scope\/[^'"]+)['"]/g;
+const SCOPED_SPECIFIER = /(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+)['"](@workspacekit\/[^'"]+)['"]/g;
 const SENTENCE = /^(.*?[.!?])(\s|$)/s;
 
 const readText = (file) => readFile(file, 'utf8');
@@ -110,9 +110,9 @@ export function extractFences(markdown) {
  * const docsUrl = await readDocsUrl(process.cwd());
  */
 export async function readDocsUrl(root) {
-  const source = await readText(path.join(root, 'packages', 'demo-kit', 'src', 'site.ts'));
+  const source = await readText(path.join(root, 'packages', 'core', 'src', 'docs', 'index.ts'));
   const match = /DOCS_URL: string = '([^']+)'/.exec(source);
-  if (!match) throw new Error('packages/demo-kit/src/site.ts must export DOCS_URL as a string literal.');
+  if (!match) throw new Error('packages/core/src/docs/index.ts must export DOCS_URL as a string literal.');
   return match[1];
 }
 

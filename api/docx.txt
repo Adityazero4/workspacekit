@@ -1,0 +1,8 @@
+@workspacekit/docx DOCX_MAX_BYTES
+@workspacekit/docx DOCX_PARTS
+@workspacekit/docx DocxClassNames
+@workspacekit/docx DocxPart
+@workspacekit/docx DocxRendererOptions
+@workspacekit/docx DocxViewer
+@workspacekit/docx DocxViewerProps
+@workspacekit/docx docxRenderer

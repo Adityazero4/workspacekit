@@ -1,4 +1,4 @@
-# @scope/spreadsheet
+# @workspacekit/spreadsheet
 
 A spreadsheet renderer for the file workspace: .xlsx, .csv and .tsv in a virtualized grid with sheet tabs, search, frozen panes and merged cells.
 
@@ -7,21 +7,21 @@ It opens .xlsx, .xlsm, .csv and .tsv up to 50 MiB. The grid and the reader worke
 ## Install
 
 ```sh
-npm install @scope/spreadsheet @scope/react react react-dom
+npm install @workspacekit/spreadsheet @workspacekit/react react react-dom
 ```
 
-`@scope/react` and `react` are peer dependencies. If you want every renderer at once, install `@scope/workspace` instead.
+`@workspacekit/react` and `react` are peer dependencies. If you want every renderer at once, install `@workspacekit/workspace` instead.
 
 ## Entry
 
 `spreadsheetRenderer()` returns a renderer. Add it before `lightRenderers` so it wins for its own files, and pass the array to `Workspace`. Create the array once, at module level.
 
 ```tsx
-import { httpAdapter } from '@scope/core/http';
-import { lightRenderers, Workspace } from '@scope/react';
-import { spreadsheetRenderer } from '@scope/spreadsheet';
-import '@scope/react/styles.css';
-import '@scope/spreadsheet/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { lightRenderers, Workspace } from '@workspacekit/react';
+import { spreadsheetRenderer } from '@workspacekit/spreadsheet';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/spreadsheet/styles.css';
 
 const adapter = httpAdapter('/api/files');
 const renderers = [spreadsheetRenderer(), ...lightRenderers];
@@ -36,9 +36,9 @@ export default function Files(): React.JSX.Element {
 `SpreadsheetViewer` shows one file without a tree or a provider.
 
 ```tsx
-import { SpreadsheetViewer } from '@scope/spreadsheet';
-import '@scope/react/styles.css';
-import '@scope/spreadsheet/styles.css';
+import { SpreadsheetViewer } from '@workspacekit/spreadsheet';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/spreadsheet/styles.css';
 
 export function Preview(): React.JSX.Element {
   return <SpreadsheetViewer src="/files/budget.xlsx" fileName="budget.xlsx" />;
@@ -49,7 +49,7 @@ export function Preview(): React.JSX.Element {
 
 ## CSS
 
-Import `@scope/react/styles.css` and `@scope/spreadsheet/styles.css` once each. Both live in `@layer fs` and use only `--fs-*` tokens. With `@scope/workspace`, its single `@scope/workspace/styles.css` covers every package.
+Import `@workspacekit/react/styles.css` and `@workspacekit/spreadsheet/styles.css` once each. Both live in `@layer fs` and use only `--fs-*` tokens. With `@workspacekit/workspace`, its single `@workspacekit/workspace/styles.css` covers every package.
 
 ## Options
 
@@ -69,12 +69,12 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   worker: { format: 'es' },
   optimizeDeps: {
-    exclude: ['@scope/spreadsheet'],
+    exclude: ['@workspacekit/spreadsheet'],
     include: [
-      '@scope/spreadsheet > papaparse',
-      '@scope/spreadsheet > saxes',
-      '@scope/spreadsheet > numfmt',
-      '@scope/spreadsheet > fast-formula-parser',
+      '@workspacekit/spreadsheet > papaparse',
+      '@workspacekit/spreadsheet > saxes',
+      '@workspacekit/spreadsheet > numfmt',
+      '@workspacekit/spreadsheet > fast-formula-parser',
     ],
   },
 });
@@ -82,4 +82,4 @@ export default defineConfig({
 
 The `include` entries are required whenever you exclude the package.
 
-Every export is documented with an example in the [API reference](https://docs.example.invalid/api/spreadsheet).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/spreadsheet).

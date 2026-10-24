@@ -1,0 +1,4 @@
+@workspacekit/create-workspace CreateWorkspaceOptions
+@workspacekit/create-workspace TEMPLATE_NAMES
+@workspacekit/create-workspace TemplateName
+@workspacekit/create-workspace createWorkspace

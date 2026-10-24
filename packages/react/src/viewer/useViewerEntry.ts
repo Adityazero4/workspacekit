@@ -9,7 +9,7 @@ import {
   toFsError,
   type Entry,
   type FolderStatus,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { sameEntryFields, useFileSystem } from '../provider/hooks';
 import { useFileSystemInternals } from '../provider/internals';

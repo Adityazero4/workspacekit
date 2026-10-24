@@ -1,4 +1,4 @@
-import { lineBreakOf, withLfLineBreaks, withLineBreak } from '@scope/react/renderer-kit';
+import { lineBreakOf, withLfLineBreaks, withLineBreak } from '@workspacekit/react/renderer-kit';
 import {
   $getRoot,
   $getSelection,

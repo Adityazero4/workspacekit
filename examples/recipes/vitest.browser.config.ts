@@ -10,8 +10,8 @@ export default defineConfig({
     include: [
       'react/compiler-runtime',
       'axe-core',
-      '@scope/pdf > pdfjs-dist/legacy/build/pdf.mjs',
-      '@scope/pdf > pdfjs-dist/legacy/web/pdf_viewer.mjs',
+      '@workspacekit/pdf > pdfjs-dist/legacy/build/pdf.mjs',
+      '@workspacekit/pdf > pdfjs-dist/legacy/web/pdf_viewer.mjs',
     ],
   },
   test: {

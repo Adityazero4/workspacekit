@@ -8,8 +8,8 @@ const SHARED_STALE_NOTICE_PART = 'viewer-stale-notice';
 
 /**
  * Props of `StaleNotice`: `error` is why the latest version failed to load. `part` defaults to the shared
- * `viewer-stale-notice` part, which `@scope/react/styles.css` styles; a renderer package may pass one of
- * its own parts instead, with its part union as `P`.
+ * `viewer-stale-notice` part, which `@workspacekit/react/styles.css` styles; a renderer package may pass one
+ * of its own parts instead, with its part union as `P`.
  *
  * @example
  * ```tsx

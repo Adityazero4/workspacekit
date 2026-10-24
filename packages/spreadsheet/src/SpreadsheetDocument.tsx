@@ -1,7 +1,7 @@
 'use client';
-import { partProps } from '@scope/react/renderer-kit';
-import type { RendererProps, ViewerError } from '@scope/react/renderer-kit';
-import { TextViewer } from '@scope/react/renderers';
+import { partProps } from '@workspacekit/react/renderer-kit';
+import type { RendererProps, ViewerError } from '@workspacekit/react/renderer-kit';
+import { TextViewer } from '@workspacekit/react/renderers';
 import { useEffect, useEffectEvent, useId, useState } from 'react';
 
 import type { SheetData } from './reader/types';

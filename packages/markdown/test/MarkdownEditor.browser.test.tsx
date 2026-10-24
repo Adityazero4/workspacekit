@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { cleanup, render } from 'vitest-browser-react';
-import '@scope/react/styles.css';
+import '@workspacekit/react/styles.css';
 import '../src/styles.css';
 import { shown } from './shown';
 import { MarkdownEditor, type MarkdownEditorProps } from '../src';

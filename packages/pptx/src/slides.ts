@@ -8,7 +8,12 @@ import {
   type SlideRendererOptions,
   type ThemeData,
 } from '@aiden0z/pptx-renderer';
-import { safeUrlOrNull } from '@scope/react/renderer-kit';
+import {
+  confineDeclarations,
+  keepWebOrMailLink,
+  SVG_ANIMATION_ELEMENTS,
+  svgAttributeFetches,
+} from '@workspacekit/react/renderer-kit';
 import { assertArchiveWithinLimits, assertPartsWithinLimits, assertSlideSizeWithinLimits } from './limits';
 import { isSlideWithinLimits, type SlideWorkCache } from './slideWork';
 
@@ -181,77 +186,17 @@ const FORBIDDEN_ELEMENTS: ReadonlySet<string> = new Set([
   'base',
   'meta',
   'form',
-  'animate',
-  'set',
-  'animatetransform',
-  'animatemotion',
-  'animatecolor',
-  'mpath',
-  'discard',
+  ...SVG_ANIMATION_ELEMENTS,
 ]);
 const MEDIA_ELEMENTS: ReadonlySet<string> = new Set(['img', 'image', 'video', 'audio', 'source']);
 const MEDIA_URL = /^[\t\n\f\r ]*(?:blob:|data:|#)/i;
 const FRAGMENT_URL = /^[\t\n\f\r ]*#/;
 const FILE_LOCAL_SCHEMES = ['blob:', 'data:', '#'];
-const CONTAINED_POSITIONS: ReadonlySet<string> = new Set(['static', 'relative', 'absolute']);
-const INTEGER = /^[+-]?\d+$/;
-const HIGHEST_Z_INDEX = 1000;
-const WEB_OR_MAIL_LINK = /^(?:https?:\/\/|mailto:)/i;
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
-const CSS_WHITESPACE: ReadonlySet<string> = new Set([' ', '\t', '\n', '\r', '\f']);
-const URL_FUNCTION = 'url(';
-
-function afterWhitespace(text: string, at: number): number {
-  while (at < text.length && CSS_WHITESPACE.has(text[at]!)) at++;
-  return at;
-}
-
-function hasExternalCssReference(value: string): boolean {
-  const text = value.toLowerCase();
-  if (text.includes('image-set(')) return true;
-  for (let at = text.indexOf(URL_FUNCTION); at !== -1; at = text.indexOf(URL_FUNCTION, at)) {
-    at = afterWhitespace(text, at + URL_FUNCTION.length);
-    if (text[at] === '"' || text[at] === "'") at = afterWhitespace(text, at + 1);
-    if (!FILE_LOCAL_SCHEMES.some((scheme) => text.startsWith(scheme, at))) return true;
-  }
-  return false;
-}
-
-function isAllowedDeclaration(property: string, value: string): boolean {
-  if (hasExternalCssReference(value) || (property.startsWith('--') && value.includes('\\'))) return false;
-  if (property === 'position') return CONTAINED_POSITIONS.has(value.trim().toLowerCase());
-  return property !== 'z-index' || (INTEGER.test(value.trim()) && Number(value) <= HIGHEST_Z_INDEX);
-}
-
-function confineDeclarations(declarations: CSSStyleDeclaration): void {
-  for (const property of [...declarations]) {
-    if (!isAllowedDeclaration(property, declarations.getPropertyValue(property))) {
-      declarations.removeProperty(property);
-    }
-  }
-}
-
-function webOrMailLinkOrNull(href: string): string | null {
-  if (!WEB_OR_MAIL_LINK.test(href)) return null;
-  if (/^mailto:/i.test(href)) return href;
-  const allowed = safeUrlOrNull(href);
-  if (!allowed) return null;
-  const { username, password } = new URL(allowed);
-  return username || password ? null : allowed;
-}
-
-function setAttributeIfDifferent(element: Element, name: string, value: string): void {
-  if (element.getAttribute(name) !== value) element.setAttribute(name, value);
-}
 
 function keepOnlyWebOrMailLink(link: Element, href: Attr): void {
-  const allowed = webOrMailLinkOrNull(href.value.trim());
   const isPlainHref = href.namespaceURI === null;
-  if (!allowed || !isPlainHref) link.removeAttributeNode(href);
-  if (!allowed) return;
-  setAttributeIfDifferent(link, 'href', allowed);
-  setAttributeIfDifferent(link, 'target', '_blank');
-  setAttributeIfDifferent(link, 'rel', 'noopener noreferrer');
+  if (!isPlainHref) link.removeAttributeNode(href);
+  if (!keepWebOrMailLink(link, href.value) && isPlainHref) link.removeAttributeNode(href);
 }
 
 function isFetchingAttribute(element: Element, attribute: Attr): boolean {
@@ -259,8 +204,7 @@ function isFetchingAttribute(element: Element, attribute: Attr): boolean {
   if (URL_ATTRIBUTES.has(attribute.localName)) {
     return !(MEDIA_ELEMENTS.has(element.localName) ? MEDIA_URL : FRAGMENT_URL).test(attribute.value);
   }
-  if (element.namespaceURI !== SVG_NAMESPACE) return false;
-  return attribute.value.includes('\\') || hasExternalCssReference(attribute.value);
+  return svgAttributeFetches(element, attribute.value, FILE_LOCAL_SCHEMES);
 }
 
 const isRenderersBackgroundFill = (element: Element): boolean =>
@@ -273,8 +217,9 @@ const isForbiddenElement = (element: Element): boolean =>
 function confineAttributes(element: Element): void {
   for (const attribute of [...element.attributes]) {
     if (attribute.name.startsWith('on')) element.removeAttribute(attribute.name);
-    else if (attribute.name === 'style') confineDeclarations((element as HTMLElement).style);
-    else if (element.localName === 'a' && attribute.localName === 'href') {
+    else if (attribute.name === 'style') {
+      confineDeclarations((element as HTMLElement).style, FILE_LOCAL_SCHEMES);
+    } else if (element.localName === 'a' && attribute.localName === 'href') {
       keepOnlyWebOrMailLink(element, attribute);
     } else if (isFetchingAttribute(element, attribute)) element.removeAttributeNode(attribute);
   }

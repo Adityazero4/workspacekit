@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { generateTree } from '../src/memory';
+import { generateTree } from '../src/memory/generate';
 import { basename, parentPath } from '../src/path';
 import { emptyTree, flattenVisible, mergeListing, type SortSpec, type TreeData } from '../src/tree/model';
 import type { Entry } from '../src/types';

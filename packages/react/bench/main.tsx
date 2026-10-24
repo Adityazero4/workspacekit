@@ -1,4 +1,4 @@
-import type { TreeShape } from '@scope/core/memory';
+import type { TreeShape } from '../../core/src/memory/generate';
 import {
   agentUpdatesUnder,
   answeringMovesAfter,

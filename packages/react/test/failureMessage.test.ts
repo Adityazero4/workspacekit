@@ -1,4 +1,4 @@
-import { FsError } from '@scope/core';
+import { FsError } from '@workspacekit/core';
 import { expect, test } from 'vitest';
 import { failureMessage } from '../src/provider/hooks';
 

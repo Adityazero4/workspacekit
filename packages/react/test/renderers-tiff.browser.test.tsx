@@ -1,5 +1,5 @@
-import type { Entry } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import type { Entry } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import axe from 'axe-core';
 import { StrictMode, type ReactNode } from 'react';
 import UTIF from 'utif2';

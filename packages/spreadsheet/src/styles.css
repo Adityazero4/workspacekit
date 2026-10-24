@@ -1,4 +1,4 @@
-/* Default look of @scope/spreadsheet. Everything lives in @layer fs, so any unlayered consumer CSS wins. */
+/* Default look of @workspacekit/spreadsheet. Everything lives in @layer fs, so any unlayered consumer CSS wins. */
 @layer fs {
   [data-fs-part='sheet-grid-viewport'] {
     position: relative;

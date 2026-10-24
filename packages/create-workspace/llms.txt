@@ -1,9 +1,9 @@
-# @scope/create-workspace
+# @workspacekit/create-workspace
 
-> A one-command starter that copies a tested example (Next.js or Vite) into a new folder, with exact `@scope/*` versions.
+> A one-command starter that copies a tested example (Next.js or Vite) into a new folder, with exact `@workspacekit/*` versions.
 
-- API reference: https://docs.example.invalid/api/create-workspace
-- Install: `npm create @scope/workspace my-files -- --template vite`
+- API reference: https://adityazero4.github.io/workspacekit/api/create-workspace
+- Install: `npm create @workspacekit/workspace my-files -- --template vite`
 
 ## README sections
 
@@ -15,11 +15,11 @@
 
 ## Entry points
 
-- `@scope/create-workspace`
+- `@workspacekit/create-workspace`
 
-## Exports of `@scope/create-workspace`
+## Exports of `@workspacekit/create-workspace`
 
 - `CreateWorkspaceOptions`: Input of {@link createWorkspace}.
 - `TEMPLATE_NAMES`: The starters this package can generate.
 - `TemplateName`: One of {@link TEMPLATE_NAMES}.
-- `createWorkspace`: Copies a starter into `directory` and pins every `@scope/*` dependency to an exact version.
+- `createWorkspace`: Copies a starter into `directory` and pins every `@workspacekit/*` dependency to an exact version.

@@ -1,5 +1,5 @@
-import { createTreeStore, entryAt, FsError, type Entry, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import { createTreeStore, entryAt, FsError, type Entry, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import { afterEach, expect, test } from 'vitest';
 import type { FollowedMove } from '../src/actions/followMove';
 import { createEditBuffers, type EditBuffers } from '../src/editing/buffers';

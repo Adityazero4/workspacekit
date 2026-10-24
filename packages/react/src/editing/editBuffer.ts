@@ -1,4 +1,4 @@
-import type { FileSystemAdapter, FsError, TreeStore } from '@scope/core';
+import type { FileSystemAdapter, FsError, TreeStore } from '@workspacekit/core';
 import type { FollowedMove } from '../actions/followMove';
 import type { UiStore } from '../provider/ui-store';
 import type { TabsState } from '../tabs/tabs-store';

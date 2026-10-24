@@ -1,5 +1,5 @@
 'use client';
-import { entryAt, isSameOrDescendant, type Entry } from '@scope/core';
+import { entryAt, isSameOrDescendant, type Entry } from '@workspacekit/core';
 import type { FileSystemContext } from '../provider/hooks';
 import { internalsOf } from '../provider/internals';
 import { withMembership } from '../provider/ui-store';

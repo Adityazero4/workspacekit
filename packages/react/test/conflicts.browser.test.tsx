@@ -1,5 +1,11 @@
-import { FsError, statusOf, type Entry, type FileSystemAdapter, type UploadOptions } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import {
+  FsError,
+  statusOf,
+  type Entry,
+  type FileSystemAdapter,
+  type UploadOptions,
+} from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import { useEffect, useState } from 'react';
 import { expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';

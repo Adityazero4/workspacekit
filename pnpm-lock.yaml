@@ -56,19 +56,19 @@ importers:
 
   apps/docs:
     dependencies:
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@scope/demo-kit':
+      '@workspacekit/demo-kit':
         specifier: workspace:*
         version: link:../../packages/demo-kit
-      '@scope/example-recipes':
+      '@workspacekit/example-recipes':
         specifier: workspace:*
         version: link:../../examples/recipes
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../../packages/react
-      '@scope/workspace':
+      '@workspacekit/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
       fumadocs-core:
@@ -126,13 +126,13 @@ importers:
 
   examples/next-agent-workspace:
     dependencies:
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@scope/server':
+      '@workspacekit/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@scope/workspace':
+      '@workspacekit/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
       next:
@@ -160,19 +160,19 @@ importers:
 
   examples/recipes:
     dependencies:
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@scope/pdf':
+      '@workspacekit/pdf':
         specifier: workspace:*
         version: link:../../packages/pdf
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../../packages/react
-      '@scope/server':
+      '@workspacekit/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@scope/workspace':
+      '@workspacekit/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
       react:
@@ -206,10 +206,10 @@ importers:
 
   examples/vite-memory:
     dependencies:
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@scope/workspace':
+      '@workspacekit/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
       react:
@@ -222,7 +222,7 @@ importers:
       '@playwright/test':
         specifier: 1.64.1
         version: 1.64.1
-      '@scope/demo-kit':
+      '@workspacekit/demo-kit':
         specifier: workspace:*
         version: link:../../packages/demo-kit
       '@types/node':
@@ -258,7 +258,7 @@ importers:
       '@rolldown/plugin-babel':
         specifier: 0.2.4
         version: 0.2.4(@babel/core@8.0.7)(@babel/plugin-transform-runtime@8.0.6(@babel/core@8.0.7))(@babel/runtime@8.0.7)(rolldown@1.2.14)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
       '@types/node':
@@ -304,10 +304,10 @@ importers:
       '@rolldown/plugin-babel':
         specifier: 0.2.4
         version: 0.2.4(@babel/core@8.0.7)(@babel/plugin-transform-runtime@8.0.6(@babel/core@8.0.7))(@babel/runtime@8.0.7)(rolldown@1.2.14)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
       '@types/node':
@@ -351,7 +351,7 @@ importers:
 
   packages/demo-kit:
     dependencies:
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
       fflate:
@@ -364,13 +364,13 @@ importers:
       '@rolldown/plugin-babel':
         specifier: 0.2.4
         version: 0.2.4(@babel/core@8.0.7)(@babel/plugin-transform-runtime@8.0.6(@babel/core@8.0.7))(@babel/runtime@8.0.7)(rolldown@1.2.14)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
-      '@scope/spreadsheet':
+      '@workspacekit/spreadsheet':
         specifier: workspace:*
         version: link:../spreadsheet
-      '@scope/workspace':
+      '@workspacekit/workspace':
         specifier: workspace:*
         version: link:../workspace
       '@types/node':
@@ -419,10 +419,10 @@ importers:
       '@rolldown/plugin-babel':
         specifier: 0.2.4
         version: 0.2.4(@babel/core@8.0.7)(@babel/plugin-transform-runtime@8.0.6(@babel/core@8.0.7))(@babel/runtime@8.0.7)(rolldown@1.2.14)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
       '@types/node':
@@ -501,10 +501,10 @@ importers:
       '@rolldown/plugin-babel':
         specifier: 0.2.4
         version: 0.2.4(@babel/core@8.0.7)(@babel/plugin-transform-runtime@8.0.6(@babel/core@8.0.7))(@babel/runtime@8.0.7)(rolldown@1.2.14)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
       '@types/node':
@@ -550,10 +550,10 @@ importers:
       '@rolldown/plugin-babel':
         specifier: 0.2.4
         version: 0.2.4(@babel/core@8.0.7)(@babel/plugin-transform-runtime@8.0.6(@babel/core@8.0.7))(@babel/runtime@8.0.7)(rolldown@1.2.14)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
       '@types/node':
@@ -608,10 +608,10 @@ importers:
       '@rolldown/plugin-babel':
         specifier: 0.2.4
         version: 0.2.4(@babel/core@8.0.7)(@babel/plugin-transform-runtime@8.0.6(@babel/core@8.0.7))(@babel/runtime@8.0.7)(rolldown@1.2.14)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
       '@types/node':
@@ -656,7 +656,7 @@ importers:
       '@radix-ui/react-dropdown-menu':
         specifier: 2.2.1
         version: 2.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
       '@tanstack/react-virtual':
@@ -717,7 +717,7 @@ importers:
 
   packages/server:
     dependencies:
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
       fflate:
@@ -755,10 +755,10 @@ importers:
       '@rolldown/plugin-babel':
         specifier: 0.2.4
         version: 0.2.4(@babel/core@8.0.7)(@babel/plugin-transform-runtime@8.0.6(@babel/core@8.0.7))(@babel/runtime@8.0.7)(rolldown@1.2.14)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
       '@types/node':
@@ -797,28 +797,28 @@ importers:
 
   packages/workspace:
     dependencies:
-      '@scope/code':
+      '@workspacekit/code':
         specifier: workspace:*
         version: link:../code
-      '@scope/core':
+      '@workspacekit/core':
         specifier: workspace:*
         version: link:../core
-      '@scope/docx':
+      '@workspacekit/docx':
         specifier: workspace:*
         version: link:../docx
-      '@scope/markdown':
+      '@workspacekit/markdown':
         specifier: workspace:*
         version: link:../markdown
-      '@scope/pdf':
+      '@workspacekit/pdf':
         specifier: workspace:*
         version: link:../pdf
-      '@scope/pptx':
+      '@workspacekit/pptx':
         specifier: workspace:*
         version: link:../pptx
-      '@scope/react':
+      '@workspacekit/react':
         specifier: workspace:*
         version: link:../react
-      '@scope/spreadsheet':
+      '@workspacekit/spreadsheet':
         specifier: workspace:*
         version: link:../spreadsheet
     devDependencies:

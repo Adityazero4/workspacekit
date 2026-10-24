@@ -7,14 +7,14 @@ export const testAgainstWorkspaceSourcesWithoutABuild: {
   alias: Array<{ find: RegExp; replacement: string }>;
 } = {
   alias: [
-    { find: /^@scope\/core\/memory$/, replacement: workspaceSource('core/src/memory/index.ts') },
-    { find: /^@scope\/core$/, replacement: workspaceSource('core/src/index.ts') },
-    { find: /^@scope\/react\/styles\.css$/, replacement: workspaceSource('react/src/styles.css') },
+    { find: /^@workspacekit\/core\/memory$/, replacement: workspaceSource('core/src/memory/index.ts') },
+    { find: /^@workspacekit\/core$/, replacement: workspaceSource('core/src/index.ts') },
+    { find: /^@workspacekit\/react\/styles\.css$/, replacement: workspaceSource('react/src/styles.css') },
     {
-      find: /^@scope\/react\/(renderers|renderer-kit)$/,
+      find: /^@workspacekit\/react\/(renderers|renderer-kit)$/,
       replacement: workspaceSource('react/src/$1/index.ts'),
     },
-    { find: /^@scope\/react$/, replacement: workspaceSource('react/src/index.ts') },
+    { find: /^@workspacekit\/react$/, replacement: workspaceSource('react/src/index.ts') },
   ],
 };
 

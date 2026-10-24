@@ -1,7 +1,7 @@
 {
   "Apache-2.0": [
     {
-      "name": "@scope/engine",
+      "name": "@workspacekit/engine",
       "versions": ["2.1.0"],
       "paths": [],
       "license": "Apache-2.0",

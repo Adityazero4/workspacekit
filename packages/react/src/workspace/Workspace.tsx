@@ -1,5 +1,5 @@
 'use client';
-import { captureDataTransfer } from '@scope/core';
+import { captureDataTransfer } from '@workspacekit/core';
 import {
   memo,
   useId,

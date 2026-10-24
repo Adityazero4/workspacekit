@@ -1,4 +1,4 @@
-import { isFsError } from '@scope/core';
+import { isFsError } from '@workspacekit/core';
 import { describe, expect, it } from 'vitest';
 import { runStoreContract } from '../../../packages/server/test/support/store-contract';
 import { createInMemoryS3 } from './inMemoryS3';

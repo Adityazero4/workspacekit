@@ -1,5 +1,5 @@
 'use client';
-import { parentPath, type Entry, type FileSystemAdapter } from '@scope/core';
+import { parentPath, type Entry, type FileSystemAdapter } from '@workspacekit/core';
 import type { Action, ActionContext } from './actions';
 import { pasteInto } from './clipboard';
 import { downloadEntry } from './download';

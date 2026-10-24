@@ -1,4 +1,4 @@
-import { withLfLineBreaks } from '@scope/react/renderer-kit';
+import { withLfLineBreaks } from '@workspacekit/react/renderer-kit';
 import { splitDocument } from './frontmatter';
 import {
   closesFence,

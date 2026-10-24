@@ -8,7 +8,7 @@ A Vite + React app with the file workspace over sample files kept in memory.
 <!-- monorepo-only -->
 
 ```sh
-pnpm --filter @scope/example-vite-memory dev
+pnpm --filter @workspacekit/example-vite-memory dev
 ```
 
 <!-- /monorepo-only -->
@@ -21,7 +21,7 @@ npm run dev
 
 -->
 
-`vite.config.ts` holds the dev-server settings from the Vite section of the `@scope/workspace` README.
+`vite.config.ts` holds the dev-server settings from the Vite section of the `@workspacekit/workspace` README.
 
 <!-- monorepo-only -->
 

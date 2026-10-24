@@ -1,4 +1,4 @@
-import type { Entry } from '@scope/core';
+import type { Entry } from '@workspacekit/core';
 
 /**
  * One upload placeholder row: a top-level item of a running upload, shown under its target folder.

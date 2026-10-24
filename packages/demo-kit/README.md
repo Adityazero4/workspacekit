@@ -1,4 +1,4 @@
-# @scope/demo-kit
+# @workspacekit/demo-kit
 
 Sample files and a simulated agent for demos and tests of the file workspace.
 
@@ -7,7 +7,7 @@ The simulated agent writes, edits, renames and deletes files in a memory adapter
 ## Install
 
 ```sh
-npm install --save-dev @scope/demo-kit
+npm install --save-dev @workspacekit/demo-kit
 ```
 
 ## Entry
@@ -15,8 +15,8 @@ npm install --save-dev @scope/demo-kit
 `sampleFiles()` returns a small project to put in a memory adapter. `simulateAgent(adapter, { signal })` starts the agent and stops when the signal aborts.
 
 ```ts
-import { createMemoryAdapter } from '@scope/core/memory';
-import { sampleFiles, simulateAgent } from '@scope/demo-kit';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { sampleFiles, simulateAgent } from '@workspacekit/demo-kit';
 
 export const adapter = createMemoryAdapter({ files: sampleFiles() });
 
@@ -31,8 +31,8 @@ Call `controller.abort()` to stop it.
 This package has no UI, so it works with any adapter built on `createMemoryAdapter`. Give the agent your own script to control exactly what changes:
 
 ```ts
-import { createMemoryAdapter } from '@scope/core/memory';
-import { simulateAgent, type AgentStep } from '@scope/demo-kit';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { simulateAgent, type AgentStep } from '@workspacekit/demo-kit';
 
 const script: AgentStep[] = [
   { kind: 'create', path: 'notes/plan.md', content: '# Plan\n' },
@@ -55,4 +55,4 @@ None. This package ships no styles.
 
 `DOCS_URL` is the address of the documentation site, shared by the examples and the generated files.
 
-Every export is documented with an example in the [API reference](https://docs.example.invalid/api/demo-kit).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/demo-kit).

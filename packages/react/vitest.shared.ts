@@ -7,8 +7,9 @@ export const testAgainstWorkspaceSourcesWithoutABuild: {
   alias: Array<{ find: RegExp; replacement: string }>;
 } = {
   alias: [
-    { find: /^@scope\/core\/(http|memory)$/, replacement: coreSource('$1/index.ts') },
-    { find: /^@scope\/core$/, replacement: coreSource('index.ts') },
+    { find: /^@workspacekit\/core\/(http|memory)$/, replacement: coreSource('$1/index.ts') },
+    { find: /^@workspacekit\/core\/docs$/, replacement: coreSource('docs/index.ts') },
+    { find: /^@workspacekit\/core$/, replacement: coreSource('index.ts') },
   ],
 };
 

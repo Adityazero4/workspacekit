@@ -4,7 +4,7 @@ import {
   type FileInfo,
   type Renderer,
   type RendererProps,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { createElement } from 'react';
 import { CODE_EXTENSIONS, hasAliasedBasename, MARKDOWN_EXTENSIONS } from './languages';
 import type { CodeClassNames } from './parts';
@@ -23,7 +23,7 @@ export const CODE_MAX_BYTES: number = 10 * 1024 * 1024;
 /**
  * Options of `codeRenderer`. `nonce` is set on the `<style>` elements CodeMirror adds, for a strict
  * `style-src` CSP. `classNames` adds classes to this package's parts (`code-viewer`, `code-editor`); the
- * viewer's own `classNames` only know `@scope/react` parts.
+ * viewer's own `classNames` only know `@workspacekit/react` parts.
  *
  * @example
  * ```ts
@@ -48,8 +48,8 @@ function matchScore(file: FileInfo): number | false {
  * stays with the text renderer. Markdown scores only `generic`, so a Markdown renderer keeps `.md` files
  * and this one takes those it declines. CodeMirror loads when the viewer first shows such a file. `nonce` is
  * set on the `<style>` elements CodeMirror adds, for a strict `style-src` CSP. `classNames` adds classes to
- * this package's parts (`code-viewer`, `code-editor`); the viewer's own `classNames` only know `@scope/react`
- * parts.
+ * this package's parts (`code-viewer`, `code-editor`); the viewer's own `classNames` only know
+ * `@workspacekit/react` parts.
  *
  * Call it once, at module level, and reuse the result: the viewer caches each renderer's loaded component by
  * the renderer object's identity.

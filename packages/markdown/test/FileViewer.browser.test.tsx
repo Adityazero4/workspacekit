@@ -1,13 +1,13 @@
-import { statusOf } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import { statusOf } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import {
   FileSystemProvider,
   FileViewer,
   lightRenderers,
   useFileSystem,
   type FileSystemContext,
-} from '@scope/react';
-import '@scope/react/styles.css';
+} from '@workspacekit/react';
+import '@workspacekit/react/styles.css';
 import { useEffect } from 'react';
 import { expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';

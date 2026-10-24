@@ -108,7 +108,7 @@ export async function embeddedFiles(root, body) {
 
 /**
  * Copies the sections for the adapter contract (`FileSystemAdapter`, `Entry`, the option types, `ChangeEvent`
- * and the error kinds) out of the generated `@scope/core` API page, so an agent that reads only
+ * and the error kinds) out of the generated `@workspacekit/core` API page, so an agent that reads only
  * `llms-full.txt` has the exact signatures. Throws when the page or a section is missing: run
  * `api-reference.mjs` first.
  *
@@ -128,14 +128,26 @@ export async function adapterContract(root, corePage = CORE_API_PAGE) {
     return lines.slice(start, end).join('\n').replace(SAME_PAGE_LINK, '$1').trim();
   });
   const helpers = await coreHelpers(root, lines, corePage);
-  return `# The @scope/core adapter contract\n\n${CONTRACT_PREFACE}\n\nThe types below are copied from the API page for @scope/core.\n\n${sections.join('\n\n')}\n\n## Helpers exported by @scope/core\n\nUse these instead of building paths or errors by hand.\n\n${helpers}`;
+  return `# The @workspacekit/core adapter contract\n\n${CONTRACT_PREFACE}\n\nThe types below are copied from the API page for @workspacekit/core.\n\n${sections.join('\n\n')}\n\n## Helpers exported by @workspacekit/core\n\nUse these instead of building paths or errors by hand.\n\n${helpers}`;
+}
+
+async function publicCoreNames(root) {
+  const snapshot = await readFile(path.join(root, 'api', 'core.txt'), 'utf8');
+  return new Set(
+    snapshot
+      .split('\n')
+      .filter((line) => line.startsWith('@workspacekit/core '))
+      .map((line) => line.slice('@workspacekit/core '.length)),
+  );
 }
 
 async function coreHelpers(root, apiLines, corePage) {
   const items = [];
+  const isPublic = await publicCoreNames(root);
   for (const file of HELPER_SOURCES) {
     const source = await readFile(path.join(root, 'packages', 'core', 'src', file), 'utf8');
     for (const [, name] of source.matchAll(EXPORTED_FUNCTION)) {
+      if (!isPublic.has(name)) continue;
       const start = apiLines.findIndex((line) => line === `#### ${name}()`);
       if (start < 0) throw new Error(`${corePage} has no section for ${name}().`);
       const summary = apiLines.slice(start + 1).find((line) => line.trim() !== '' && !line.startsWith('>'));
@@ -159,7 +171,7 @@ async function renderPage(root, docsUrl, page) {
 async function renderLlmsFullTxt(root, docsUrl, pages, packages, corePage) {
   const intro = [
     '# File workspace: all documentation pages',
-    `The API reference is not repeated here, except the @scope/core adapter contract at the end. Each package has its own page:\n\n${packages
+    `The API reference is not repeated here, except the @workspacekit/core adapter contract at the end. Each package has its own page:\n\n${packages
       .map(({ folderName, name }) => `- ${name}: ${docsUrl}/api/${folderName}`)
       .join('\n')}`,
   ];
@@ -173,7 +185,7 @@ async function renderLlmsFullTxt(root, docsUrl, pages, packages, corePage) {
  * Builds the text of `llms.txt` (a curated map) and `llms-full.txt` (every docs page) from the pages under
  * `content/docs`. The result depends only on the repository's files, so two builds are identical.
  *
- * `corePage` is the repository-relative path of the generated `@scope/core` API page that the adapter
+ * `corePage` is the repository-relative path of the generated `@workspacekit/core` API page that the adapter
  * contract is copied from; tests point it at a small checked-in fixture.
  *
  * @example

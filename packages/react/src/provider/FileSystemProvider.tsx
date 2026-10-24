@@ -15,7 +15,7 @@ import {
   type TreeSnapshot,
   type TreeStore,
   type UploadOptions,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ClipboardItem } from '../actions/clipboard';
 import { createTreeCommandsHost, type TreeCommandsHost } from '../actions/treeCommands';
@@ -205,17 +205,33 @@ function foldersToPoll(session: Session): string[] {
   return [...activeTabFolder, normalizePath(session.root), ...tabFolders, ...mostRecentlyExpandedFirst];
 }
 
-const resumeOnVisibilityChange = (poll: () => void): (() => void) => {
-  document.addEventListener('visibilitychange', poll);
-  return () => document.removeEventListener('visibilitychange', poll);
+const resumeWhenTheTabShows = (poll: () => void): (() => void) => {
+  const pollIfShown = (): void => {
+    if (!document.hidden) poll();
+  };
+  document.addEventListener('visibilitychange', pollIfShown);
+  return () => document.removeEventListener('visibilitychange', pollIfShown);
 };
 
+function watchingTheFoldersShown(adapter: FileSystemAdapter, session: () => Session): FileSystemAdapter {
+  const watch: FileSystemAdapter['watch'] = (onChange) =>
+    adapter.watch!(onChange, { pollPaths: () => foldersToPoll(session()) });
+  return new Proxy(Object.create(null) as FileSystemAdapter, {
+    get(_emptyTarget, property) {
+      if (property === 'watch') return watch;
+      const value: unknown = Reflect.get(adapter, property, adapter);
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(adapter) : value;
+    },
+    has: (_emptyTarget, property) => Reflect.has(adapter, property),
+  });
+}
+
 function watchableAdapter(adapter: FileSystemAdapter, session: () => Session): FileSystemAdapter {
-  if (adapter.watch) return adapter;
+  if (adapter.watch) return watchingTheFoldersShown(adapter, session);
   return withPolling(adapter, {
     paths: () => foldersToPoll(session()),
     isPaused: () => document.hidden,
-    resumeSignal: resumeOnVisibilityChange,
+    resumeSignal: resumeWhenTheTabShows,
   });
 }
 
@@ -542,6 +558,9 @@ function applyDefaultsOutsideParametersForReactCompiler(props: FileSystemProvide
  * moved the state to `to`, so nothing is left below `from` or inside the new name. Open tabs also follow
  * deletions: a clean tab closes once a loaded listing shows its file is gone (unless a followed move
  * involving it is in flight); a dirty one stays open.
+ *
+ * An adapter that has `watch` is given `{ pollPaths }` as its second argument, the folders of the open tabs
+ * and the expanded folders, so one that falls back to polling (such as `httpAdapter`) polls what is shown.
  *
  * Defaults are applied in the body, not in the parameter pattern: React Compiler 1.0 skips a component with
  * parameter-pattern defaults, silently. The build test checks that every exported component and hook stays

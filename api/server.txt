@@ -1,0 +1,6 @@
+@workspacekit/server FileHandlerOptions
+@workspacekit/server FileStore
+@workspacekit/server Operation
+@workspacekit/server createFileHandler
+@workspacekit/server nodeFsStore
+@workspacekit/server resolveInRoot

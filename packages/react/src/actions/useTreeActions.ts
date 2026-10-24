@@ -1,5 +1,5 @@
 'use client';
-import { toFsError, type Entry, type EntryKind, type VisibleRow } from '@scope/core';
+import { toFsError, type Entry, type EntryKind, type VisibleRow } from '@workspacekit/core';
 import { useLayoutEffect, useState, type KeyboardEvent } from 'react';
 import type { MenuAnchor } from '../components';
 import { failureMessage, useFileSystem, type FileSystemContext } from '../provider/hooks';

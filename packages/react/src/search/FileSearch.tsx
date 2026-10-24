@@ -1,5 +1,5 @@
 'use client';
-import { parentPath, toFsError, type Entry } from '@scope/core';
+import { parentPath, toFsError, type Entry } from '@workspacekit/core';
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { partProps } from '../cx';
 import { useListboxWindow, type ListboxWindow } from '../listboxWindow';

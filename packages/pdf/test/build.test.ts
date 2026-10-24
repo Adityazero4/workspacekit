@@ -66,12 +66,12 @@ test('the worker and the API are the pinned pdf.js version, so their handshake c
   }
 });
 
-test('@scope/react/renderer-kit stays external: imported by specifier, none of its modules bundled', () => {
+test('@workspacekit/react/renderer-kit stays external: imported by specifier, none of its modules bundled', () => {
   const files = filesReachableFrom(DIST, 'index.js', { throughDynamicImports: true });
   const staticImports = filesReachableFrom(DIST, 'index.js').flatMap(
     (file) => importsOf(distText(file)).static,
   );
-  expect(staticImports).toContain('@scope/react/renderer-kit');
+  expect(staticImports).toContain('@workspacekit/react/renderer-kit');
   const bundledModules = files.flatMap((file) => modulesIn(distText(file)));
   expect(bundledModules.filter((module) => !module.startsWith('src/'))).toEqual([]);
 });

@@ -1,4 +1,4 @@
-import { createMemoryAdapter } from '@scope/core/memory';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import axe from 'axe-core';
 import { expect, test } from 'vitest';
 import { commands } from 'vitest/browser';

@@ -1,5 +1,5 @@
-import { FsError, statusOf, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import { FsError, statusOf, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import axe from 'axe-core';
 import { Component, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -438,7 +438,9 @@ test('a row rendered outside <FileTree> throws an error that says where to rende
       </FileSystemProvider>,
     );
     await expect.poll(() => caught.mock.calls.length).toBe(1);
-    expect(caught.mock.calls[0]![0]).toMatch(/inside <FileTree>/);
+    expect(caught.mock.calls[0]![0]).toMatch(
+      /inside <FileTree>.*docs\/concepts\/adapter#tree-rows-and-tabs/s,
+    );
   } finally {
     silenceReactErrorLog.mockRestore();
   }

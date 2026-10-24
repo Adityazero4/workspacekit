@@ -1,4 +1,4 @@
-/* Default look of @scope/pptx. Everything lives in @layer fs, so any unlayered consumer CSS wins. Each slide
+/* Default look of @workspacekit/pptx. Everything lives in @layer fs, so any unlayered consumer CSS wins. Each slide
    is drawn in the shadow root of its pptx-slide part, where these rules do not reach. */
 @layer fs {
   [data-fs-part='pptx-viewer'] {

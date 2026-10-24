@@ -1,6 +1,6 @@
-import { PdfViewer, type PdfViewerProps } from '@scope/pdf';
-import '@scope/react/styles.css';
-import '@scope/pdf/styles.css';
+import { PdfViewer, type PdfViewerProps } from '@workspacekit/pdf';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/pdf/styles.css';
 
 /**
  * Props of `StandalonePdfExample`: `src` is a URL string, or the file's bytes or a `Blob`.

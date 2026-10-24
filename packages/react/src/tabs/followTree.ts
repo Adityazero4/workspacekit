@@ -1,4 +1,4 @@
-import { isSameOrDescendant, type TreeStore } from '@scope/core';
+import { isSameOrDescendant, type TreeStore } from '@workspacekit/core';
 import type { FollowedMove } from '../actions/followMove';
 import type { UiStore } from '../provider/ui-store';
 import { withDeletedCleanTabsClosed, type TabsHolder } from './tabs-store';

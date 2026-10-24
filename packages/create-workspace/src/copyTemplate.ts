@@ -26,7 +26,7 @@ export type TemplateName = (typeof TEMPLATE_NAMES)[number];
 export interface CreateWorkspaceOptions {
   template: TemplateName;
   directory: string;
-  /** Exact version for every `@scope/*` package a template depends on, keyed by package name. */
+  /** Exact version for every `@workspacekit/*` package a template depends on, keyed by package name. */
   versions: Record<string, string>;
   /** Packages that are `private`; a template depending on one is refused. */
   privatePackages?: readonly string[];
@@ -91,13 +91,14 @@ function projectNameFor(directory: string): string {
 }
 
 /**
- * Copies a starter into `directory` and pins every `@scope/*` dependency to an exact version.
+ * Copies a starter into `directory` and pins every `@workspacekit/*` dependency to an exact version.
  *
  * Refuses a directory that already has files, and an unknown template, with a message that says what to
  * change.
  *
  * @example
- * await createWorkspace({ template: 'vite', directory: 'my-files', versions: { '@scope/core': '1.0.0' } });
+ * const versions = { '@workspacekit/core': '1.0.0' };
+ * await createWorkspace({ template: 'vite', directory: 'my-files', versions });
  */
 export async function createWorkspace(options: CreateWorkspaceOptions): Promise<void> {
   const { template, versions } = options;

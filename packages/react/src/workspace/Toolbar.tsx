@@ -1,6 +1,6 @@
 'use client';
 import * as RadixMenu from '@radix-ui/react-dropdown-menu';
-import { basename, type Entry, type SortSpec } from '@scope/core';
+import { basename, type Entry, type SortSpec } from '@workspacekit/core';
 import { useState, type FC, type KeyboardEvent, type SVGProps } from 'react';
 import { builtinActions } from '../actions/builtin';
 import type { TreeCommandsHost } from '../actions/treeCommands';

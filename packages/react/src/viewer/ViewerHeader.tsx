@@ -1,5 +1,5 @@
 'use client';
-import { basename } from '@scope/core';
+import { basename } from '@workspacekit/core';
 import type { ReactNode } from 'react';
 import { partProps } from '../cx';
 import type { ClassNames } from '../parts';

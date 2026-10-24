@@ -1,5 +1,5 @@
 'use client';
-import { parentPath, toFsError, type Entry, type FileSystemAdapter } from '@scope/core';
+import { parentPath, toFsError, type Entry, type FileSystemAdapter } from '@workspacekit/core';
 
 /**
  * The entry at `path` as the server reports it right now, bypassing the tree store (whose listing may be

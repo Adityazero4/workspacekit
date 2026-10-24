@@ -5,9 +5,10 @@
     "jsx": "react-jsx",
     "types": ["node", "vitest/globals"],
     "paths": {
-      "@scope/core": ["../core/src/index.ts"],
-      "@scope/core/http": ["../core/src/http/index.ts"],
-      "@scope/core/memory": ["../core/src/memory/index.ts"]
+      "@workspacekit/core": ["../core/src/index.ts"],
+      "@workspacekit/core/http": ["../core/src/http/index.ts"],
+      "@workspacekit/core/docs": ["../core/src/docs/index.ts"],
+      "@workspacekit/core/memory": ["../core/src/memory/index.ts"]
     }
   },
   "include": ["src", "test", "bench/*.tsx"]

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
-import '@scope/react/styles.css';
+import '@workspacekit/react/styles.css';
 import '../src/styles.css';
 import { Grid } from '../src/grid/Grid';
 import { spreadMerges, syntheticModel } from './support/syntheticModel';

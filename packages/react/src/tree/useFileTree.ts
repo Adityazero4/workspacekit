@@ -7,7 +7,7 @@ import {
   type TreeData,
   type VisibleRow,
   type VisibleRowIndex,
-} from '@scope/core';
+} from '@workspacekit/core';
 import {
   useEffect,
   useLayoutEffect,

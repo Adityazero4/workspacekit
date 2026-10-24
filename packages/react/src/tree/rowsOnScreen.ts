@@ -1,5 +1,5 @@
 'use client';
-import type { VisibleRow, VisibleRowIndex } from '@scope/core';
+import type { VisibleRow, VisibleRowIndex } from '@workspacekit/core';
 import { defaultRangeExtractor, useVirtualizer, type Range, type VirtualItem } from '@tanstack/react-virtual';
 import { useEffect, useState, type RefObject } from 'react';
 import type { UploadRun } from '../uploads/uploads';

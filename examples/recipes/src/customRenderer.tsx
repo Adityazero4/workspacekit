@@ -1,4 +1,9 @@
-import { defineRenderer, MATCH_SCORE, type Renderer, type RendererProps } from '@scope/react/renderer-kit';
+import {
+  defineRenderer,
+  MATCH_SCORE,
+  type Renderer,
+  type RendererProps,
+} from '@workspacekit/react/renderer-kit';
 
 const LEVEL_PATTERN = /\b(ERROR|WARN|INFO|DEBUG)\b/;
 
@@ -39,7 +44,7 @@ function LogViewer({ source }: RendererProps): React.JSX.Element {
  * `--fs-*` tokens. It scores `specific`, so it beats the built-in text renderer, which scores `text`.
  *
  * @example
- * import { lightRenderers, Workspace } from '@scope/react';
+ * import { lightRenderers, Workspace } from '@workspacekit/react';
  *
  * <Workspace adapter={adapter} renderers={[logRenderer(), ...lightRenderers]} />
  */

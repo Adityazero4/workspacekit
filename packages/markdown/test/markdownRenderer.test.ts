@@ -1,4 +1,4 @@
-import { lightRenderers, resolveRenderer, type Renderer } from '@scope/react';
+import { lightRenderers, resolveRenderer, type Renderer } from '@workspacekit/react';
 import { expect, test, vi } from 'vitest';
 import { markdownRenderer } from '../src';
 import { allowedLinkUrl } from '../src/links';

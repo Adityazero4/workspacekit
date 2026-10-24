@@ -8,7 +8,7 @@ const RESET_AFTER_MS = 2000;
  *
  * @example
  * ```tsx
- * <CopyButton text="pnpm add @scope/workspace" label="Copy the install command" />
+ * <CopyButton text="pnpm add @workspacekit/workspace" label="Copy the install command" />
  * ```
  */
 export function CopyButton(props: { text: string; label: string }): React.JSX.Element {

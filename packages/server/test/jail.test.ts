@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isFsError, type FsErrorKind } from '@scope/core';
+import { isFsError, type FsErrorKind } from '@workspacekit/core';
 import { resolveInRoot } from '../src/jail';
 
 let base: string;

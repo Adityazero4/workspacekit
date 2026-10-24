@@ -1,5 +1,5 @@
 'use client';
-import { partProps } from '@scope/react/renderer-kit';
+import { partProps } from '@workspacekit/react/renderer-kit';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import type { CellAddress } from './grid/model';
 import type { SheetClassNames } from './parts';

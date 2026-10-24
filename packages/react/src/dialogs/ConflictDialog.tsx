@@ -1,5 +1,5 @@
 'use client';
-import type { Entry } from '@scope/core';
+import type { Entry } from '@workspacekit/core';
 import { useState, type ComponentType } from 'react';
 import type { DialogSlotProps } from '../components';
 import { partProps } from '../cx';

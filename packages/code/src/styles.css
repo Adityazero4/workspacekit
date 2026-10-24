@@ -1,4 +1,4 @@
-/* Default look of @scope/code. Everything lives in @layer fs, so any unlayered consumer CSS wins. */
+/* Default look of @workspacekit/code. Everything lives in @layer fs, so any unlayered consumer CSS wins. */
 @layer fs {
   [data-fs-part='code-viewer'] {
     display: flex;

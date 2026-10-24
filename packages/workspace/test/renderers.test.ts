@@ -1,5 +1,5 @@
-import type { Entry } from '@scope/core';
-import { resolveRenderer } from '@scope/react';
+import type { Entry } from '@workspacekit/core';
+import { resolveRenderer } from '@workspacekit/react';
 import { expect, test } from 'vitest';
 import { allRenderers } from '../src';
 

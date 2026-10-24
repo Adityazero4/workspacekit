@@ -10,10 +10,10 @@ Each layer is independent. There is no CSS-in-JS and no runtime style injection,
 Import the stylesheet once. It looks finished in light and dark: it follows `prefers-color-scheme`, and `data-theme="light"` or `"dark"` on any ancestor overrides it (`Workspace` sets it from its `theme` prop).
 
 ```tsx
-import '@scope/workspace/styles.css';
+import '@workspacekit/workspace/styles.css';
 ```
 
-With `@scope/react` alone, import `@scope/react/styles.css` instead. All of it lives in `@layer fs`, so your own unlayered CSS wins without `!important`.
+With `@workspacekit/react` alone, import `@workspacekit/react/styles.css` instead. All of it lives in `@layer fs`, so your own unlayered CSS wins without `!important`.
 
 ## 2. Design tokens
 
@@ -54,16 +54,16 @@ Every element carries `data-fs-part="<part>"`, and state is a data attribute: `d
 }
 ```
 
-The valid names are the `PARTS` constant exported by `@scope/react`. Each renderer package exports its own: `PDF_PARTS`, `CODE_PARTS`, `MARKDOWN_PARTS`, `SHEET_PARTS`, `DOCX_PARTS` and `PPTX_PARTS`. Style against these names, not generated class names.
+The valid names are the `PARTS` constant exported by `@workspacekit/react`. Each renderer package exports its own: `PDF_PARTS`, `CODE_PARTS`, `MARKDOWN_PARTS`, `SHEET_PARTS`, `DOCX_PARTS` and `PPTX_PARTS`. Style against these names, not generated class names.
 
 ## 4. Class names per part
 
 `classNames` maps a part name to a class. Tailwind works directly.
 
 ```tsx
-import { createMemoryAdapter } from '@scope/core/memory';
-import { Workspace } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { Workspace } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 
 const adapter = createMemoryAdapter({ files: { 'README.md': '# Hello' } });
 const classNames = { 'workspace-files': 'border-e-4 border-fuchsia-600', 'tree-row': 'font-medium' };
@@ -78,9 +78,9 @@ export function Files(): React.JSX.Element {
 `components` replaces a part with your design system's version: `Menu`, `Dialog`, `EmptyState` and `Loader`.
 
 ```tsx
-import { createMemoryAdapter } from '@scope/core/memory';
-import { Workspace, type Components } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { Workspace, type Components } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 
 function BrandEmptyState({ children }: { children?: React.ReactNode }): React.JSX.Element {
   return (
@@ -112,8 +112,8 @@ Do not import the stylesheet. Structure, accessibility and behavior stay, with n
 `useFileTree` and `useFileViewer` give state and prop getters for fully custom markup. They are stable API. This tree is plain `div`s with no stylesheet; it keeps the WAI-ARIA keyboard model and the single tab stop.
 
 ```tsx
-import { createMemoryAdapter } from '@scope/core/memory';
-import { FileSystemProvider, useFileTree } from '@scope/react';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { FileSystemProvider, useFileTree } from '@workspacekit/react';
 
 const adapter = createMemoryAdapter({ files: { 'src/index.ts': 'export {};' } });
 

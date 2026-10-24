@@ -5,12 +5,12 @@ export default defineConfig({
   plugins: [react()],
   worker: { format: 'es' },
   optimizeDeps: {
-    exclude: ['@scope/pdf', '@scope/spreadsheet'],
+    exclude: ['@workspacekit/pdf', '@workspacekit/spreadsheet'],
     include: [
-      '@scope/workspace > @scope/spreadsheet > papaparse',
-      '@scope/workspace > @scope/spreadsheet > saxes',
-      '@scope/workspace > @scope/spreadsheet > numfmt',
-      '@scope/workspace > @scope/spreadsheet > fast-formula-parser',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > papaparse',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > saxes',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > numfmt',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > fast-formula-parser',
     ],
   },
 });

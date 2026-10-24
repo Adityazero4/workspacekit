@@ -1,10 +1,5 @@
-import {
-  createVisibleRowIndex,
-  mergeListing,
-  emptyTree,
-  type Entry,
-  type VisibleRowIndex,
-} from '@scope/core';
+import { createVisibleRowIndex, type Entry, type VisibleRowIndex } from '@workspacekit/core';
+import { emptyTree, mergeListing } from '../../core/src/tree/model';
 import { describe, expect, test } from 'vitest';
 import { treeKeyIntent, type TreeKeyIntent } from '../src/tree/keyboard';
 import { findTypeahead, typeaheadStep } from '../src/tree/typeahead';

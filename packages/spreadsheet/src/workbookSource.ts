@@ -1,5 +1,5 @@
-import type { ViewerError } from '@scope/react/renderer-kit';
-import { viewerError } from '@scope/react/renderer-kit';
+import type { ViewerError } from '@workspacekit/react/renderer-kit';
+import { viewerError } from '@workspacekit/react/renderer-kit';
 import type { CellAddress } from './grid/model';
 import { createWorkerReader, isSuperseded, type WorkerReader } from './reader/client';
 import { findCells } from './reader/search';

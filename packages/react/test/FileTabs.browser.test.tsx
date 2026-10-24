@@ -1,6 +1,6 @@
 import { fileTabRenders, treeRowRenders } from './support/countComponentRenders';
-import { FsError, statusOf, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import { FsError, statusOf, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import axe from 'axe-core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { expect, test, vi } from 'vitest';

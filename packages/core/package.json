@@ -1,16 +1,25 @@
 {
-  "name": "@scope/core",
+  "name": "@workspacekit/core",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
   "author": "Aditya Jain <adityajain042001@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Adityazero4/workspacekit.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://adityazero4.github.io/workspacekit",
+  "bugs": "https://github.com/Adityazero4/workspacekit/issues",
   "type": "module",
   "sideEffects": false,
   "files": [
     "dist",
     "README.md",
     "AGENTS.md",
-    "llms.txt"
+    "llms.txt",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     ".": {
@@ -24,6 +33,10 @@
     "./memory": {
       "types": "./dist/memory/index.d.ts",
       "default": "./dist/memory/index.js"
+    },
+    "./docs": {
+      "types": "./dist/docs/index.d.ts",
+      "default": "./dist/docs/index.js"
     }
   },
   "scripts": {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { unzipSync } from 'fflate';
-import { CSRF_HEADER } from '@scope/core';
-import type { Entry } from '@scope/core';
+import { CSRF_HEADER } from '@workspacekit/core';
+import type { Entry } from '@workspacekit/core';
 import { createFileHandler, type FileStore } from '../src';
 
 let tz: string | undefined;

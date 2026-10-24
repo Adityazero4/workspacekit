@@ -1,25 +1,25 @@
-# @scope/markdown
+# @workspacekit/markdown
 
 > A Markdown renderer for the file workspace: an editable rendered view with a source mode, built on Lexical.
 
-- API reference: https://docs.example.invalid/api/markdown
-- Install: `npm install @scope/markdown @scope/code @scope/react react react-dom`
+- API reference: https://adityazero4.github.io/workspacekit/api/markdown
+- Install: `npm install @workspacekit/markdown @workspacekit/code @workspacekit/react react react-dom`
 
 ## README sections
 
 - Install
 - Entry: `markdownRenderer()` returns a renderer.
 - Standalone use: `MarkdownEditor` shows one file without a tree or a provider.
-- CSS: Import `@scope/react/styles.css` and `@scope/markdown/styles.css` once each.
+- CSS: Import `@workspacekit/react/styles.css` and `@workspacekit/markdown/styles.css` once each.
 - Options: `source`: the renderer that draws source mode.
 - Vite: No configuration is needed in a build or in the dev server.
 
 ## Entry points
 
-- `@scope/markdown`
-- `@scope/markdown/styles.css` (stylesheet)
+- `@workspacekit/markdown`
+- `@workspacekit/markdown/styles.css` (stylesheet)
 
-## Exports of `@scope/markdown`
+## Exports of `@workspacekit/markdown`
 
 - `MARKDOWN_MAX_BYTES`: The largest Markdown file the renderer reads: 10 MiB.
 - `MARKDOWN_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `md-` prefix.

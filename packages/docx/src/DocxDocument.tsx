@@ -1,5 +1,10 @@
 'use client';
-import { partProps, viewerError, type RendererProps, type ViewerError } from '@scope/react/renderer-kit';
+import {
+  partProps,
+  viewerError,
+  type RendererProps,
+  type ViewerError,
+} from '@workspacekit/react/renderer-kit';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { DocxLoading } from './DocxViewer';
 import type { DocxClassNames } from './parts';
@@ -34,7 +39,10 @@ const shadowRootOf = (host: HTMLElement): ShadowRoot =>
  * `docx-document` part, so the document's styles and ids stay inside it. A new `data` replaces the shown
  * document once it has rendered (it is busy until then, or until that version fails); a render overtaken by a
  * newer `data`, or by unmount, is never mounted.
- * Unmount empties the shadow root.
+ * Unmount empties the shadow root and deletes the shown document's font faces from `document.fonts`, in
+ * the same passive cleanup pass that aborts a render still in progress, so a render that finishes during
+ * an unmount is cleaned up too. A failure while mounting a rendered document is reported like a failed
+ * render, so the viewer is never left busy.
  *
  * @example
  * ```tsx
@@ -62,19 +70,18 @@ export default function DocxDocument(props: DocxDocumentProps): React.JSX.Elemen
   useEffect(() => {
     const shadowRoot = shadowRootOf(host.current!);
     const controller = new AbortController();
-    renderDocx(data, controller.signal).then(
-      (rendered) => {
+    renderDocx(data, controller.signal)
+      .then((rendered) => {
         if (controller.signal.aborted) return;
         showRendered(shadowRoot, rendered);
         setShownData(data);
         setSettledData(data);
-      },
-      (thrown: unknown) => {
+      })
+      .catch((thrown: unknown) => {
         if (controller.signal.aborted) return;
         setSettledData(data);
         reportError(thrown);
-      },
-    );
+      });
     return () => controller.abort();
   }, [data]);
 

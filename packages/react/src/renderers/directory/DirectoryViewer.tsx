@@ -1,5 +1,5 @@
 'use client';
-import { sortedChildren, type Entry, type FolderStatus } from '@scope/core';
+import { sortedChildren, type Entry, type FolderStatus } from '@workspacekit/core';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { partProps } from '../../cx';
 import { useListboxWindow } from '../../listboxWindow';
@@ -154,7 +154,7 @@ function DirectoryList(props: DirectoryListProps): React.JSX.Element {
  * columns. The list is a virtualized `listbox` that keeps focus and points at the active row with
  * `aria-activedescendant`: the arrow keys, Home and End move it; Enter or a double-click calls
  * `onOpenEntry`. A click selects a row and leaves focus on the listbox. Needs a `FileSystemProvider`, so
- * it is not part of `@scope/react/renderers`.
+ * it is not part of `@workspacekit/react/renderers`.
  *
  * @example
  * ```tsx

@@ -5,17 +5,44 @@ description: What the handler enforces for you, and what only you can do.
 
 ## What the handler enforces
 
-- **A required `authorize`.** There is no default-open mode. Every operation asks it, once per affected path. A directory `move`, `copy` or `delete` asks for every descendant, and any denial rejects the whole operation. A directory `download` asks for every file and leaves out the denied ones.
-- **A root jail.** `nodeFsStore` normalizes every path, resolves it with `realpath` and checks the result against the root. `..` and symlinks that lead outside the root are rejected, and so is a dangling symlink.
-- **Hidden names on the server.** `nodeFsStore(root, { exclude })` hides excluded names from listings and search, and answers `not_found` for any path that contains one. This is not only a UI setting.
-- **Limits.** `maxWriteBytes`, `maxUploadBytes` and `readOnly`.
+- **A required `authorize`.** There is no default-open mode. Every operation asks it at least once per affected path; it may be asked again for the same path (link targets, zip entries when opened), so keep it free of side effects. A directory `move`, `copy` or `delete` asks for every descendant, and any denial rejects the whole operation. A directory `download` asks for every file and leaves out the denied ones. A path that goes through a symlink inside the root is authorized as both its own path and its target's, and both must allow.
+- **A root jail.** `nodeFsStore` normalizes every path, resolves it with `realpath` and checks the result against the root. `..` and symlinks that lead outside the root are rejected, and so is a dangling symlink. Names the API cannot address, such as one with a backslash, are left out of listings, search and downloads. Hard links cannot be detected: a hard link to a file outside the root reads that file (writes replace the link, not the file). Don't give agents a workspace on the same filesystem as secrets they couldn't read anyway, or mount it separately.
+- **Hidden names on the server.** `nodeFsStore(root, { exclude })` hides excluded names from listings and search, and answers `not_found` for any path that contains one. This is not only a UI setting. Names shaped like the store's own staging files are hidden and refused the same way.
+- **Limits.** With `nodeFsStore`, or any store that honours the `list` and `search` budgets, every size, count and walk is bounded, and each default can be overridden on `createFileHandler` (see [Limits](#limits)). `readOnly` rejects every mutating operation.
 - **A CSRF header.** Every request that is not a `GET` needs `X-FS-Request: 1`, which a cross-site form cannot send.
 - **Files never render in your origin.** `read` and `download` answer with `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`.
+- **Nothing is cached.** Every response carries `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`, so a CDN or the browser's disk cache never keeps listings or file bytes.
+- **Failures reach you.** Unexpected errors, a watcher that breaks down and a file stream that fails mid-response all go to `onError`.
+
+## Limits
+
+| What is bounded                                                                | Option                               | Default                            |
+| ------------------------------------------------------------------------------ | ------------------------------------ | ---------------------------------- |
+| A `write` body                                                                 | `maxWriteBytes`                      | 10 MiB                             |
+| A direct upload, or a chunked upload's total                                   | `maxUploadBytes`                     | 1 GiB                              |
+| A JSON request body                                                            | none                                 | 1 MiB                              |
+| Unfinished chunked uploads                                                     | `maxUploadSessions`                  | 100                                |
+| Unfinished chunked uploads of one actor, with an `actor` hook                  | `maxUploadSessionsPerActor`          | A quarter of `maxUploadSessions`   |
+| Bytes unfinished chunked uploads keep in the temp folder, declared and written | `maxUploadTempBytes`                 | 4 GiB                              |
+| Bytes one actor's unfinished chunked uploads may declare, with an `actor` hook | `maxUploadTempBytesPerActor`         | A quarter of `maxUploadTempBytes`  |
+| Bytes one chunked upload keeps                                                 | none                                 | Its size plus one chunk            |
+| How long an idle upload session lives                                          | `uploadTtlMs`                        | 1 hour                             |
+| Open live-update streams                                                       | `maxWatchConnections`                | 100                                |
+| Open live-update streams of one actor, with an `actor` hook                    | `maxWatchConnectionsPerActor`        | A quarter of `maxWatchConnections` |
+| How long a live-update stream stays open                                       | `watchMaxLifetimeMs`                 | 1 hour                             |
+| Bytes a live-update stream may hold unread                                     | `watchBufferBytes`                   | 1 MiB                              |
+| The `depth` of a `list`                                                        | `maxListDepth`                       | 16                                 |
+| Entries in one `list`                                                          | `maxListEntries`                     | 100,000                            |
+| Entries a `search` looks at, and how long it walks                             | `maxSearchVisits`, `searchTimeoutMs` | 100,000 and 5 s                    |
+| Results of one `search`                                                        | none                                 | 200                                |
+| A folder download: entries walked, and archive size                            | none                                 | 65,535 entries; under 4 GiB        |
+
+Every walk stops when the request is aborted. `upload/init` and `watch` answer 503 with `Retry-After` when a session, connection or reserved-bytes cap is reached; a body, chunk, listing or archive over its size or entry limit answers 413; `search` answers with what it found so far. A folder download stops walking past 65,535 entries, and refuses an archive of 4 GiB or more before the first byte. Uploads wait in a fresh private folder per handler under the system temp directory, or in your own `uploadTempDir` (see [the handler](/docs/server/handler#uploadtempdir)), and idle sessions are removed on a timer. Without an `actor` hook every request is the same actor, so one client can use the whole of each overall cap. A directory `move`, `copy` or `delete` is not capped, because it must ask `authorize` for every descendant, but it stops when the request is aborted.
 
 ## What only you can do
 
 - **Write `isSignedIn` properly.** It must verify a session or token on the request, not check that a header exists.
-- **Scope what each principal may see.** `list`, `search` and `stat` results are not filtered per entry, and `watch` is asked once, for the whole root. A principal who may see only part of the tree must be denied `'list'`, `'search'` and `'watch'`, or the hidden parts must be excluded in the store.
+- **Scope what each principal may see.** `list` and `search` results are not filtered per entry, and `watch` is asked once, for the whole root. A principal who may see only part of the tree must be denied `'list'`, `'search'` and `'watch'`, or the hidden parts must be excluded in the store.
 - **Choose the tenant on the server.** Pick the store root from the verified session, not from a request parameter.
 - **Keep secrets out of the browser.** A token that grants access must be sent as an `httpOnly` cookie, or fetched by a function you pass as `httpAdapter`'s `headers`.
 

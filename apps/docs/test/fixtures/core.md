@@ -1,4 +1,4 @@
-# @scope/core (test fixture)
+# @workspacekit/core (test fixture)
 
 A trimmed copy of the generated API page: only the sections that llms.mjs reads.
 

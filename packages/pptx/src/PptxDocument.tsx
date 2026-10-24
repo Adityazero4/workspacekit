@@ -9,7 +9,7 @@ import {
   type RendererProps,
   type ViewerError,
   type VirtualPagesHandle,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { DocumentLimitExceeded, EncryptedPresentation } from './limits';
 import type { PptxClassNames } from './parts';

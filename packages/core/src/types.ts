@@ -30,6 +30,19 @@ export interface Entry {
   meta?: Record<string, unknown>;
 }
 /**
+ * Hints a caller gives `FileSystemAdapter.watch`. `pollPaths` returns the folders worth polling, read again
+ * before every round, for an adapter that falls back to polling when it cannot watch.
+ *
+ * @example
+ * ```ts
+ * adapter.watch?.(applyChanges, { pollPaths: () => ['', 'src'] });
+ * ```
+ */
+export interface WatchOptions {
+  pollPaths?: () => readonly string[];
+}
+
+/**
  * One change reported by `FileSystemAdapter.watch`. `actor` is `'user'` for changes made through this client.
  *
  * @example
@@ -127,6 +140,9 @@ export interface FileSystemAdapter {
   delete?(path: string): Promise<void>;
   upload?: UploadTransport;
   download?(paths: string[]): Promise<Blob | { url: string; fileName?: string }>;
-  /** Delivers batches of events, so a burst of changes costs one render. */
-  watch?(onChange: (events: ChangeEvent[]) => void): () => void;
+  /**
+   * Delivers batches of events, so a burst of changes costs one render. `options` is a hint that adapters
+   * may ignore.
+   */
+  watch?(onChange: (events: ChangeEvent[]) => void, options?: WatchOptions): () => void;
 }

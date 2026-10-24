@@ -1,5 +1,5 @@
 'use client';
-import { FsError, type Entry, type FileSystemAdapter } from '@scope/core';
+import { FsError, type Entry, type FileSystemAdapter } from '@workspacekit/core';
 import { safeUrlOrNull } from '../renderers/safeUrls';
 
 const DOWNLOAD_URL_LIFETIME_MS = 40_000;

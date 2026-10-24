@@ -12,21 +12,21 @@ Start from Vite's React and TypeScript template, which includes the types for CS
 ```sh
 npm create vite@latest my-files -- --template react-ts
 cd my-files
-npm install @scope/workspace @scope/core
-npm install --save-dev @scope/demo-kit
+npm install @workspacekit/workspace @workspacekit/core
+npm install --save-dev @workspacekit/demo-kit
 ```
 
-`@scope/demo-kit` is only for the sample-files page below. Skip it when you use your own server.
+`@workspacekit/demo-kit` is only for the sample-files page below. Skip it when you use your own server.
 
 ## Render it on sample files
 
-Nothing runs on a server here. `createMemoryAdapter` holds the files in the browser and `sampleFiles` from `@scope/demo-kit` fills it.
+Nothing runs on a server here. `createMemoryAdapter` holds the files in the browser and `sampleFiles` from `@workspacekit/demo-kit` fills it.
 
 ```tsx
-import { createMemoryAdapter } from '@scope/core/memory';
-import { sampleFiles } from '@scope/demo-kit';
-import { Workspace } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { sampleFiles } from '@workspacekit/demo-kit';
+import { Workspace } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 
 const adapter = createMemoryAdapter({ files: sampleFiles() });
 
@@ -39,12 +39,12 @@ export default function App(): React.JSX.Element {
 
 ## Render it on your server
 
-Swap the adapter for `httpAdapter` and serve a directory with `createFileHandler` from `@scope/server`, as in [Next.js](/docs/getting-started/next). Proxy `/api/files` to that server in Vite's `server.proxy` during development.
+Swap the adapter for `httpAdapter` and serve a directory with `createFileHandler` from `@workspacekit/server`, as in [Next.js](/docs/getting-started/next). Proxy `/api/files` to that server in Vite's `server.proxy` during development.
 
 ```tsx
-import { httpAdapter } from '@scope/core/http';
-import { Workspace } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { Workspace } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 
 const adapter = httpAdapter('/api/files');
 
@@ -55,7 +55,7 @@ export default function App(): React.JSX.Element {
 
 ## Vite configuration
 
-Set `worker: { format: 'es' }` whenever `@scope/spreadsheet` is in the build, as it is with the `@scope/workspace` preset: the spreadsheet worker is code-split, which Vite's default `iife` worker format rejects, so `vite build` fails without it. `@scope/pdf` alone does not need it. The dev server also pre-bundles dependencies, which breaks the worker references in `@scope/pdf` and `@scope/spreadsheet`. Exclude those two and pre-bundle the CommonJS modules the spreadsheet worker imports (Vite's `>` names a dependency of a dependency):
+Set `worker: { format: 'es' }` whenever `@workspacekit/spreadsheet` is in the build, as it is with the `@workspacekit/workspace` preset: the spreadsheet worker is code-split, which Vite's default `iife` worker format rejects, so `vite build` fails without it. `@workspacekit/pdf` alone does not need it. The dev server also pre-bundles dependencies, which breaks the worker references in `@workspacekit/pdf` and `@workspacekit/spreadsheet`. Exclude those two and pre-bundle the CommonJS modules the spreadsheet worker imports (Vite's `>` names a dependency of a dependency):
 
 ```ts
 // not-compiled: needs @vitejs/plugin-react, which comes with the Vite React template and is not installed here
@@ -67,17 +67,17 @@ export default defineConfig({
   plugins: [react()],
   worker: { format: 'es' },
   optimizeDeps: {
-    exclude: ['@scope/pdf', '@scope/spreadsheet'],
+    exclude: ['@workspacekit/pdf', '@workspacekit/spreadsheet'],
     include: [
-      '@scope/workspace > @scope/spreadsheet > papaparse',
-      '@scope/workspace > @scope/spreadsheet > saxes',
-      '@scope/workspace > @scope/spreadsheet > numfmt',
-      '@scope/workspace > @scope/spreadsheet > fast-formula-parser',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > papaparse',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > saxes',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > numfmt',
+      '@workspacekit/workspace > @workspacekit/spreadsheet > fast-formula-parser',
     ],
   },
 });
 ```
 
-If you install `@scope/spreadsheet` directly rather than through `@scope/workspace`, drop the `@scope/workspace > ` prefix.
+If you install `@workspacekit/spreadsheet` directly rather than through `@workspacekit/workspace`, drop the `@workspacekit/workspace > ` prefix.
 
 <LiveWorkspace />

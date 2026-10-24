@@ -138,7 +138,7 @@ const documentCssOf = (styles: DocumentStyles): string =>
 const BREAKOUT =
   'position:fixed!important;inset:0!important;z-index:2147483647!important;background:rgb(1,2,3)!important';
 const SHADOW_BREAKOUTS = {
-  scopeHost: `@scope/**/(:host)/**/{:scope{${BREAKOUT};contain:none!important}}`,
+  scopeHost: `@workspacekit/**/(:host)/**/{:scope{${BREAKOUT};contain:none!important}}`,
   scopeImplicit: `@scope{:scope{${BREAKOUT}}}`,
   scopeInLayer: `@layer a{@scope (:host){:scope{${BREAKOUT}}}}`,
   scopeInMedia: `@media all{@scope{:scope{${BREAKOUT}}}}`,
@@ -181,9 +181,8 @@ test.each(STYLE_PATHS)('no document rule can style the viewer itself (%s)', (_, 
 test.each(STYLE_PATHS)(
   'kept rules cannot fetch, reach the viewport or stack above the app (%s)',
   (_, safeStylesOf) => {
-    const css = documentCssOf(
-      safeStylesOf([
-        `@import url(http://evil.example/a.css);
+    const styles = safeStylesOf([
+      `@import url(http://evil.example/a.css);
       @namespace svg url(http://www.w3.org/2000/svg);
       .a { color: red; background: url(http://evil.example/b.png) }
       @media screen { .b { background-image: url('http://evil.example/c.png'); color: blue } }
@@ -198,24 +197,23 @@ test.each(STYLE_PATHS)(
       .f { position: relative; z-index: 10 }
       .g { --p: fixed; position: var(--p) !important; z-index: calc(1e9) }
       .h { z-index: +1001 } .i { z-index: 1e3 } .j { position: -webkit-sticky }`,
-      ]),
-    );
+    ]);
+    const css = documentCssOf(styles);
     expect(css).not.toMatch(
-      /evil\.example|null|@property|@import|sticky|5000|99999|var\(--p\)|calc|1001|1e3/,
+      /evil\.example|null|@property|@import|@font-face|sticky|5000|99999|var\(--p\)|calc|1001|1e3/,
     );
     expect(css.match(/(?<![-\w])position: [a-z-]+/g)).toEqual(['position: relative']);
     expect(css).toContain('@namespace svg');
-    for (const kept of [
-      'color: red',
-      'color: blue',
-      'color: green',
-      'Inline',
-      'data:font/woff2',
-      '#123456',
-      '@keyframes',
-    ]) {
+    for (const kept of ['color: red', 'color: blue', 'color: green', '#123456', '@keyframes']) {
       expect(css).toContain(kept);
     }
+    expect(styles.fonts.faces).toEqual([
+      {
+        family: 'fs-docx-test-Inline',
+        source: expect.stringMatching(/^url\("?data:font\/woff2/),
+        descriptors: {},
+      },
+    ]);
   },
 );
 
@@ -283,8 +281,11 @@ test.each(STYLE_PATHS)(
     ]);
     const css = documentCssOf(styles);
     expect(css).not.toMatch(/font-family: (Arial|"Probe Sans")/);
-    expect(css).toMatch(/@font-face \{ font-family: "?fs-docx-test-Arial"?;/);
-    expect(css).toMatch(/@font-face \{ font-family: "?fs-docx-test-Probe Sans"?;/);
+    expect(css).not.toContain('@font-face');
+    expect(styles.fonts.faces.map(({ family, source }) => [family, source])).toEqual([
+      ['fs-docx-test-Arial', expect.stringMatching(/^local\("?Menlo"?\)$/)],
+      ['fs-docx-test-Probe Sans', expect.stringMatching(/^url\("?data:font\/woff2/)],
+    ]);
     expect(css).toMatch(/\.a \{ font-family: "?fs-docx-test-Arial"?, serif;/);
     expect(css).toMatch(/"?fs-docx-test-Probe Sans"?, sans-serif/);
     expect(css).toContain('font-family: serif, Georgia');

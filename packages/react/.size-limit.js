@@ -3,7 +3,7 @@ import { readdirSync } from 'node:fs';
 const outsideOurCode = [
   'react',
   'react-dom',
-  '@scope/core',
+  '@workspacekit/core',
   '@radix-ui/react-dialog',
   '@radix-ui/react-dropdown-menu',
   '@tanstack/react-virtual',
@@ -24,7 +24,7 @@ const builtChunk = (name) => builtFiles.find((file) => file.startsWith(`${name}-
 
 export default [
   {
-    name: '@scope/react: FileSystemProvider and FileTree',
+    name: '@workspacekit/react: FileSystemProvider and FileTree',
     path: 'dist/index.js',
     import: '{ FileSystemProvider, FileTree }',
     entry: ['index'],
@@ -33,7 +33,7 @@ export default [
     ignore: outsideOurCode,
   },
   {
-    name: '@scope/react: Workspace',
+    name: '@workspacekit/react: Workspace',
     path: 'dist/index.js',
     import: '{ Workspace }',
     entry: ['index'],
@@ -44,7 +44,7 @@ export default [
   ...lightRendererChunks.map((name) => {
     const file = builtChunk(name);
     return {
-      name: `@scope/react ${name} chunk`,
+      name: `@workspacekit/react ${name} chunk`,
       path: `dist/${file}`,
       entry: [file.replace(/\.js$/, '')],
       limit: '8 KB',

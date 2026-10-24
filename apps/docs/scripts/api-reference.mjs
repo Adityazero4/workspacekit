@@ -43,7 +43,7 @@ function mapOutsideFences(markdown, mapLine) {
  *
  * @example
  * const [entry] = await apiEntries(process.cwd(), ['core']);
- * console.log(entry.specifier, entry.sourceFile); // @scope/core packages/core/src/index.ts
+ * console.log(entry.specifier, entry.sourceFile); // @workspacekit/core packages/core/src/index.ts
  */
 export async function apiEntries(root, packages = PUBLIC_PACKAGES) {
   const entries = [];
@@ -218,7 +218,7 @@ function duplicateExportAnchors(markdown) {
  * Returns a problem for every exported name that has no heading on its package's API page.
  *
  * @example
- * const expected = [{ folderName: 'core', specifier: '@scope/core', names: ['joinPath'] }];
+ * const expected = [{ folderName: 'core', specifier: '@workspacekit/core', names: ['joinPath'] }];
  * const problems = missingExports(pages, expected);
  */
 export function missingExports(pages, expected) {

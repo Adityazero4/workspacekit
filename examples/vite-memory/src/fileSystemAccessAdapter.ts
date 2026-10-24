@@ -10,7 +10,7 @@ import {
   type EntryKind,
   type FileSystemAdapter,
   type FsErrorKind,
-} from '@scope/core';
+} from '@workspacekit/core';
 
 type ReadFormat = 'text' | 'blob' | 'arrayBuffer';
 

@@ -1,6 +1,6 @@
-import type { FileSystemAdapter } from '@scope/core';
-import { Workspace, type Components } from '@scope/react';
-import '@scope/react/styles.css';
+import type { FileSystemAdapter } from '@workspacekit/core';
+import { Workspace, type Components } from '@workspacekit/react';
+import '@workspacekit/react/styles.css';
 import './theming.css';
 
 function BrandEmptyState({ children }: { children?: React.ReactNode }): React.JSX.Element {

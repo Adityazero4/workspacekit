@@ -7,7 +7,7 @@ import {
   type Entry,
   type FolderNode,
   type NameProblem,
-} from '@scope/core';
+} from '@workspacekit/core';
 import {
   useId,
   useLayoutEffect,

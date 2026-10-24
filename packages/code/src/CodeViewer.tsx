@@ -1,5 +1,9 @@
 'use client';
-import { StandaloneRoot, useStandaloneBytes, type StandaloneViewerProps } from '@scope/react/renderer-kit';
+import {
+  StandaloneRoot,
+  useStandaloneBytes,
+  type StandaloneViewerProps,
+} from '@workspacekit/react/renderer-kit';
 import { LazyCodeMirrorEditor } from './CodeEditor';
 import { CODE_MAX_BYTES } from './codeRenderer';
 import type { CodePart } from './parts';

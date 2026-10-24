@@ -1,4 +1,4 @@
-import type { VisibleRowIndex } from '@scope/core';
+import type { VisibleRowIndex } from '@workspacekit/core';
 
 /**
  * The type-ahead buffer: the characters typed so far and when the last one arrived.

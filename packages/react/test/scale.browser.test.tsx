@@ -1,5 +1,5 @@
-import type { MemoryAdapter } from '@scope/core/memory';
-import { createMemoryAdapter } from '@scope/core/memory';
+import type { MemoryAdapter } from '@workspacekit/core/memory';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { afterEach, describe, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
 import {

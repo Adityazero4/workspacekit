@@ -1,5 +1,5 @@
 'use client';
-import { partProps, type RendererProps } from '@scope/react/renderer-kit';
+import { partProps, type RendererProps } from '@workspacekit/react/renderer-kit';
 import { lazy, Suspense, useState, type ComponentType, type ReactNode } from 'react';
 import type { MarkdownClassNames } from './parts';
 import { fitsTheRenderedView } from './renderedView';

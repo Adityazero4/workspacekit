@@ -7,7 +7,7 @@ import {
   validateTransfer,
   type DroppedItem,
   type Entry,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore, type DragEvent } from 'react';
 import { transferInto } from '../actions/clipboard';
 import { notifyActionFailed } from '../actions/useTreeActions';

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { createMemoryAdapter, generateShape, generateTree } from '../src/memory';
+import { createMemoryAdapter } from '../src/memory';
+import { generateShape, generateTree } from '../src/memory/generate';
 import type { ChangeEvent } from '../src/types';
 import { runAdapterContract } from './contract/adapter-contract';
 
@@ -118,4 +119,24 @@ it('list agrees with a brute-force scan of every node after a random sequence of
       }
     }
   }
+});
+
+it('emits one event with the adapter actor for each write', async () => {
+  const adapter = createMemoryAdapter({ actor: 'agent' });
+  const events: ChangeEvent[] = [];
+  adapter.watch!((batch) => events.push(...batch));
+  await adapter.write!('a.txt', 'x');
+  expect(events.map(({ type, path, actor }) => ({ type, path, actor }))).toEqual([
+    { type: 'created', path: 'a.txt', actor: 'agent' },
+  ]);
+});
+
+it('gives withActor views the same files and their own actor', async () => {
+  const adapter = createMemoryAdapter();
+  const events: ChangeEvent[] = [];
+  adapter.watch!((batch) => events.push(...batch));
+  await adapter.withActor('agent').write!('a.txt', 'x');
+  await adapter.write!('b.txt', 'y');
+  expect(events.map((event) => event.actor)).toEqual(['agent', 'user']);
+  expect(await adapter.read('a.txt', 'text')).toBe('x');
 });

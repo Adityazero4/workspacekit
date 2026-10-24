@@ -1,6 +1,6 @@
 # next-agent-workspace
 
-A Next.js app that serves a folder on disk through `@scope/server` and shows it in the workspace UI. A fake agent writes into the folder from a separate process, and the workspace shows its changes live.
+A Next.js app that serves a folder on disk through `@workspacekit/server` and shows it in the workspace UI. A fake agent writes into the folder from a separate process, and the workspace shows its changes live.
 
 - `app/api/files/[...path]/route.ts` is the file service: `createFileHandler` over `nodeFsStore(AGENT_WORKSPACE_DIR)`.
 - `app/page.tsx` is `<Workspace adapter={httpAdapter('/api/files')} />`.
@@ -10,8 +10,8 @@ A Next.js app that serves a folder on disk through `@scope/server` and shows it 
 
 ```sh
 mkdir workspace
-AGENT_WORKSPACE_DIR=$PWD/workspace pnpm --filter @scope/example-next-agent-workspace dev
-AGENT_WORKSPACE_DIR=$PWD/workspace pnpm --filter @scope/example-next-agent-workspace agent
+AGENT_WORKSPACE_DIR=$PWD/workspace pnpm --filter @workspacekit/example-next-agent-workspace dev
+AGENT_WORKSPACE_DIR=$PWD/workspace pnpm --filter @workspacekit/example-next-agent-workspace agent
 ```
 
 <!-- /monorepo-only -->

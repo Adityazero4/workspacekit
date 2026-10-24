@@ -30,8 +30,8 @@ const packageDirectory = (name) => installedIn(WORKSPACE_PACKAGE, name);
 
 function linkInstalledPackages(app) {
   const installed = {
-    '@scope/workspace': WORKSPACE_PACKAGE,
-    '@scope/core': packageDirectory('@scope/core'),
+    '@workspacekit/workspace': WORKSPACE_PACKAGE,
+    '@workspacekit/core': packageDirectory('@workspacekit/core'),
     react: packageDirectory('react'),
     'react-dom': packageDirectory('react-dom'),
   };
@@ -42,7 +42,7 @@ function linkInstalledPackages(app) {
 }
 
 function copyPdfjsDataInto(publicDirectory) {
-  const pdfjs = installedIn(packageDirectory('@scope/pdf'), 'pdfjs-dist');
+  const pdfjs = installedIn(packageDirectory('@workspacekit/pdf'), 'pdfjs-dist');
   for (const directory of PDFJS_DATA_DIRECTORIES) {
     cpSync(join(pdfjs, directory), join(publicDirectory, 'pdfjs', directory), { recursive: true });
   }

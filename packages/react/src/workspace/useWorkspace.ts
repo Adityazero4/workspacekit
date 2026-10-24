@@ -1,5 +1,5 @@
 'use client';
-import { entryAt, normalizePath, parentPath, type TreeStore } from '@scope/core';
+import { entryAt, normalizePath, parentPath, type TreeStore } from '@workspacekit/core';
 import type { TreeCommands } from '../actions/treeCommands';
 import { useFileSystem } from '../provider/hooks';
 import { useFileSystemInternals } from '../provider/internals';

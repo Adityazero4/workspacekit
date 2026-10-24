@@ -132,7 +132,7 @@ async function collectPackageVersions(root) {
     );
     if (manifest === null) continue;
     const { name, version, private: isPrivate } = JSON.parse(manifest);
-    if (name?.startsWith('@scope/')) versions[name] = { version, private: isPrivate === true };
+    if (name?.startsWith('@workspacekit/')) versions[name] = { version, private: isPrivate === true };
   }
   return Object.fromEntries(Object.entries(versions).sort(([left], [right]) => left.localeCompare(right)));
 }

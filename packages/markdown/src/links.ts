@@ -1,5 +1,5 @@
 import { $isLinkNode, LinkNode } from '@lexical/link';
-import { safeUrlOrNull } from '@scope/react/renderer-kit';
+import { safeUrlOrNull } from '@workspacekit/react/renderer-kit';
 import { $getNodeByKey, type LexicalEditor } from 'lexical';
 
 function absoluteUrlOrNull(url: string): URL | null {

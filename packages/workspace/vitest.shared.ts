@@ -9,25 +9,29 @@ export const testAgainstWorkspaceSourcesWithoutABuild: {
   alias: Array<{ find: RegExp; replacement: string }>;
 } = {
   alias: [
-    { find: /^@scope\/core\/memory$/, replacement: workspaceSource('core/src/memory/index.ts') },
-    { find: /^@scope\/core\/http$/, replacement: workspaceSource('core/src/http/index.ts') },
-    { find: /^@scope\/core$/, replacement: workspaceSource('core/src/index.ts') },
-    { find: /^@scope\/react\/styles\.css$/, replacement: workspaceSource('react/src/styles.css') },
+    { find: /^@workspacekit\/core\/memory$/, replacement: workspaceSource('core/src/memory/index.ts') },
+    { find: /^@workspacekit\/core\/http$/, replacement: workspaceSource('core/src/http/index.ts') },
+    { find: /^@workspacekit\/core\/docs$/, replacement: workspaceSource('core/src/docs/index.ts') },
+    { find: /^@workspacekit\/core$/, replacement: workspaceSource('core/src/index.ts') },
+    { find: /^@workspacekit\/react\/styles\.css$/, replacement: workspaceSource('react/src/styles.css') },
     {
-      find: /^@scope\/react\/(renderers|renderer-kit)$/,
+      find: /^@workspacekit\/react\/(renderers|renderer-kit)$/,
       replacement: workspaceSource('react/src/$1/index.ts'),
     },
-    { find: /^@scope\/react$/, replacement: workspaceSource('react/src/index.ts') },
+    { find: /^@workspacekit\/react$/, replacement: workspaceSource('react/src/index.ts') },
     {
-      find: new RegExp(`^@scope/(${RENDERER_PACKAGES.join('|')})/styles\\.css$`),
+      find: new RegExp(`^@workspacekit/(${RENDERER_PACKAGES.join('|')})/styles\\.css$`),
       replacement: workspaceSource('$1/src/styles.css'),
     },
     {
-      find: new RegExp(`^@scope/(${RENDERER_PACKAGES.join('|')})$`),
+      find: new RegExp(`^@workspacekit/(${RENDERER_PACKAGES.join('|')})$`),
       replacement: workspaceSource('$1/src/index.ts'),
     },
-    { find: /^@scope\/workspace\/styles\.css$/, replacement: workspaceSource('workspace/src/styles.css') },
-    { find: /^@scope\/workspace$/, replacement: workspaceSource('workspace/src/index.ts') },
+    {
+      find: /^@workspacekit\/workspace\/styles\.css$/,
+      replacement: workspaceSource('workspace/src/styles.css'),
+    },
+    { find: /^@workspacekit\/workspace$/, replacement: workspaceSource('workspace/src/index.ts') },
   ],
 };
 
@@ -44,4 +48,4 @@ export const spreadsheetWorkerDependencies: string[] = [
   'numfmt',
   'papaparse',
   'saxes',
-].map((dependency) => `@scope/spreadsheet > ${dependency}`);
+].map((dependency) => `@workspacekit/spreadsheet > ${dependency}`);

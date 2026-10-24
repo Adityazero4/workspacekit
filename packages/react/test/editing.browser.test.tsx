@@ -1,5 +1,5 @@
-import { FsError, statusOf, type Entry, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import { FsError, statusOf, type Entry, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import axe from 'axe-core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { expect, test } from 'vitest';

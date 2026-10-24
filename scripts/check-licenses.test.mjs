@@ -113,7 +113,7 @@ test('the CLI writes the notices with --write, then passes until they go stale',
 
 test('NOTICE names only the Apache-2.0 dependencies, counting a dual licence taken as Apache-2.0', async () => {
   const text = noticeFileText(dependenciesOf(await reportOf('apache')));
-  assert.match(text, /^- @scope\/engine 2\.1\.0 \(https:\/\/example\.invalid\/engine\)$/m);
+  assert.match(text, /^- @workspacekit\/engine 2\.1\.0 \(https:\/\/example\.invalid\/engine\)$/m);
   assert.match(text, /^- dompurify 3\.4\.17$/m);
   assert.doesNotMatch(text, /left-pad/);
   assert.match(text, /Apache License, Version 2\.0/);
@@ -126,10 +126,10 @@ test('the CLI writes NOTICE with --write and fails when NOTICE is stale or missi
 
   assert.equal((await run([...report, '--write'])).code, 0);
   const notice = await readFile(path.join(root, 'NOTICE'), 'utf8');
-  assert.match(notice, /@scope\/engine/);
+  assert.match(notice, /@workspacekit\/engine/);
   assert.equal((await run(report)).code, 0);
 
-  await writeFile(path.join(root, 'NOTICE'), notice.replace('@scope/engine', '@scope/other'));
+  await writeFile(path.join(root, 'NOTICE'), notice.replace('@workspacekit/engine', '@workspacekit/other'));
   const stale = await run(report);
   assert.equal(stale.code, 1);
   assert.match(stale.stderr, /NOTICE is out of date/);

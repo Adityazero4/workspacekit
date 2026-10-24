@@ -1,25 +1,25 @@
-# @scope/spreadsheet
+# @workspacekit/spreadsheet
 
 > A spreadsheet renderer for the file workspace: .xlsx, .csv and .tsv in a virtualized grid with sheet tabs, search, frozen panes and merged cells.
 
-- API reference: https://docs.example.invalid/api/spreadsheet
-- Install: `npm install @scope/spreadsheet @scope/react react react-dom`
+- API reference: https://adityazero4.github.io/workspacekit/api/spreadsheet
+- Install: `npm install @workspacekit/spreadsheet @workspacekit/react react react-dom`
 
 ## README sections
 
 - Install
 - Entry: `spreadsheetRenderer()` returns a renderer.
 - Standalone use: `SpreadsheetViewer` shows one file without a tree or a provider.
-- CSS: Import `@scope/react/styles.css` and `@scope/spreadsheet/styles.css` once each.
+- CSS: Import `@workspacekit/react/styles.css` and `@workspacekit/spreadsheet/styles.css` once each.
 - Options: `engines.xlsx`: loads SheetJS so `.xls`, `.xlsb` and `.ods` open too, as in `{ xlsx: () => import('xlsx') }`.
 - Vite: Set `worker: { format: 'es' }` (Vite 7 and 8): the reader worker is code-split, which Vite's default `iife` worker format rejects.
 
 ## Entry points
 
-- `@scope/spreadsheet`
-- `@scope/spreadsheet/styles.css` (stylesheet)
+- `@workspacekit/spreadsheet`
+- `@workspacekit/spreadsheet/styles.css` (stylesheet)
 
-## Exports of `@scope/spreadsheet`
+## Exports of `@workspacekit/spreadsheet`
 
 - `SHEET_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `sheet-` prefix.
 - `SPREADSHEET_MAX_BYTES`: The largest spreadsheet the renderer and the standalone `SpreadsheetViewer` open: 50 MiB.

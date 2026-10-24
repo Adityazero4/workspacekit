@@ -5,8 +5,9 @@
     "jsx": "react-jsx",
     "types": ["node"],
     "paths": {
-      "@scope/core": ["../core/src/index.ts"],
-      "@scope/react/renderer-kit": ["../react/src/renderer-kit/index.ts"]
+      "@workspacekit/core": ["../core/src/index.ts"],
+      "@workspacekit/core/docs": ["../core/src/docs/index.ts"],
+      "@workspacekit/react/renderer-kit": ["../react/src/renderer-kit/index.ts"]
     }
   },
   "include": ["src", "test"]

@@ -25,7 +25,7 @@ async function makeRepo(pages = {}, examples = {}) {
   await writeFile(
     path.join(packageDir, 'package.json'),
     JSON.stringify({
-      name: '@scope/demo',
+      name: '@workspacekit/demo',
       exports: { '.': { types: './dist/index.d.ts', default: './dist/index.js' } },
     }),
   );
@@ -56,7 +56,7 @@ test('a clean set of pages passes every check', async () => {
     {
       'index.mdx': '# Home\n\nSee [the recipe](/docs/recipes/theming#the-file) and [home](/).\n',
       'recipes/theming.mdx': '## The file\n\n<Include file="examples/recipes/theming.ts" />\n',
-      'guide.mdx': `${fenceOf("import { hello } from '@scope/demo';\nhello('a');")}\nStyle \`[data-fs-part="demo-viewer"]\`.\n`,
+      'guide.mdx': `${fenceOf("import { hello } from '@workspacekit/demo';\nhello('a');")}\nStyle \`[data-fs-part="demo-viewer"]\`.\n`,
     },
     { 'examples/recipes/theming.ts': 'export {};\n' },
   );
@@ -108,7 +108,7 @@ test('a fence marked not-compiled is skipped, and a fence importing a non-public
   });
   assert.deepEqual(await checkContent(skipped.options), []);
   const internal = await makeRepo({
-    'b.mdx': fenceOf("import { hello } from '@scope/demo/internal';\nhello('a');"),
+    'b.mdx': fenceOf("import { hello } from '@workspacekit/demo/internal';\nhello('a');"),
   });
   assert.ok(mentions(await checkContent(internal.options), /not a public entry point/));
 });

@@ -1,4 +1,4 @@
-/* Default look of @scope/markdown. Everything lives in @layer fs, so any unlayered consumer CSS wins. */
+/* Default look of @workspacekit/markdown. Everything lives in @layer fs, so any unlayered consumer CSS wins. */
 @layer fs {
   [data-fs-part='md-viewer'] {
     display: flex;

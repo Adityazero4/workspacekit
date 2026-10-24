@@ -4,7 +4,7 @@ import {
   type FileInfo,
   type Renderer,
   type RendererProps,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { createElement } from 'react';
 import type { SheetClassNames } from './parts';
 
@@ -54,9 +54,9 @@ const matchScore = (file: FileInfo): number | false =>
  *
  * The reader's worker is found with `new URL('./worker.js', import.meta.url)`. Vite resolves that in a
  * build, but not inside a dependency it pre-bundles in development: exclude this package and pre-bundle the
- * CommonJS modules its worker imports, `optimizeDeps: { exclude: ['@scope/spreadsheet'], include:
- * ['papaparse', 'saxes', 'numfmt', 'fast-formula-parser'].map((name) => `@scope/spreadsheet > ${name}`) }`,
- * or pass `workerFactory`.
+ * CommonJS modules its worker imports: exclude `@workspacekit/spreadsheet` from `optimizeDeps` and include
+ * `@workspacekit/spreadsheet > papaparse` (and `saxes`, `numfmt`, `fast-formula-parser`), or pass
+ * `workerFactory`.
  *
  * Call it once, at module level, and reuse the result: the viewer caches each renderer's loaded component by
  * the renderer object's identity.

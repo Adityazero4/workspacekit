@@ -1,28 +1,28 @@
-# @scope/react
+# @workspacekit/react
 
 > The React file workspace: a virtualized file tree, search, tabs, upload and viewers, in one `Workspace` component, plus every building block it is made of.
 
-- API reference: https://docs.example.invalid/api/react
-- Install: `npm install @scope/react @scope/core react react-dom`
+- API reference: https://adityazero4.github.io/workspacekit/api/react
+- Install: `npm install @workspacekit/react @workspacekit/core react react-dom`
 
 ## README sections
 
 - Install
 - Entry: `Workspace` takes an adapter and fills its parent, so give it a height.
 - Use the parts on their own: `FileSystemProvider` owns the tree store.
-- Standalone viewers: `@scope/react/renderers` exports the light viewers, which take a file and need no provider.
-- Write a renderer: `@scope/react/renderer-kit` is the public API for renderer packages.
-- CSS: Import `@scope/react/styles.css` once.
+- Standalone viewers: `@workspacekit/react/renderers` exports the light viewers, which take a file and need no provider.
+- Write a renderer: `@workspacekit/react/renderer-kit` is the public API for renderer packages.
+- CSS: Import `@workspacekit/react/styles.css` once.
 - Options: `adapter`: required.
 
 ## Entry points
 
-- `@scope/react`
-- `@scope/react/renderers`
-- `@scope/react/renderer-kit`
-- `@scope/react/styles.css` (stylesheet)
+- `@workspacekit/react`
+- `@workspacekit/react/renderers`
+- `@workspacekit/react/renderer-kit`
+- `@workspacekit/react/styles.css` (stylesheet)
 
-## Exports of `@scope/react`
+## Exports of `@workspacekit/react`
 
 - `Action`: One command on an entry, rendered in the context menu, the row's "More actions" button and as a keyboard shortcut.
 - `ActionContext`: What an action's `when` and `run` receive besides the entry.
@@ -149,7 +149,7 @@
 - `videoRenderer`: Video in the browser's native player.
 - `viewerError`: Builds the {@link ViewerError} for a kind, with the standard user-facing message.
 
-## Exports of `@scope/react/renderers`
+## Exports of `@workspacekit/react/renderers`
 
 - `AudioViewer`: Plays audio without a `FileSystemProvider`, in the browser's native `<audio>` player.
 - `ClassNames`: Extra class names per part, merged after the part's own class.
@@ -171,7 +171,7 @@
 - `VirtualPagesHandle`: What a `ref` on `VirtualPages` can do.
 - `VirtualPagesProps`: Props of `VirtualPages`.
 
-## Exports of `@scope/react/renderer-kit`
+## Exports of `@workspacekit/react/renderer-kit`
 
 - `ClassNames`: Extra class names per part, merged after the part's own class.
 - `FileInfo`: An {@link Entry} plus the lower-cased name parts renderers match on.
@@ -183,6 +183,7 @@
 - `RendererInput`: What a renderer wants to be given: a URL, a `Blob`, an `ArrayBuffer`, decoded text, or nothing.
 - `RendererProps`: The props every renderer component receives.
 - `RendererSource`: The file content handed to a renderer, in the shape its {@link RendererInput} asked for.
+- `SVG_ANIMATION_ELEMENTS`: The SVG animation (SMIL) elements a document sanitizer removes, lower-cased and frozen: each could change an attribute after it was checked.
 - `StaleNotice`: A `role="alert"` notice saying the latest version of the file couldn't be opened and the content below is the previous version, followed by the error's message.
 - `StaleNoticeProps`: Props of `StaleNotice`: `error` is why the latest version failed to load.
 - `StandaloneFile`: Where a standalone renderer's file is: still loading, loaded (with the fields `Ready` names), or failed.
@@ -196,12 +197,16 @@
 - `VirtualPages`: A vertically scrolling, virtualized stack of pages (a multi-page TIFF, a PDF), centred horizontally and scrolling sideways when a zoomed page is wider than the viewport.
 - `VirtualPagesHandle`: What a `ref` on `VirtualPages` can do.
 - `VirtualPagesProps`: Props of `VirtualPages`.
+- `confineDeclarations`: Removes from `declarations` (an inline style, or a rule's) every declaration that could fetch or reach outside the viewer's box: a `url()` whose target does not start with one of `localSchemes`, any `image-set()`, a custom property holding a CSS escape, any `position` other than exactly `static`, `relative` or `absolute`, and any `z-index` that is not an integer up to 1000 (so `var()` and `calc()` cannot smuggle `fixed` or a high stack in).
 - `defineRenderer`: Returns the renderer unchanged; use it to get the `Renderer` type checked where the object is written.
+- `keepWebOrMailLink`: Keeps `link` only as a link to a web page or a mail client: when `href` (trimmed) is a `mailto:` link, or an absolute `http:` or `https:` URL without a user name or password, points `link` at it (the absolute form) with `target="_blank"` and `rel="noopener noreferrer"`, and returns `true`.
 - `lineBreakOf`: The line break a file uses, judged by its first one: `'\r\n'` when that is CRLF, otherwise `'\n'` (also for text without line breaks).
 - `mediaUrlOfBlob`: A URL an `img`, `audio` or `video` element can show `blob` from, typed so it can never render as a page.
 - `partProps`: Props for an element that renders `part`: the `data-fs-part` attribute plus the consumer's `classNames[part]` and an optional extra class.
+- `safeFontSource`: A font face's `src`, rebuilt from an allow-list, or `null` when nothing in it is allowed.
 - `safeUrlOrNull`: The absolute form of `url` (an adapter's answer, a link inside a document) when it is http, https or blob; `null` otherwise (such as `javascript:` or `data:`), so the URL can never run script when it is followed, downloaded or shown.
 - `stepZoom`: The next zoom level in or out from `scale`: the next multiple of 0.25, within 0.1–8.
+- `svgAttributeFetches`: Whether an attribute `value` on `element` could fetch through CSS: on an SVG element, a value holding a CSS escape (`u\72l(` is `url(` to the CSS parser) or a `url()` whose target does not start with one of `localSchemes` (whole schemes or `'#'`, as in `confineDeclarations`).
 - `useSettledAnnouncement`: Returns `text` for a live region once it has stopped changing for 300 ms, so a gesture that changes it many times (a zoom, a scroll through pages) is announced once, at its end.
 - `useStandaloneBytes`: Loads a standalone renderer's `src` as an `ArrayBuffer`, like `useStandaloneText` but without decoding: a `Uint8Array` is copied into a buffer of its own, an `ArrayBuffer` is used as given.
 - `viewerError`: Builds the {@link ViewerError} for a kind, with the standard user-facing message.

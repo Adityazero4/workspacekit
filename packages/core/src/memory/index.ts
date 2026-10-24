@@ -21,7 +21,7 @@ interface ChunkedUploadSession {
  *
  * @example
  * ```ts
- * const options: MemoryAdapterOptions = { files: { 'README.md': '# Hi' }, latencyMs: 50 };
+ * const options: MemoryAdapterOptions = { files: { 'README.md': '# Hi' }, latencyMs: 50, actor: 'agent' };
  * ```
  */
 export interface MemoryAdapterOptions {
@@ -30,18 +30,24 @@ export interface MemoryAdapterOptions {
   latencyMs?: number;
   /** Chunk size reported by `upload.chunked.init`. */
   chunkSize?: number;
+  /** The actor of every change made through this adapter's own methods. Default 'user'. */
+  actor?: string;
 }
 /**
  * An in-memory `FileSystemAdapter` that can also `emit` change events, as if made by someone else. A
  * `created`, `updated` or `moved` event without an `entry` gets the adapter's entry at its path, if one
- * exists.
+ * exists. `withActor` returns a view of the same files whose own changes carry that actor.
  *
  * @example
  * ```ts
  * adapter.emit([{ type: 'created', path: 'new.txt', actor: 'external' }]);
+ * await adapter.withActor('agent').write!('agent.txt', 'hi');
  * ```
  */
-export type MemoryAdapter = FileSystemAdapter & { emit(events: ChangeEvent[]): void };
+export type MemoryAdapter = FileSystemAdapter & {
+  emit(events: ChangeEvent[]): void;
+  withActor(actor: string): MemoryAdapter;
+};
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -53,7 +59,10 @@ function nonRootPath(path: string): string {
   return normalized;
 }
 
+const DEFAULT_ACTOR = 'user';
+
 class MemoryFiles {
+  #actor = DEFAULT_ACTOR;
   readonly #nodes = new Map<string, MemoryNode>();
   readonly #childrenOf = new Map<string, Set<string>>();
   readonly #listeners = new Set<(events: ChangeEvent[]) => void>();
@@ -83,6 +92,16 @@ class MemoryFiles {
     return entry;
   }
 
+  actingAs<T>(actor: string, operation: () => T): T {
+    const previousActor = this.#actor;
+    this.#actor = actor;
+    try {
+      return operation();
+    } finally {
+      this.#actor = previousActor;
+    }
+  }
+
   emit(events: ChangeEvent[]): void {
     if (events.length > 0) for (const listener of [...this.#listeners]) listener(events);
   }
@@ -98,7 +117,9 @@ class MemoryFiles {
     path: string,
     extra: Partial<ChangeEvent> = {},
   ): void {
-    events.push(this.withEntry({ type, path, mtimeMs: this.get(path)?.mtimeMs, actor: 'user', ...extra }));
+    events.push(
+      this.withEntry({ type, path, mtimeMs: this.get(path)?.mtimeMs, actor: this.#actor, ...extra }),
+    );
   }
 
   withEntry(event: ChangeEvent): ChangeEvent {
@@ -364,14 +385,24 @@ export function createMemoryAdapter(opts: MemoryAdapterOptions = {}): MemoryAdap
       typeof content === 'string' ? encoder.encode(content) : new Uint8Array(content),
     );
   }
+  return adapterOver(files, uploads, latencyMs, opts.actor ?? DEFAULT_ACTOR);
+}
+
+function adapterOver(
+  files: MemoryFiles,
+  uploads: MemoryUploads,
+  latencyMs: number,
+  actor: string,
+): MemoryAdapter {
   const afterLatency = async <T>(operation: () => T, signal?: AbortSignal): Promise<T> => {
     if (latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, latencyMs));
     if (signal?.aborted) throw new FsError('cancelled');
-    return operation();
+    return files.actingAs(actor, operation);
   };
   const read = (path: string, as: 'text' | 'blob' | 'arrayBuffer', options?: { signal?: AbortSignal }) =>
     afterLatency(() => files.read(path, as), options?.signal);
   return {
+    withActor: (otherActor) => adapterOver(files, uploads, latencyMs, otherActor),
     emit: (events) => files.emit(events.map((event) => files.withEntry(event))),
     read: read as FileSystemAdapter['read'],
     list: (path, options) => afterLatency(() => files.list(path, options.depth), options.signal),
@@ -412,80 +443,4 @@ export function createMemoryAdapter(opts: MemoryAdapterOptions = {}): MemoryAdap
     download: (paths) => afterLatency(() => files.downloadSingleFile(paths)),
     watch: (onChange) => files.subscribe(onChange),
   };
-}
-
-function mulberry32(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let mixed = state;
-    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
-    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
-    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/**
- * Deterministic tree of `files` files, at most `depth` directories deep with up to `breadth` subdirectories
- * per level.
- * @internal — test/benchmark helper
- *
- * @example
- * ```ts
- * const files = generateTree({ files: 10_000, depth: 4, breadth: 20, seed: 7 });
- * ```
- */
-export function generateTree(opts: {
-  files: number;
-  depth: number;
-  breadth: number;
-  seed?: number;
-}): Record<string, string> {
-  const random = mulberry32(opts.seed ?? 1);
-  const out: Record<string, string> = {};
-  for (let i = 0; i < opts.files; i++) {
-    const dirs: string[] = [];
-    for (let d = 0; d < opts.depth && random() < 0.75; d++) {
-      dirs.push(`d${Math.floor(random() * opts.breadth)}`);
-    }
-    out[[...dirs, `f${i}.txt`].join('/')] = `file ${i}`;
-  }
-  return out;
-}
-
-/**
- * The benchmark tree layouts `generateShape` can build.
- * @internal — test/benchmark helper
- *
- * @example
- * ```ts
- * const shape: TreeShape = 'chains64';
- * ```
- */
-export type TreeShape = 'wide' | '10x100k' | 'chains64';
-const EXTS = ['txt', 'md', 'json', 'ts'];
-
-/**
- * @internal — test/benchmark helper
- *
- * Deterministic benchmark tree of exactly `size` files (folders are implied by the paths):
- * `wide` puts them all in one folder, `10x100k` splits them across 10 folders, `chains64` spreads them across
- * the ends of 64-deep folder chains (one chain per 1000 files). `seed` only varies the file extensions.
- *
- * @example
- * ```ts
- * const adapter = createMemoryAdapter({ files: generateShape('wide', 100_000) });
- * ```
- */
-export function generateShape(shape: TreeShape, size: number, seed = 1): Record<string, string> {
-  const random = mulberry32(seed);
-  const chains = Math.max(1, Math.ceil(size / 1000));
-  const chainDir = (c: number): string => `c${c}/` + Array.from({ length: 63 }, (_, i) => `l${i}`).join('/');
-  const dirs = shape === 'chains64' ? Array.from({ length: chains }, (_, c) => chainDir(c)) : [];
-  const out: Record<string, string> = {};
-  for (let i = 0; i < size; i++) {
-    const dir = shape === 'wide' ? 'wide' : shape === '10x100k' ? `d${i % 10}` : dirs[i % chains]!;
-    out[`${dir}/f${i}.${EXTS[Math.floor(random() * EXTS.length)]}`] = `file ${i}`;
-  }
-  return out;
 }

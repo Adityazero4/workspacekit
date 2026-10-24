@@ -264,7 +264,8 @@ export function checkRecipePages(pages, root, sources = RECIPE_SOURCES) {
 
 /**
  * Reads every valid part name from the `*PARTS` arrays of the named packages' `src/parts.ts`: the `PARTS` of
- * `@scope/react` and the `*_PARTS` of each renderer package. Throws when a file or its array is missing.
+ * `@workspacekit/react` and the `*_PARTS` of each renderer package. Throws when a file or its array is
+ * missing.
  *
  * @example
  * const parts = await readValidParts(process.cwd(), ['react', 'pdf']);

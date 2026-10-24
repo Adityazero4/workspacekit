@@ -10,7 +10,7 @@ import {
   validateTransfer,
   type Entry,
   type TreeTransferOptions,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { useSyncExternalStore } from 'react';
 import { isUnchangedSince, replaceRefusedMessage } from '../dialogs/conflicts';
 import { useFileSystem, type FileSystemContext } from '../provider/hooks';

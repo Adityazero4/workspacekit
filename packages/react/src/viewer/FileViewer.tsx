@@ -1,5 +1,5 @@
 'use client';
-import { basename, type Entry, type FsError } from '@scope/core';
+import { basename, type Entry, type FsError } from '@workspacekit/core';
 import {
   createElement,
   Suspense,

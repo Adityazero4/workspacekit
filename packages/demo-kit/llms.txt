@@ -1,9 +1,9 @@
-# @scope/demo-kit
+# @workspacekit/demo-kit
 
 > Sample files and a simulated agent for demos and tests of the file workspace.
 
-- API reference: https://docs.example.invalid/api/demo-kit
-- Install: `npm install --save-dev @scope/demo-kit`
+- API reference: https://adityazero4.github.io/workspacekit/api/demo-kit
+- Install: `npm install --save-dev @workspacekit/demo-kit`
 
 ## README sections
 
@@ -15,13 +15,13 @@
 
 ## Entry points
 
-- `@scope/demo-kit`
+- `@workspacekit/demo-kit`
 
-## Exports of `@scope/demo-kit`
+## Exports of `@workspacekit/demo-kit`
 
 - `AgentStep`: One thing the simulated agent does: `create` and `edit` write `content` to `path`, `rename` moves `path` to `to`, and `delete` removes `path`.
 - `DEFAULT_AGENT_SCRIPT`: What the agent does when `simulateAgent` gets no `script`: it writes a plan, edits the README and the source, then creates, renames and deletes a scratch file.
-- `DOCS_URL`: The documentation site's address, in one place so the examples, the site and the generated files agree.
+- `DOCS_URL`: The documentation site's address, in one place so the examples, the site, the generated files and the error messages agree.
 - `SimulateAgentOptions`: Options of `simulateAgent`.
 - `sampleFiles`: A small project tree for examples and docs: Markdown, TypeScript, JSON, CSV, an SVG, and an XLSX, a PDF and a PNG that are generated in code.
 - `simulateAgent`: Plays a script of file changes against a memory adapter, one step per `intervalMs`, as if an agent were working in the project.

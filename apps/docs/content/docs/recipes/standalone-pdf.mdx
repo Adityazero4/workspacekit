@@ -3,14 +3,14 @@ title: Standalone PDF
 description: PdfViewer on its own, with no provider, adapter or workspace.
 ---
 
-Install the viewer and `@scope/react`, which is a peer dependency that also supplies the base stylesheet:
+Install the viewer and `@workspacekit/react`, which is a peer dependency that also supplies the base stylesheet:
 
 ```sh
-npm install @scope/pdf @scope/react react react-dom
+npm install @workspacekit/pdf @workspacekit/react react react-dom
 ```
 
 `PdfViewer` needs a parent with a height, because the pages scroll inside the viewer. A string `src` is handed to pdf.js as a URL, so a root-relative path such as `/files/report.pdf` works and resolves against the page's origin. Pass only same-origin paths and `http(s):` or `blob:` URLs, and check the scheme of any URL from untrusted input. pdf.js loads the first time it renders, so importing this stays cheap. No `workerSrc` or `assets` are needed with Vite or Next.js; they are for CJK fonts and JPX images only.
 
 <Include file="examples/recipes/src/standalonePdf.tsx" />
 
-In the Vite dev server, exclude `@scope/pdf` from pre-bundling, as in [Vite](/docs/getting-started/vite). The other viewers are on [standalone renderers](/docs/standalone-renderers).
+In the Vite dev server, exclude `@workspacekit/pdf` from pre-bundling, as in [Vite](/docs/getting-started/vite). The other viewers are on [standalone renderers](/docs/standalone-renderers).

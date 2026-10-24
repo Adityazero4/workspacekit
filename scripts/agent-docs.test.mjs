@@ -7,14 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { checkAgentDocs, extractFences, generateAgentDocs } from './agent-docs.mjs';
 
 const REACT_PACKAGE = fileURLToPath(new URL('../packages/react', import.meta.url));
-const DOCS_URL = 'https://docs.example.invalid';
+const DOCS_URL = 'https://adityazero4.github.io/workspacekit';
 const MISTAKES = 'Never ship without `authorize`.\n';
 const START = '<!-- common-mistakes:start -->';
 const END = '<!-- common-mistakes:end -->';
 
 const agentsMd = (block) => `# Demo agents\n\n${START}\n${block}${END}\n`;
 const readme = (fence = '') =>
-  `# @scope/demo\n\nA demo package.\n\n## Install\n\nRun the installer.\n\n[API reference](${DOCS_URL}/api/demo)\n\n${fence}`;
+  `# @workspacekit/demo\n\nA demo package.\n\n## Install\n\nRun the installer.\n\n[API reference](${DOCS_URL}/api/demo)\n\n${fence}`;
 const fenceOf = (code, language = 'ts') => `\`\`\`${language}\n${code}\n\`\`\`\n`;
 
 async function makeRepo({
@@ -29,7 +29,7 @@ async function makeRepo({
   await writeFile(
     path.join(packageDir, 'package.json'),
     JSON.stringify({
-      name: '@scope/demo',
+      name: '@workspacekit/demo',
       exports: { '.': { types: './dist/index.d.ts', default: './dist/index.js' } },
       files,
     }),
@@ -63,7 +63,7 @@ test('a freshly generated repo passes, and llms.txt names every export and links
 test('llms.txt repeats the README install command, including npm create', async () => {
   const withCommand = (command) =>
     readme(fenceOf(command, 'sh')).replace('Run the installer.', 'Run the installer.\n');
-  for (const command of ['npm create @scope/demo my-app', 'npm install @scope/demo react']) {
+  for (const command of ['npm create @workspacekit/demo my-app', 'npm install @workspacekit/demo react']) {
     const { packageDir } = await generated({ readmeText: withCommand(command) });
     assert.ok(
       (await readFile(path.join(packageDir, 'llms.txt'), 'utf8')).includes(`- Install: \`${command}\``),
@@ -137,7 +137,7 @@ async function giveReactTo(packageDir) {
 
 test('compiles tsx fences against the package dist types, and skips not-compiled fences', async () => {
   const goodTsx = fenceOf(
-    "import { hello } from '@scope/demo';\nexport const view = <p>{hello('a')}</p>;",
+    "import { hello } from '@workspacekit/demo';\nexport const view = <p>{hello('a')}</p>;",
     'tsx',
   );
   const skipped = fenceOf("// not-compiled: needs a bundler\nconst count: number = 'many';");
@@ -147,11 +147,11 @@ test('compiles tsx fences against the package dist types, and skips not-compiled
 });
 
 test('fails when a fence imports a path the package does not export', async () => {
-  const fence = fenceOf("import { hello } from '@scope/demo/internal';\nhello('a');");
+  const fence = fenceOf("import { hello } from '@workspacekit/demo/internal';\nhello('a');");
   const { options } = await generated({ readmeText: readme(fence) });
   const problems = await checkAgentDocs(options);
   assert.ok(
-    problems.some((problem) => /@scope\/demo\/internal is not a public entry/.test(problem)),
+    problems.some((problem) => /@workspacekit\/demo\/internal is not a public entry/.test(problem)),
     problems.join('\n'),
   );
 });
@@ -167,7 +167,7 @@ test('fails when package.json files omits a shipped doc', async () => {
 
 test('fails when the README does not link the API reference by DOCS_URL', async () => {
   const { options, packageDir } = await generated();
-  await writeFile(path.join(packageDir, 'README.md'), '# @scope/demo\n\nA demo package.\n');
+  await writeFile(path.join(packageDir, 'README.md'), '# @workspacekit/demo\n\nA demo package.\n');
   const problems = await checkAgentDocs(options);
   assert.ok(
     problems.some((problem) => /must link the API reference at/.test(problem)),
@@ -240,7 +240,7 @@ test("an export named only in another entry's prose does not count as listed", a
 
 test('fails when a fence imports a stylesheet the package does not ship', async () => {
   const { options, packageDir } = await generated({
-    readmeText: readme(fenceOf("import '@scope/demo/styles.css';")),
+    readmeText: readme(fenceOf("import '@workspacekit/demo/styles.css';")),
   });
   const manifestPath = path.join(packageDir, 'package.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));

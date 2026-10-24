@@ -1,5 +1,5 @@
 'use client';
-import type { VisibleRowIndex } from '@scope/core';
+import type { VisibleRowIndex } from '@workspacekit/core';
 import { useId, useLayoutEffect, useState, type FocusEventHandler } from 'react';
 
 /**

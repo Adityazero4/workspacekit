@@ -34,10 +34,10 @@ test('docx-preview is pinned exactly to 0.4.1', () => {
   expect(dependencies['docx-preview']).toBe('0.4.1');
 });
 
-test('@scope/react/renderer-kit stays external: imported by specifier, none of its modules bundled', () => {
+test('@workspacekit/react/renderer-kit stays external: imported by specifier, none of its modules bundled', () => {
   const files = filesReachableFrom(DIST, 'index.js', { throughDynamicImports: true });
   const kitImporters = files.filter((file) =>
-    importsOf(distText(file)).static.includes('@scope/react/renderer-kit'),
+    importsOf(distText(file)).static.includes('@workspacekit/react/renderer-kit'),
   );
   expect(kitImporters.length).toBeGreaterThan(0);
   const bundledModules = files.flatMap((file) => modulesIn(distText(file)));

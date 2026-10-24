@@ -1,7 +1,7 @@
 import { treeRowRenders } from './support/countComponentRenders';
 import { interactionSettled } from './support/interactionSettled';
-import { statusOf, type DropEntry, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import { statusOf, type DropEntry, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import { useEffect } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';

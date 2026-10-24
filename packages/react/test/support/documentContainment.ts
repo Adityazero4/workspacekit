@@ -64,7 +64,7 @@ const attributesOf = (root: HTMLElement, id: string): Record<string, string> =>
 const linksOf = (root: HTMLElement): Array<string | null> =>
   [...root.querySelectorAll('a')].map((link) => link.getAttribute('href'));
 
-const HOSTILE_DOCUMENT_CASES: ContainmentCase[] = [
+const STYLE_AND_LINK_CASES: ContainmentCase[] = [
   {
     hostile: 'a CSS-escaped url( in SVG paint attributes',
     html:
@@ -126,6 +126,10 @@ const HOSTILE_DOCUMENT_CASES: ContainmentCase[] = [
       expect(byId(root, 'safe').getAttribute('rel')).toBe('noopener noreferrer');
     },
   },
+];
+
+const HOSTILE_DOCUMENT_CASES: ContainmentCase[] = [
+  ...STYLE_AND_LINK_CASES,
   {
     hostile: 'ping, which reports a click to another server',
     html: `<a id="link" href="https://ok.example/" ping="${TRACKER}/ping">a</a>`,
@@ -167,6 +171,18 @@ function inertRoot(html: string): HTMLElement {
   return root;
 }
 
+function testContainmentCases(
+  name: string,
+  contain: (root: HTMLElement) => void,
+  cases: ContainmentCase[],
+): void {
+  test.each(cases)(`${name} contains $hostile`, ({ html, expectContained }) => {
+    const root = inertRoot(html);
+    contain(root);
+    expectContained(root);
+  });
+}
+
 /**
  * Runs one table of hostile document markup (CSS escapes, no-break spaces before a URL, escaping positions
  * and stacks, script and credentialed links, `ping`, document-level elements, `xlink:href`, SMIL) through
@@ -179,12 +195,19 @@ function inertRoot(html: string): HTMLElement {
  * ```
  */
 export function testDocumentContainment(name: string, contain: (root: HTMLElement) => void): void {
-  test.each([...HOSTILE_DOCUMENT_CASES, ...urlAttributeCases(), ...smilCases()])(
-    `${name} contains $hostile`,
-    ({ html, expectContained }) => {
-      const root = inertRoot(html);
-      contain(root);
-      expectContained(root);
-    },
-  );
+  testContainmentCases(name, contain, [...HOSTILE_DOCUMENT_CASES, ...urlAttributeCases(), ...smilCases()]);
+}
+
+/**
+ * Runs the part of the table that the shared document-safety helpers decide on their own, whatever a
+ * package's element and URL-attribute lists are: CSS escapes and no-break spaces in styles and SVG
+ * attributes, escaping positions and stacks, script and credentialed links, and SMIL elements.
+ *
+ * @example
+ * ```ts
+ * testStyleAndLinkContainment('the renderer kit', containWithTheKit);
+ * ```
+ */
+export function testStyleAndLinkContainment(name: string, contain: (root: HTMLElement) => void): void {
+  testContainmentCases(name, contain, [...STYLE_AND_LINK_CASES, ...smilCases()]);
 }

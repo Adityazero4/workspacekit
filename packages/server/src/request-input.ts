@@ -1,4 +1,4 @@
-import { FsError } from '@scope/core';
+import { FsError } from '@workspacekit/core';
 
 const MAX_JSON_BYTES = 1024 * 1024;
 

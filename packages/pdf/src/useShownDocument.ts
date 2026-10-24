@@ -1,5 +1,5 @@
 'use client';
-import { viewerError, type ViewerError } from '@scope/react/renderer-kit';
+import { viewerError, type ViewerError } from '@workspacekit/react/renderer-kit';
 import { PasswordResponses } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { useEffect, useEffectEvent, useState, type Dispatch, type SetStateAction } from 'react';
 import {

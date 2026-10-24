@@ -1,5 +1,5 @@
 import { languages } from '@codemirror/language-data';
-import { fileInfo, lightRenderers, resolveRenderer, type FileInfo } from '@scope/react';
+import { fileInfo, lightRenderers, resolveRenderer, type FileInfo } from '@workspacekit/react';
 import { expect, test } from 'vitest';
 import { codeRenderer } from '../src';
 import { matchFilename, matchLanguageName } from '../src/languages';

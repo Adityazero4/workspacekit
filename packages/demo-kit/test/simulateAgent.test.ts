@@ -1,4 +1,5 @@
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import type { ChangeEvent } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { DEFAULT_AGENT_SCRIPT, sampleFiles, simulateAgent, type AgentStep } from '../src';
 
@@ -21,6 +22,7 @@ test('the default script runs in order, each change announced as the agent', asy
   simulateAgent(adapter, { signal: new AbortController().signal, intervalMs: INTERVAL_MS });
   await vi.advanceTimersByTimeAsync(INTERVAL_MS * DEFAULT_AGENT_SCRIPT.length);
   expect(changes).toEqual([
+    'created notes',
     'created notes/plan.md',
     'updated README.md',
     'updated src/index.ts',
@@ -38,23 +40,38 @@ test('a step only runs after its interval', async () => {
   await vi.advanceTimersByTimeAsync(INTERVAL_MS - 1);
   expect(changes).toEqual([]);
   await vi.advanceTimersByTimeAsync(1);
-  expect(changes).toEqual(['created notes/plan.md']);
+  expect(changes).toEqual(['created notes', 'created notes/plan.md']);
 });
 
-test('aborting stops every later write', async () => {
+test('each step gives exactly one event, with the agent as actor', async () => {
   const adapter = createMemoryAdapter({ files: sampleFiles() });
-  const calls = vi.spyOn(adapter, 'write');
+  const events: ChangeEvent[] = [];
+  adapter.watch!((batch) => events.push(...batch));
+  const script: AgentStep[] = [
+    { kind: 'edit', path: 'README.md', content: 'x' },
+    { kind: 'rename', path: 'README.md', to: 'GUIDE.md' },
+    { kind: 'delete', path: 'GUIDE.md' },
+  ];
+  simulateAgent(adapter, { signal: new AbortController().signal, intervalMs: INTERVAL_MS, script });
+  await vi.advanceTimersByTimeAsync(INTERVAL_MS * script.length);
+  expect(events.map(({ type, path, actor }) => `${type} ${path} ${actor}`)).toEqual([
+    'updated README.md agent',
+    'moved GUIDE.md agent',
+    'deleted GUIDE.md agent',
+  ]);
+});
+
+test('aborting stops every later change', async () => {
+  const adapter = createMemoryAdapter({ files: sampleFiles() });
+  const events: ChangeEvent[] = [];
+  adapter.watch!((batch) => events.push(...batch));
   const controller = new AbortController();
   simulateAgent(adapter, { signal: controller.signal, intervalMs: INTERVAL_MS });
   await vi.advanceTimersByTimeAsync(INTERVAL_MS);
-  const callsBeforeAbort = calls.mock.calls.length;
+  const eventsBeforeAbort = events.length;
   controller.abort();
-  const emit = vi.spyOn(adapter, 'emit');
-  const move = vi.spyOn(adapter, 'move');
-  const remove = vi.spyOn(adapter, 'delete');
   await vi.advanceTimersByTimeAsync(INTERVAL_MS * DEFAULT_AGENT_SCRIPT.length);
-  expect(calls).toHaveBeenCalledTimes(callsBeforeAbort);
-  expect([emit, move, remove].map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
+  expect(events).toHaveLength(eventsBeforeAbort);
 });
 
 test('a custom script replaces the default one', async () => {
@@ -89,5 +106,5 @@ test('a step whose write has landed is announced once even if the abort arrives 
   await vi.advanceTimersByTimeAsync(INTERVAL_MS + INTERVAL_MS / 2);
   controller.abort();
   await vi.advanceTimersByTimeAsync(INTERVAL_MS * DEFAULT_AGENT_SCRIPT.length * 2);
-  expect(announcements).toEqual(['created notes/plan.md']);
+  expect(announcements).toEqual(['created notes', 'created notes/plan.md']);
 });

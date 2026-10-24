@@ -1,4 +1,4 @@
-import type { ClassNames } from '@scope/react/renderer-kit';
+import type { ClassNames } from '@workspacekit/react/renderer-kit';
 
 /**
  * Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the

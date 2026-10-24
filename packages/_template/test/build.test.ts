@@ -8,7 +8,7 @@ import {
   modulesIn,
 } from '../../../scripts/import-graph.mjs';
 
-// Runs against the output of `pnpm --filter @scope/template build`.
+// Runs against the output of `pnpm --filter @workspacekit/template build`.
 const DIST = new URL('../dist/', import.meta.url);
 const distText = (file: string): string => readFileSync(new URL(file, DIST), 'utf8');
 
@@ -20,9 +20,9 @@ test.each(['src/TemplateText.tsx', 'src/TemplateRenderer.tsx'])(
   },
 );
 
-test('@scope/react/renderer-kit stays external: imported by specifier, none of its modules bundled', () => {
+test('@workspacekit/react/renderer-kit stays external: imported by specifier, none of its modules bundled', () => {
   const files = filesReachableFrom(DIST, 'index.js', { throughDynamicImports: true });
-  expect(importsOf(distText('index.js')).static).toContain('@scope/react/renderer-kit');
+  expect(importsOf(distText('index.js')).static).toContain('@workspacekit/react/renderer-kit');
   const bundledModules = files.flatMap((file) => modulesIn(distText(file)));
   expect(bundledModules.filter((module) => !module.startsWith('src/'))).toEqual([]);
 });

@@ -20,6 +20,7 @@ import {
   unexpectedWorkspaceKeys,
   unpinnedDependencies,
   workflowProblems,
+  allWorkflowProblems,
   workspacePackages,
   workspaceSettings,
 } from './check-supply-chain.mjs';
@@ -624,9 +625,136 @@ test('a job that calls a reusable workflow is reported', () => {
   ]);
 });
 
-test('security.yml sets both variables on its pnpm job', () => {
-  const text = readFileSync(new URL('../.github/workflows/security.yml', import.meta.url), 'utf8');
-  assert.deepEqual(workflowProblems(text), []);
+const CI_WORKFLOW = (extra = '') =>
+  `on:\n  pull_request:\npermissions: {}\njobs:\n  check:\n    permissions:\n      contents: read\n${BOTH_ENV}${extra}    steps:\n      - uses: actions/checkout@${SHA}\n      - run: pnpm check:full\n`;
+const PAGES_WORKFLOW = (trigger) =>
+  `on:\n  ${trigger}:\npermissions: {}\njobs:\n  deploy:\n    permissions:\n      pages: write\n      id-token: write\n    steps:\n      - uses: actions/deploy-pages@${SHA}\n`;
+
+test('accepts the upload-pages-artifact and deploy-pages actions', () => {
+  assert.deepEqual(workflowProblems(PAGES_WORKFLOW('push')), []);
+  const upload = `jobs:\n  build:\n    steps:\n      - uses: actions/upload-pages-artifact@${SHA}\n`;
+  assert.deepEqual(workflowProblems(upload), []);
+});
+
+test('a pages deploy job triggered by pull_request is reported, however the trigger is written', () => {
+  const reported = (trigger) =>
+    ['pages', 'id-token'].map(
+      (scope) =>
+        `workflow job deploy permissions ${scope}: write is not allowed in a workflow triggered by ${trigger}`,
+    );
+  const onPush = PAGES_WORKFLOW('push');
+  assert.deepEqual(workflowProblems(PAGES_WORKFLOW('pull_request')), reported('pull_request'));
+  assert.deepEqual(workflowProblems(PAGES_WORKFLOW('pull_request_target')), reported('pull_request_target'));
+  assert.deepEqual(
+    workflowProblems(onPush.replace('on:\n  push:', 'on: [push, pull_request]')),
+    reported('pull_request'),
+  );
+  assert.deepEqual(
+    workflowProblems(onPush.replace('on:\n  push:', 'on: pull_request')),
+    reported('pull_request'),
+  );
+});
+
+test('contents: write is reported at job and workflow level, as is write-all', () => {
+  assert.deepEqual(workflowProblems(CI_WORKFLOW()), []);
+  assert.deepEqual(workflowProblems(CI_WORKFLOW().replace('contents: read', 'contents: write')), [
+    'workflow job check permissions contents: write is not allowed',
+  ]);
+  assert.deepEqual(
+    workflowProblems(CI_WORKFLOW().replace('permissions: {}', 'permissions:\n  contents: write')),
+    ['workflow permissions contents: write is not allowed'],
+  );
+  assert.deepEqual(
+    workflowProblems(
+      CI_WORKFLOW()
+        .replace('contents: read', 'write-all')
+        .replace('permissions:\n      write-all', 'permissions: write-all'),
+    ),
+    ['workflow job check permissions write-all is not allowed'],
+  );
+});
+
+test('every workflow in the repository passes', () => {
+  assert.deepEqual(allWorkflowProblems(new URL('../.github/workflows/', import.meta.url)), []);
+});
+
+test('every .yml and .yaml file in the workflows folder is checked, named by its file', () => {
+  assert.deepEqual(allWorkflowProblems(new URL('./fixtures/workflows/', import.meta.url), { required: [] }), [
+    'release.yaml: workflow job publish step 1 uses actions/checkout@v4, which is not an allowed action pinned to a full commit SHA',
+    `release.yaml: ${DISPATCH_PROBLEM('publish', 'id-token: write', 'workflow_dispatch')}`,
+  ]);
+});
+
+test('a required workflow that is missing is reported, so deleting one cannot pass', () => {
+  assert.deepEqual(allWorkflowProblems(new URL('./fixtures/workflows-without-ci/', import.meta.url)), [
+    '.github/workflows/ci.yml is missing',
+  ]);
+});
+
+const DISPATCH_PROBLEM = (job, scopes, triggers) =>
+  `workflow job ${job} holds ${scopes} in a workflow that ${triggers} can trigger, so it needs if: github.ref == 'refs/heads/main'`;
+const DISPATCHED_PAGES = (trigger, jobIf = '') =>
+  PAGES_WORKFLOW(trigger).replace('    permissions:\n      pages', `${jobIf}    permissions:\n      pages`);
+
+test('a pages or id-token job that a dispatch can trigger must be pinned to main', () => {
+  for (const trigger of ['workflow_dispatch', 'repository_dispatch']) {
+    assert.deepEqual(workflowProblems(DISPATCHED_PAGES(trigger)), [
+      DISPATCH_PROBLEM('deploy', 'pages: write and id-token: write', trigger),
+    ]);
+  }
+  const both = PAGES_WORKFLOW('push').replace(
+    'on:\n  push:',
+    'on: [push, workflow_dispatch, repository_dispatch]',
+  );
+  assert.deepEqual(workflowProblems(both), [
+    DISPATCH_PROBLEM(
+      'deploy',
+      'pages: write and id-token: write',
+      'workflow_dispatch or repository_dispatch',
+    ),
+  ]);
+});
+
+test('a dispatchable job pinned to main is accepted, in either expression form', () => {
+  for (const jobIf of [
+    "    if: github.ref == 'refs/heads/main'\n",
+    "    if: ${{ github.ref == 'refs/heads/main' }}\n",
+    "    if: github.repository_owner == 'x' && github.ref == 'refs/heads/main'\n",
+  ]) {
+    assert.deepEqual(workflowProblems(DISPATCHED_PAGES('workflow_dispatch', jobIf)), [], jobIf);
+  }
+});
+
+test('an if that does not actually pin main is rejected', () => {
+  for (const jobIf of [
+    "    if: github.ref == 'refs/heads/main' || true\n",
+    '    if: "!(github.ref == \'refs/heads/main\')"\n',
+    "    if: github.ref != 'refs/heads/main'\n",
+    '    if: true\n',
+  ]) {
+    assert.deepEqual(
+      workflowProblems(DISPATCHED_PAGES('workflow_dispatch', jobIf)),
+      [DISPATCH_PROBLEM('deploy', 'pages: write and id-token: write', 'workflow_dispatch')],
+      jobIf,
+    );
+  }
+});
+
+test('write scopes granted at the workflow level count for jobs that set no permissions', () => {
+  const text = `on: workflow_dispatch\npermissions:\n  id-token: write\njobs:\n  publish:\n    steps:\n      - uses: actions/deploy-pages@${SHA}\n`;
+  assert.deepEqual(workflowProblems(text), [
+    DISPATCH_PROBLEM('publish', 'id-token: write', 'workflow_dispatch'),
+  ]);
+});
+
+test('ci.yml and pages.yml keep the shapes the release checklist relies on', () => {
+  const read = (name) => readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
+  assert.match(read('ci'), /pnpm check:full/);
+  assert.match(read('ci'), /pnpm --filter @workspacekit\/react exec playwright install --with-deps/);
+  const pages = read('pages');
+  assert.match(pages, /NEXT_PUBLIC_BASE_PATH: \/workspacekit/);
+  assert.doesNotMatch(pages, /NEXT_PUBLIC_DOCS_TEST/);
+  assert.doesNotMatch(pages, /pull_request/);
 });
 
 test('effectiveSettings runs pnpm with its pnpmfile ignored', () => {
@@ -652,10 +780,8 @@ test(
   },
 );
 
-test('the repository is clean for a release once @OWNER is replaced, and not before', underPnpm, () => {
-  assert.deepEqual(collectProblems('2026-10-23', effectiveSettings, { release: true }), [
-    '.github/CODEOWNERS still names the placeholder @OWNER; replace it with the maintainers GitHub user or team',
-  ]);
+test('the repository is clean for a release now that CODEOWNERS names a real owner', underPnpm, () => {
+  assert.deepEqual(collectProblems('2026-10-23', effectiveSettings, { release: true }), []);
 });
 
 test('a setting pnpm cannot report fails the check', underPnpm, () => {

@@ -1,5 +1,5 @@
-import { FsError, statusOf, type ChangeEvent, type Entry, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import { FsError, statusOf, type ChangeEvent, type Entry, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { act, StrictMode, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -51,7 +51,9 @@ test('useFileSystem outside the provider throws a message naming FileSystemProvi
     return null;
   };
   // act rethrows the render error
-  await expect(mount(<Bare />)).rejects.toThrow(/outside <FileSystemProvider>\. Wrap/);
+  await expect(mount(<Bare />)).rejects.toThrow(
+    /outside <FileSystemProvider>\. Wrap.*See https:\/\/\S+\/docs\/concepts\/adapter#provider-and-hooks/s,
+  );
 });
 
 test('provider loads the root and disposes the store on unmount', async () => {
@@ -673,5 +675,36 @@ test('a Replace that the adapter completes under another name forgets the state 
   await settle();
   expect([...ctx().expanded.get()].sort()).toEqual(['b', 'b (1)', 'b/old']);
   expect(ctx().selected.get()).toBeNull();
+  await act(async () => root.unmount());
+});
+
+class PrivateFieldAdapter implements FileSystemAdapter {
+  readonly #inner = createMemoryAdapter({ files: { 'src/a.txt': 'a' } });
+  readonly pollPathsSeen: Array<(() => readonly string[]) | undefined> = [];
+
+  list: FileSystemAdapter['list'] = (path, options) => this.#inner.list(path, options);
+  read: FileSystemAdapter['read'] = ((path: string, as: 'text') =>
+    this.#inner.read(path, as)) as FileSystemAdapter['read'];
+  watch: FileSystemAdapter['watch'] = (onChange, options) => {
+    this.pollPathsSeen.push(options?.pollPaths);
+    return this.#inner.watch!(onChange);
+  };
+}
+
+test('an adapter with #private fields keeps working behind the provider, and watch gets the folders shown', async () => {
+  const adapter = new PrivateFieldAdapter();
+  const onError = vi.fn();
+  await withContext({ adapter, root: 'src', onError });
+  expect(onError).not.toHaveBeenCalled();
+  expect(adapter.pollPathsSeen).toHaveLength(1);
+  expect(adapter.pollPathsSeen[0]!()).toContain('src');
+});
+
+test('a frozen adapter with watch keeps working behind the provider', async () => {
+  const adapter = Object.freeze(createMemoryAdapter({ files: { 'src/a.txt': 'a' } }));
+  const onError = vi.fn();
+  const { ctx, root } = await withContext({ adapter, onError });
+  expect(onError).not.toHaveBeenCalled();
+  expect(statusOf(ctx().store.getSnapshot().tree, '')).toBe('loaded');
   await act(async () => root.unmount());
 });

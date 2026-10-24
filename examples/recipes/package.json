@@ -1,5 +1,5 @@
 {
-  "name": "@scope/example-recipes",
+  "name": "@workspacekit/example-recipes",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
@@ -11,11 +11,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.monorepo.json"
   },
   "dependencies": {
-    "@scope/core": "workspace:*",
-    "@scope/pdf": "workspace:*",
-    "@scope/react": "workspace:*",
-    "@scope/server": "workspace:*",
-    "@scope/workspace": "workspace:*",
+    "@workspacekit/core": "workspace:*",
+    "@workspacekit/pdf": "workspace:*",
+    "@workspacekit/react": "workspace:*",
+    "@workspacekit/server": "workspace:*",
+    "@workspacekit/workspace": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

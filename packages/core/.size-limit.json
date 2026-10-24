@@ -1,5 +1,5 @@
 [
-  { "name": "@scope/core", "path": "dist/index.js", "limit": "15 KB", "gzip": true },
-  { "name": "@scope/core/http", "path": "dist/http/index.js", "limit": "6 KB", "gzip": true },
-  { "name": "@scope/core/memory", "path": "dist/memory/index.js", "limit": "6 KB", "gzip": true }
+  { "name": "@workspacekit/core", "path": "dist/index.js", "limit": "15 KB", "gzip": true },
+  { "name": "@workspacekit/core/http", "path": "dist/http/index.js", "limit": "6 KB", "gzip": true },
+  { "name": "@workspacekit/core/memory", "path": "dist/memory/index.js", "limit": "6 KB", "gzip": true }
 ]

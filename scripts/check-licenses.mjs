@@ -148,7 +148,7 @@ export function noticeFileText(dependencies) {
   ].join('\n');
 }
 
-const PUBLISHED_FILTERS = ['--filter', './packages/*', '--filter', '!@scope/template'];
+const PUBLISHED_FILTERS = ['--filter', './packages/*', '--filter', '!@workspacekit/template'];
 
 function readReport(args, flag, pnpmArgs) {
   const reportFlag = args.indexOf(flag);

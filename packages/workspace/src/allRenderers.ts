@@ -1,10 +1,10 @@
-import { codeRenderer, type CodeRendererOptions } from '@scope/code';
-import { docxRenderer, type DocxRendererOptions } from '@scope/docx';
-import { markdownRenderer, type MarkdownRendererOptions } from '@scope/markdown';
-import { pdfRenderer, type PdfRendererOptions } from '@scope/pdf';
-import { pptxRenderer, type PptxRendererOptions } from '@scope/pptx';
-import { lightRenderers, type Renderer } from '@scope/react';
-import { spreadsheetRenderer, type SpreadsheetRendererOptions } from '@scope/spreadsheet';
+import { codeRenderer, type CodeRendererOptions } from '@workspacekit/code';
+import { docxRenderer, type DocxRendererOptions } from '@workspacekit/docx';
+import { markdownRenderer, type MarkdownRendererOptions } from '@workspacekit/markdown';
+import { pdfRenderer, type PdfRendererOptions } from '@workspacekit/pdf';
+import { pptxRenderer, type PptxRendererOptions } from '@workspacekit/pptx';
+import { lightRenderers, type Renderer } from '@workspacekit/react';
+import { spreadsheetRenderer, type SpreadsheetRendererOptions } from '@workspacekit/spreadsheet';
 
 /**
  * Options of `allRenderers`, one entry per renderer package, each passed to that package's factory as it is:

@@ -1,5 +1,5 @@
 'use client';
-import type { Entry } from '@scope/core';
+import type { Entry } from '@workspacekit/core';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { useFileSystemInternals } from '../provider/internals';
 import { createUiStore, type UiStore } from '../provider/ui-store';

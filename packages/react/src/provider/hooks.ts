@@ -9,7 +9,8 @@ import {
   type SortSpec,
   type TreeSnapshot,
   type TreeStore,
-} from '@scope/core';
+} from '@workspacekit/core';
+import { docsLink } from '@workspacekit/core/docs';
 import { createContext, useContext, useRef, useSyncExternalStore, type Context } from 'react';
 import type { Clipboard } from '../actions/clipboard';
 import type { TabsState } from '../tabs/tabs-store';
@@ -147,7 +148,7 @@ export function useFileSystem(): FileSystemContext {
   if (!ctx) {
     throw new Error(
       'useFileSystem() was called outside <FileSystemProvider>. Wrap the component (or its parent) in ' +
-        '<FileSystemProvider adapter={yourAdapter}>…</FileSystemProvider>.',
+        `<FileSystemProvider adapter={yourAdapter}>…</FileSystemProvider>. See ${docsLink('concepts/adapter', 'provider-and-hooks')}`,
     );
   }
   return ctx;

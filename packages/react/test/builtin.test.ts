@@ -1,5 +1,5 @@
-import type { Entry, FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import type { Entry, FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { expect, test, vi } from 'vitest';
 import type { ActionContext } from '../src/actions/actions';
 import { BUILTIN_ACTION_IDS, builtinActions } from '../src/actions/builtin';

@@ -10,7 +10,7 @@ A React file workspace for apps where people and agents work in the same directo
 Install the preset and the server handler:
 
 ```sh
-npm install @scope/workspace @scope/core @scope/server react react-dom
+npm install @workspacekit/workspace @workspacekit/core @workspacekit/server react react-dom
 ```
 
 <!-- quick-start:start -->
@@ -18,7 +18,7 @@ npm install @scope/workspace @scope/core @scope/server react react-dom
 On the server, expose a directory. `authorize` is required, and `isSignedIn` is yours to write: it must verify the session or token.
 
 ```ts
-import { createFileHandler, nodeFsStore } from '@scope/server';
+import { createFileHandler, nodeFsStore } from '@workspacekit/server';
 
 const handler = createFileHandler({
   store: nodeFsStore(process.env.AGENT_WORKSPACE_DIR!),
@@ -31,9 +31,9 @@ In the browser, render it.
 
 ```tsx
 'use client';
-import { Workspace } from '@scope/workspace';
-import { httpAdapter } from '@scope/core/http';
-import '@scope/workspace/styles.css';
+import { Workspace } from '@workspacekit/workspace';
+import { httpAdapter } from '@workspacekit/core/http';
+import '@workspacekit/workspace/styles.css';
 
 export default function Files() {
   return <Workspace adapter={httpAdapter('/api/files')} />;
@@ -59,30 +59,30 @@ export function isSignedIn(request: Request): boolean {
 }
 ```
 
-`nodeFsStore` checks `AGENT_WORKSPACE_DIR` on the first request, so `next build` works without it. `authorize` has no default-open mode: the server refuses every request until you decide who may do what. Import `@scope/workspace/styles.css` once. More in [Common mistakes](AGENTS.md#common-mistakes).
+`nodeFsStore` checks `AGENT_WORKSPACE_DIR` on the first request, so `next build` works without it. `authorize` has no default-open mode: the server refuses every request until you decide who may do what. Import `@workspacekit/workspace/styles.css` once. More in [Common mistakes](AGENTS.md#common-mistakes).
 
 ## Packages
 
-| Package                                                | What it is                                                       |
-| ------------------------------------------------------ | ---------------------------------------------------------------- |
-| [`@scope/workspace`](packages/workspace)               | The preset: `Workspace` with every renderer. Use this in an app. |
-| [`@scope/server`](packages/server)                     | A Fetch-API request handler that serves a directory.             |
-| [`@scope/core`](packages/core)                         | The adapter contract, the tree store, paths and uploads.         |
-| [`@scope/react`](packages/react)                       | The components, when you want only the light renderers.          |
-| [`@scope/pdf`](packages/pdf)                           | PDF renderer, drawn by pdf.js.                                   |
-| [`@scope/docx`](packages/docx)                         | Word renderer, sanitized before it is shown.                     |
-| [`@scope/pptx`](packages/pptx)                         | PowerPoint renderer with virtualized slides.                     |
-| [`@scope/spreadsheet`](packages/spreadsheet)           | `.xlsx`, `.csv` and `.tsv` in a virtualized grid.                |
-| [`@scope/markdown`](packages/markdown)                 | Editable Markdown with a source mode.                            |
-| [`@scope/code`](packages/code)                         | CodeMirror 6 editor for code, configuration and data files.      |
-| [`@scope/demo-kit`](packages/demo-kit)                 | Sample files and a simulated agent for demos and tests.          |
-| [`@scope/create-workspace`](packages/create-workspace) | Scaffolds a project from a tested example.                       |
+| Package                                                       | What it is                                                       |
+| ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`@workspacekit/workspace`](packages/workspace)               | The preset: `Workspace` with every renderer. Use this in an app. |
+| [`@workspacekit/server`](packages/server)                     | A Fetch-API request handler that serves a directory.             |
+| [`@workspacekit/core`](packages/core)                         | The adapter contract, the tree store, paths and uploads.         |
+| [`@workspacekit/react`](packages/react)                       | The components, when you want only the light renderers.          |
+| [`@workspacekit/pdf`](packages/pdf)                           | PDF renderer, drawn by pdf.js.                                   |
+| [`@workspacekit/docx`](packages/docx)                         | Word renderer, sanitized before it is shown.                     |
+| [`@workspacekit/pptx`](packages/pptx)                         | PowerPoint renderer with virtualized slides.                     |
+| [`@workspacekit/spreadsheet`](packages/spreadsheet)           | `.xlsx`, `.csv` and `.tsv` in a virtualized grid.                |
+| [`@workspacekit/markdown`](packages/markdown)                 | Editable Markdown with a source mode.                            |
+| [`@workspacekit/code`](packages/code)                         | CodeMirror 6 editor for code, configuration and data files.      |
+| [`@workspacekit/demo-kit`](packages/demo-kit)                 | Sample files and a simulated agent for demos and tests.          |
+| [`@workspacekit/create-workspace`](packages/create-workspace) | Scaffolds a project from a tested example.                       |
 
 The packages are not published yet. Each one has a README, an `AGENTS.md` and an `llms.txt` for coding agents.
 
 ## Documentation
 
-- Guides and API reference: https://docs.example.invalid
+- Guides and API reference: https://adityazero4.github.io/workspacekit
 - Runnable examples: [`examples/`](examples) (a Next.js app with an agent-written directory, a Vite app on the in-memory adapter, and recipes)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Reporting a vulnerability: [SECURITY.md](SECURITY.md)

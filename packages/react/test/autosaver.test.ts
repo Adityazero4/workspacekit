@@ -1,4 +1,4 @@
-import { FsError, type Entry } from '@scope/core';
+import { FsError, type Entry } from '@workspacekit/core';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createAutosaver, type AutosaverOptions } from '../src/editing/autosaver';
 
