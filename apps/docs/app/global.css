@@ -4,6 +4,178 @@
 
 @source '../node_modules/fumadocs-ui/dist/**/*.js';
 
-:root:not(.dark) {
-  --color-fd-muted-foreground: hsl(0, 0%, 36%);
+@theme inline {
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, monospace;
+  --font-display: var(--font-bricolage), var(--font-body), ui-sans-serif, sans-serif;
+  --color-paper: var(--wk-paper);
+  --color-ink: var(--wk-ink);
+  --color-graphite: var(--wk-graphite);
+  --color-rule: var(--wk-rule);
+  --color-blue: var(--wk-blue);
+  --color-amber: var(--wk-amber);
+  --color-amber-soft: var(--wk-amber-soft);
+}
+
+:root {
+  --wk-paper: #f6f7f9;
+  --wk-surface: #ffffff;
+  --wk-ink: #141b2d;
+  --wk-graphite: #4a5468;
+  --wk-rule: #d9dee7;
+  --wk-blue: #2563eb;
+  --wk-amber: #b7791f;
+  --wk-amber-soft: #fde68a;
+}
+
+.dark {
+  --wk-paper: #0f1626;
+  --wk-surface: #172036;
+  --wk-ink: #e6eaf2;
+  --wk-graphite: #a3adc2;
+  --wk-rule: #2a3550;
+  --wk-blue: #58a6ff;
+  --wk-amber: #e9b949;
+  --wk-amber-soft: #5c4813;
+}
+
+:root,
+.dark {
+  --color-fd-background: var(--wk-paper);
+  --color-fd-foreground: var(--wk-ink);
+  --color-fd-card: var(--wk-surface);
+  --color-fd-card-foreground: var(--wk-ink);
+  --color-fd-popover: var(--wk-surface);
+  --color-fd-popover-foreground: var(--wk-ink);
+  --color-fd-primary: var(--wk-blue);
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #eceff4;
+  --color-fd-secondary-foreground: var(--wk-ink);
+  --color-fd-muted: #eceff4;
+  --color-fd-muted-foreground: var(--wk-graphite);
+  --color-fd-accent: #e4e9f2;
+  --color-fd-accent-foreground: var(--wk-ink);
+  --color-fd-border: var(--wk-rule);
+  --color-fd-ring: var(--wk-blue);
+}
+
+.dark {
+  --color-fd-primary-foreground: #0f1626;
+  --color-fd-secondary: #1c2740;
+  --color-fd-muted: #1c2740;
+  --color-fd-accent: #22304d;
+}
+
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-bricolage), var(--font-body), ui-sans-serif, sans-serif;
+    font-optical-sizing: auto;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wk-arrive {
+    animation: wk-arrive 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  .wk-step[data-active='true'] {
+    transition:
+      background-color 240ms ease,
+      border-color 240ms ease;
+  }
+}
+
+@keyframes wk-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    background-color: var(--wk-amber-soft);
+  }
+  60% {
+    background-color: var(--wk-amber-soft);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wk-pulse {
+    animation: wk-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes wk-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.wk-wire {
+  position: absolute;
+  top: 2.5rem;
+  bottom: 0;
+  left: 1.25rem;
+  width: 1px;
+  overflow: hidden;
+  background: var(--wk-rule);
+}
+
+@media (min-width: 1024px) {
+  .wk-wire {
+    top: 1.25rem;
+    right: 0;
+    bottom: auto;
+    left: 2.5rem;
+    width: auto;
+    height: 1px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wk-wire::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent, var(--wk-amber), transparent);
+    animation: wk-wire-down 2.2s ease-in-out var(--wk-wire-delay, 0s) infinite both;
+  }
+
+  @media (min-width: 1024px) {
+    .wk-wire::after {
+      background: linear-gradient(to right, transparent, var(--wk-amber), transparent);
+      animation-name: wk-wire-across;
+    }
+  }
+}
+
+@keyframes wk-wire-down {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes wk-wire-across {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.wk-dots::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(var(--wk-rule) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 60% at 30% 30%, black, transparent);
 }

@@ -5,10 +5,34 @@ description: Put a file tree, search, tabs, upload and viewers over a directory,
 
 The workspace has two halves. A route handler on your server exposes a directory, and one React component in the browser shows it. Both are short.
 
-- New here: start with [Next.js](/docs/getting-started/next) or [Vite](/docs/getting-started/vite).
-- Connect your own storage: [the adapter](/docs/concepts/adapter) and the [S3](/docs/recipes/s3) and [custom adapter](/docs/recipes/custom-adapter) recipes.
-- Lock it down: [authorize and policy](/docs/concepts/policy) and [security](/docs/server/security).
-- Make it yours: [styling](/docs/styling) and [renderers](/docs/concepts/renderers).
-- Using a coding agent: [coding agents](/docs/coding-agents).
+## Start here
+
+<Cards>
+  <Card title="Next.js" href="/docs/getting-started/next">
+    A route handler and one page, with a signed-in check, in about ten minutes.
+  </Card>
+  <Card title="Vite" href="/docs/getting-started/vite">
+    The same workspace in a Vite app, with any Fetch API server behind it.
+  </Card>
+</Cards>
+
+## Go further
+
+<Cards>
+  <Card title="Bring your own storage" href="/docs/concepts/adapter">
+    The adapter contract, and how to put the workspace over S3 or any storage you have.
+  </Card>
+  <Card title="Lock it down" href="/docs/concepts/policy">
+    What `authorize` sees for each request, and how to decide what each person may do.
+  </Card>
+  <Card title="Make it yours" href="/docs/styling">
+    CSS variables, part class names and state attributes, light and dark.
+  </Card>
+  <Card title="Using a coding agent" href="/docs/coding-agents">
+    The AGENTS.md and llms.txt files every package ships, and how to point an agent at them.
+  </Card>
+</Cards>
+
+Also useful: the [S3](/docs/recipes/s3) and [custom adapter](/docs/recipes/custom-adapter) recipes, the server's [security](/docs/server/security) guarantees, and writing your own [renderers](/docs/concepts/renderers).
 
 Every example in these pages that renders UI is live, running on the in-memory adapter. The [home page](/) runs the whole workspace with a simulated agent.
