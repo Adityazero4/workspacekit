@@ -258,3 +258,30 @@ html {
     filter: none;
   }
 }
+
+.wk-prose {
+  color: var(--wk-ink);
+  line-height: 1.75;
+}
+
+.wk-prose h2 {
+  margin: 2.5rem 0 0.75rem;
+  font-size: 1.35rem;
+}
+
+.wk-prose p,
+.wk-prose ul {
+  margin: 0 0 1rem;
+  color: color-mix(in oklab, var(--wk-ink) 82%, var(--wk-paper));
+}
+
+.wk-prose ul {
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.wk-prose a {
+  color: var(--wk-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

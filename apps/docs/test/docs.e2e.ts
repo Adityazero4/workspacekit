@@ -24,6 +24,9 @@ const PAGES = [
   '/api/core/',
   '/api/react/',
   '/api/workspace/',
+  '/about/',
+  '/contact/',
+  '/privacy/',
 ] as const;
 
 for (const url of PAGES) {
