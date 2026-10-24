@@ -71,7 +71,7 @@ jobs:
           name: release-tarballs
           path: ${{ runner.temp }}/release/*.tgz
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   publish:
     needs: pack
