@@ -46,8 +46,8 @@ export const viewport: Viewport = {
 };
 
 /**
- * The root layout: the site's typefaces and the theme provider, dark only, with search off until the static search
- * index exists.
+ * The root layout: the site's typefaces and the theme provider, dark only, with search off until the static
+ * search index exists.
  *
  * @example
  * <RootLayout>{page}</RootLayout>

@@ -72,7 +72,8 @@ function lights(scene: Scene): void {
 
 /**
  * Renders the workspacekit mark in 3D inside `host` and returns a function that stops and frees it. The
- * stack drifts slowly, turns as the page scrolls and leans towards the pointer while it is over the model; with reduced motion it renders one still frame.
+ * stack drifts slowly, turns as the page scrolls and leans towards the pointer while it is over the model;
+ * with reduced motion it renders one still frame.
  *
  * @example
  * const stop = mountHeroScene(element);
