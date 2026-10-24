@@ -5,7 +5,7 @@ declare module 'vitest/browser' {
   interface BrowserCommands {
     emulateMedia: (opts: {
       colorScheme?: 'light' | 'dark' | null;
-      reducedMotion?: 'reduce' | null;
+      reducedMotion?: 'reduce' | 'no-preference' | null;
     }) => Promise<void>;
     /** Drives the real mouse; `x` and `y` are offsets from the top-left of the element `selector` matches. */
     mouse: (selector: string, steps: MouseStep[]) => Promise<void>;
