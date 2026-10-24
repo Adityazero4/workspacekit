@@ -1,4 +1,9 @@
-import { defineRenderer, MATCH_SCORE, type Renderer, type RendererProps } from '@scope/react/renderer-kit';
+import {
+  defineRenderer,
+  MATCH_SCORE,
+  type Renderer,
+  type RendererProps,
+} from '@workspacekit/react/renderer-kit';
 import { createElement } from 'react';
 import type { PdfClassNames } from './parts';
 
@@ -47,8 +52,8 @@ export interface PdfAssets {
  * browsers pass a `workerSrc` that is your own module worker, which installs the polyfill and then imports
  * `pdfjs-dist/legacy/build/pdf.worker.min.mjs`. `maxCanvasPixels` caps each page's canvas (default 16
  * megapixels); above it pages are zoomed with CSS, which keeps memory bounded with many tabs open.
- * `classNames` adds classes to this package's parts; the viewer's own `classNames` only know `@scope/react`
- * parts.
+ * `classNames` adds classes to this package's parts; the viewer's own `classNames` only know
+ * `@workspacekit/react` parts.
  *
  * @example
  * ```ts
@@ -72,10 +77,10 @@ export interface PdfRendererOptions {
  *
  * The worker is found with `new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url)`. Vite
  * resolves that in a build, but not inside a dependency it pre-bundles in development (`import.meta.url` then
- * points into `.vite/deps`): add `optimizeDeps: { exclude: ['@scope/pdf'] }` to your Vite config, or pass
- * `workerSrc` (for example `import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'`).
- * `classNames` adds classes to this package's parts; the viewer's own `classNames` only know `@scope/react`
- * parts.
+ * points into `.vite/deps`): add `optimizeDeps: { exclude: ['@workspacekit/pdf'] }` to your Vite config, or
+ * pass `workerSrc` (for example `import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'`).
+ * `classNames` adds classes to this package's parts; the viewer's own `classNames` only know
+ * `@workspacekit/react` parts.
  *
  * Call it once, at module level, and reuse the result: the viewer caches each renderer's loaded component by
  * the renderer object's identity.

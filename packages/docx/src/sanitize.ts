@@ -1,19 +1,15 @@
-import { safeUrlOrNull } from '@scope/react/renderer-kit';
+import {
+  confineDeclarations,
+  keepWebOrMailLink,
+  SVG_ANIMATION_ELEMENTS,
+  svgAttributeFetches,
+} from '@workspacekit/react/renderer-kit';
 import DOMPurify from 'dompurify';
 import { scopeFontFaces, scopeFontFamilies, type FontFaceInSheet, type FontScope } from './fontScope';
 
 type RuleContainer = FontFaceInSheet['container'];
 
 const FORBIDDEN_TAGS = ['iframe', 'script', 'object', 'embed', 'form', 'link', 'meta', 'base', 'style'];
-const SMIL_ELEMENTS = [
-  'animate',
-  'set',
-  'animatetransform',
-  'animatemotion',
-  'animatecolor',
-  'mpath',
-  'discard',
-];
 const URL_ATTRIBUTES = new Set([
   'src',
   'href',
@@ -25,76 +21,26 @@ const URL_ATTRIBUTES = new Set([
   'ping',
 ]);
 const INLINE_OR_LOCAL = /^[ \t\n\r\f]*(?:data:|#)/i;
-const ABSOLUTE_WEB_URL = /^https?:\/\//i;
-const URL_FUNCTION = 'url(';
+const INLINE_SCHEMES = ['data:', '#'];
+const FONT_SOURCE_SCHEMES = ['data:'];
 const SHADOW_BOUNDARY_SELECTOR = /:host|:scope|::part|::slotted|&/i;
-const CONTAINED_POSITIONS: ReadonlySet<string> = new Set(['static', 'relative', 'absolute']);
-const INTEGER = /^[+-]?\d+$/;
-const HIGHEST_Z_INDEX = 1000;
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
-const CSS_WHITESPACE: ReadonlySet<string> = new Set([' ', '\t', '\n', '\r', '\f']);
 const HOST_CSS =
   ':host{contain:paint!important;position:relative;overflow:auto}.docx-wrapper{min-width:fit-content}';
 
-function afterWhitespace(text: string, index: number): number {
-  let next = index;
-  while (next < text.length && CSS_WHITESPACE.has(text[next]!)) next++;
-  return next;
-}
-
-function referencesOutside(value: string): boolean {
-  const lowerCased = value.toLowerCase();
-  if (lowerCased.includes('image-set(')) return true;
-  for (let at = lowerCased.indexOf(URL_FUNCTION); at !== -1; at = lowerCased.indexOf(URL_FUNCTION, at + 1)) {
-    let target = afterWhitespace(lowerCased, at + URL_FUNCTION.length);
-    if (lowerCased[target] === '"' || lowerCased[target] === "'") {
-      target = afterWhitespace(lowerCased, target + 1);
-    }
-    if (!lowerCased.startsWith('data:', target) && lowerCased[target] !== '#') return true;
-  }
-  return false;
-}
-
-function isAllowedDeclaration(property: string, value: string): boolean {
-  if (referencesOutside(value) || (property.startsWith('--') && value.includes('\\'))) return false;
-  if (property === 'position') return CONTAINED_POSITIONS.has(value.trim().toLowerCase());
-  return property !== 'z-index' || (INTEGER.test(value.trim()) && Number(value) <= HIGHEST_Z_INDEX);
-}
-
-function confineDeclarations(declarations: CSSStyleDeclaration): void {
-  for (const property of [...declarations]) {
-    if (!isAllowedDeclaration(property, declarations.getPropertyValue(property))) {
-      declarations.removeProperty(property);
-    }
-  }
-}
-
-function linkOrNull(href: string): string | null {
-  if (href.startsWith('#') || /^mailto:/i.test(href)) return href;
-  const allowed = ABSOLUTE_WEB_URL.test(href) ? safeUrlOrNull(href) : null;
-  if (allowed === null) return null;
-  const { username, password } = new URL(allowed);
-  return username || password ? null : allowed;
-}
-
 function keepOnlySafeLink(link: Element, href: string): void {
-  const allowed = linkOrNull(href);
-  if (allowed === null) return link.removeAttribute('href');
-  link.setAttribute('href', allowed);
-  if (allowed.startsWith('#')) return;
-  link.setAttribute('target', '_blank');
-  link.setAttribute('rel', 'noopener noreferrer');
+  if (href.startsWith('#')) return link.setAttribute('href', href);
+  if (!keepWebOrMailLink(link, href)) link.removeAttribute('href');
 }
 
 function fetchesExternally(element: Element, name: string, value: string): boolean {
   if (URL_ATTRIBUTES.has(name)) return !INLINE_OR_LOCAL.test(value);
-  return element.namespaceURI === SVG_NAMESPACE && (value.includes('\\') || referencesOutside(value));
+  return svgAttributeFetches(element, value, INLINE_SCHEMES);
 }
 
 function allowOnlyInlineReferences(node: Node): void {
   if (!(node instanceof Element)) return;
   for (const { name, value } of [...node.attributes]) {
-    if (name === 'style') confineDeclarations((node as HTMLElement).style);
+    if (name === 'style') confineDeclarations((node as HTMLElement).style, INLINE_SCHEMES);
     else if (node.localName === 'a' && name === 'href') keepOnlySafeLink(node, value.trim());
     else if (fetchesExternally(node, name, value)) node.removeAttribute(name);
   }
@@ -126,7 +72,7 @@ purifier.addHook('afterSanitizeAttributes', allowOnlyInlineReferences);
 export function sanitizeBody(body: HTMLElement): void {
   purifier.sanitize(body, {
     IN_PLACE: true,
-    FORBID_TAGS: [...FORBIDDEN_TAGS, ...SMIL_ELEMENTS],
+    FORBID_TAGS: [...FORBIDDEN_TAGS, ...SVG_ANIMATION_ELEMENTS],
     FORBID_ATTR: ['srcset'],
     SANITIZE_DOM: false,
   });
@@ -157,6 +103,15 @@ function keepSafeRules(container: RuleContainer, kept: KeptRules): void {
   }
 }
 
+function fontFacesInDocumentOrder(
+  sheet: CSSStyleSheet,
+  declarations: CSSStyleDeclaration[],
+): FontFaceInSheet[] {
+  const kept: KeptRules = { declarations, fontFaces: [] };
+  keepSafeRules(sheet, kept);
+  return kept.fontFaces.reverse();
+}
+
 const canConstructStyleSheets = (): boolean => 'adoptedStyleSheets' in Document.prototype;
 
 function parsedSheet(cssText: string, inert: Document): CSSStyleSheet {
@@ -180,7 +135,7 @@ function serializedAndDetached(sheet: CSSStyleSheet): string {
 /**
  * A rendered document's styles, ready for its shadow root: constructed `sheets` to adopt, or, where the
  * browser cannot construct style sheets (Safari before 16.4), one `element` to mount instead; and the
- * scope its font families were renamed into, to apply to inline styles too.
+ * scope its font families were renamed into, to apply to inline styles too, with the faces to load.
  *
  * @example
  * ```ts
@@ -197,11 +152,13 @@ export interface DocumentStyles {
  * Turns CSS from a rendered document into styles that cannot fetch or reach outside the viewer, led by the
  * viewer's own `:host` rules (paint containment, `!important`, so nothing is drawn outside its box). The CSS
  * is parsed by the browser (in `inert` when style sheets cannot be constructed, where `@import` fetches
- * nothing), then only style rules, `@media`, `@font-face`, `@keyframes` and `@namespace` (inert, and not
- * removable) are kept. Every other at-rule goes (`@import`, `@scope`, `@layer`, `@supports`, `@container`,
- * `@property` and any unknown one), as do style rules with nested rules or whose selector names `:host`,
- * `:scope`, `::part`, `::slotted` or `&`. Declarations are confined as in `sanitizeBody`, and every
- * `@font-face` family is renamed under `fontPrefix`, with the rules that use it.
+ * nothing), then only style rules, `@media`, `@keyframes` and `@namespace` (inert, and not removable) are
+ * kept. Every other at-rule goes (`@import`, `@scope`, `@layer`, `@supports`, `@container`, `@property` and
+ * any unknown one), as do style rules with nested rules or whose selector names `:host`, `:scope`, `::part`,
+ * `::slotted` or `&`. Declarations are confined as in `sanitizeBody`. Every `@font-face` is taken out of the
+ * CSS into `fonts.faces`, its family renamed under `fontPrefix` (with the rules that use it) and its `src`
+ * confined the same way but with `data:` as the only `url()` it keeps (then rebuilt by `safeFontSource`), for
+ * `showFontFaces` to load.
  *
  * @example
  * ```ts
@@ -210,12 +167,12 @@ export interface DocumentStyles {
  */
 export function safeStyles(cssTexts: string[], inert: Document, fontPrefix: string): DocumentStyles {
   const sheets = cssTexts.map((cssText) => parsedSheet(cssText, inert));
-  const kept: KeptRules = { declarations: [], fontFaces: [] };
-  for (const sheet of sheets) keepSafeRules(sheet, kept);
-  for (const declarations of kept.declarations) confineDeclarations(declarations);
-  for (const { rule } of kept.fontFaces) confineDeclarations(rule.style);
-  const fonts = scopeFontFaces(kept.fontFaces, fontPrefix);
-  for (const declarations of kept.declarations) scopeFontFamilies(declarations, fonts);
+  const declarations: CSSStyleDeclaration[] = [];
+  const fontFaces = sheets.flatMap((sheet) => fontFacesInDocumentOrder(sheet, declarations));
+  for (const style of declarations) confineDeclarations(style, INLINE_SCHEMES);
+  for (const { rule } of fontFaces) confineDeclarations(rule.style, FONT_SOURCE_SCHEMES);
+  const fonts = scopeFontFaces(fontFaces, fontPrefix);
+  for (const style of declarations) scopeFontFamilies(style, fonts);
   if (canConstructStyleSheets()) {
     const host = new CSSStyleSheet();
     host.replaceSync(HOST_CSS);

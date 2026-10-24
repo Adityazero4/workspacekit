@@ -4,7 +4,7 @@ const withMDX = createMDX();
 
 export default withMDX({
   output: 'export',
-  transpilePackages: ['@scope/example-recipes'],
+  transpilePackages: ['@workspacekit/example-recipes'],
   basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? '',
   reactStrictMode: true,
   images: { unoptimized: true },

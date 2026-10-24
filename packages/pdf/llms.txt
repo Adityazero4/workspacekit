@@ -1,25 +1,25 @@
-# @scope/pdf
+# @workspacekit/pdf
 
 > A PDF renderer for the file workspace, drawn by pdf.js one page at a time, with selectable text, links, zoom and a password prompt.
 
-- API reference: https://docs.example.invalid/api/pdf
-- Install: `npm install @scope/pdf @scope/react react react-dom`
+- API reference: https://adityazero4.github.io/workspacekit/api/pdf
+- Install: `npm install @workspacekit/pdf @workspacekit/react react react-dom`
 
 ## README sections
 
 - Install
 - Entry: `pdfRenderer()` returns a renderer.
 - Standalone use: `PdfViewer` shows one file without a tree or a provider.
-- CSS: Import `@scope/react/styles.css` and `@scope/pdf/styles.css` once each.
+- CSS: Import `@workspacekit/react/styles.css` and `@workspacekit/pdf/styles.css` once each.
 - Options: `workerSrc`: the URL of the pdf.js worker.
 - Vite: A production build needs no configuration.
 
 ## Entry points
 
-- `@scope/pdf`
-- `@scope/pdf/styles.css` (stylesheet)
+- `@workspacekit/pdf`
+- `@workspacekit/pdf/styles.css` (stylesheet)
 
-## Exports of `@scope/pdf`
+## Exports of `@workspacekit/pdf`
 
 - `PDF_MAX_BYTES`: The largest PDF the renderer and the standalone `PdfViewer` open from bytes or a blob: 200 MiB.
 - `PDF_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `pdf-` prefix.

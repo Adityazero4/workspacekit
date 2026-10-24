@@ -1,5 +1,5 @@
 'use client';
-import type { FsError } from '@scope/core';
+import type { FsError } from '@workspacekit/core';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLatest } from '../renderers/useLatest';
 import { createAutosaver, type AutosaverOptions, type SaveStatusKind } from './autosaver';

@@ -9,18 +9,18 @@ A `FileSystemAdapter` is everything the workspace knows about your storage. `htt
 
 `list` and `read` are required. A workspace with only those is read-only. Each optional method switches on the matching UI, so a missing `move` means no drag to move.
 
-| Method         | Turns on                                                                                                                                                                    |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stat`         | Checks whether a file still exists before a replace. Without it the parent folder is listed instead                                                                         |
-| `url`          | Streaming for media and PDF ranges, instead of reading the whole file                                                                                                       |
-| `search`       | The search box                                                                                                                                                              |
-| `create`       | New file and new folder                                                                                                                                                     |
-| `write`        | Editing and autosave. Receives `expectedMtimeMs` so a conflict is a `conflict` error, not a lost edit                                                                       |
-| `move`, `copy` | Rename, drag to move, cut, copy and paste, duplicate                                                                                                                        |
-| `delete`       | Delete                                                                                                                                                                      |
-| `upload`       | Upload files and folders, direct or chunked                                                                                                                                 |
-| `download`     | Download, with folders as a zip                                                                                                                                             |
-| `watch`        | Live updates. Without it the root, the folders of open tabs and the expanded folders are polled every few seconds, paused while the tab is hidden and slowed after failures |
+| Method         | Turns on                                                                                                                                                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stat`         | Checks whether a file still exists before a replace. Without it the parent folder is listed instead                                                                                                                                               |
+| `url`          | Streaming for media and PDF ranges, instead of reading the whole file                                                                                                                                                                             |
+| `search`       | The search box                                                                                                                                                                                                                                    |
+| `create`       | New file and new folder                                                                                                                                                                                                                           |
+| `write`        | Editing and autosave. Receives `expectedMtimeMs` so a conflict is a `conflict` error, not a lost edit                                                                                                                                             |
+| `move`, `copy` | Rename, drag to move, cut, copy and paste, duplicate                                                                                                                                                                                              |
+| `delete`       | Delete                                                                                                                                                                                                                                            |
+| `upload`       | Upload files and folders, direct or chunked                                                                                                                                                                                                       |
+| `download`     | Download, with folders as a zip                                                                                                                                                                                                                   |
+| `watch`        | Live updates. Without it the root, the folders of open tabs and the expanded folders are polled every few seconds, paused while the tab is hidden and slowed after failures. It may take a second argument, `{ pollPaths }`, naming those folders |
 
 ## What `list` returns
 
@@ -32,14 +32,14 @@ A `FileSystemAdapter` is everything the workspace knows about your storage. `htt
 - **New files:** the UI calls `create(path, 'file')` for a new empty file and `create(path, 'directory')` for a new folder. `write` is called afterwards for edits, autosave and conflict copies, and it must also create a file that does not exist yet. `create` on an existing path is a `conflict` error.
 - **Missing optional methods** hide the UI in the table above: with no `create` there is no New file or New folder, with no `write` the editors are read-only, and with no `watch` the workspace polls.
 
-`Entry.mtimeMs` is the version: it keys caches, detects conflicts and drives live refresh. Paths are `/`-separated with no leading slash, and the root is the empty string. Build them with `joinPath` and `parentPath` from `@scope/core`, never by concatenating strings.
+`Entry.mtimeMs` is the version: it keys caches, detects conflicts and drives live refresh. Paths are `/`-separated with no leading slash, and the root is the empty string. Build them with `joinPath` and `parentPath` from `@workspacekit/core`, never by concatenating strings.
 
 ## A minimal adapter
 
 This read-only adapter shows the shape. `read` has three overloads in the contract, so a single implementation is cast to its type.
 
 ```ts
-import { FsError, type Entry, type FileSystemAdapter } from '@scope/core';
+import { FsError, type Entry, type FileSystemAdapter } from '@workspacekit/core';
 
 const FILES: Record<string, string> = { 'notes.txt': 'hello' };
 
@@ -72,7 +72,11 @@ A complete adapter, over a folder the user picks in the browser, is in the [cust
 
 `watch(onChange)` calls `onChange` with a batch of `ChangeEvent`s (`created`, `updated`, `deleted`, `moved` or `resync`) and returns the function that stops watching. The store subscribes to it itself, so never wire `watch` separately. Events carry an optional `actor`, which lets the UI tell the user's own writes from an agent's.
 
-The workspace below is a memory adapter. A simulated agent writes to it while it is on screen, and the changes appear with a dot and a flash.
+`httpAdapter` falls back to polling `list` when the server refuses the watch (400, 403, 404 or 501), so denying `'watch'` in `authorize` does not stop the client reading the tree. It polls the folders the workspace shows, or the root when used on its own (`polling.paths` changes that), and tells `onWatchError` once. It sends a `resync` when it starts, and gives up, telling `onWatchError` once more, after three polling rounds in a row are all refused with 403 (a 401 keeps polling, since signing in again can fix it). Like the workspace's own polling, it polls nothing while the tab is hidden.
+
+Under `FileSystemProvider`, `pollPaths` replaces the `paths` given to `withPolling`.
+
+The workspace below is a memory adapter. A simulated agent writes to it while it is on screen, and the changes appear with a dot and a flash. Each change is one agent event, plus one for every folder it creates.
 
 <LiveWorkspace />
 
@@ -83,3 +87,11 @@ Scope a tenant or sandbox on the adapter instance, for example `httpAdapter('/ap
 ## Where to create it
 
 Create the adapter once, at module scope or with `useState(() => ...)`. A new adapter identity starts a new session: a fresh tree, UI state and edit buffers.
+
+## Provider and hooks
+
+`useFileSystem()` and the other hooks read the session that `FileSystemProvider` creates, so they throw when called outside it. `Workspace` includes a provider; when you build your own layout, wrap it once with `<FileSystemProvider adapter={adapter}>`.
+
+## Tree rows and tabs
+
+A tree row shares state with the `FileTree` that renders it, and a tab shares state with its `FileTabs`. Rendering one outside its parent throws. Render rows only through `FileTree`, and tabs only through `FileTabs`.

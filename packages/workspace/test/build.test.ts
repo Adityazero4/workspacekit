@@ -12,17 +12,17 @@ const dependenciesOf = (name: string): string[] =>
       {},
   );
 const ENGINES = [
-  ...new Set(RENDERER_PACKAGES.flatMap(dependenciesOf).filter((name) => !name.startsWith('@scope/'))),
+  ...new Set(RENDERER_PACKAGES.flatMap(dependenciesOf).filter((name) => !name.startsWith('@workspacekit/'))),
 ];
 
 test('the entry is one file: every renderer package and engine stays outside it', () => {
   expect(filesReachableFrom(DIST, 'index.js', { throughDynamicImports: true })).toEqual(['index.js']);
 });
 
-test('importing the entry loads only React, @scope/react and the renderer package entries', () => {
+test('importing the entry loads only React, @workspacekit/react and the renderer package entries', () => {
   const { static: staticImports, dynamic } = importsOf(distText('index.js'));
-  const allowed = new Set(['react', 'react/jsx-runtime', 'react/compiler-runtime', '@scope/react']);
-  RENDERER_PACKAGES.forEach((name) => allowed.add(`@scope/${name}`));
+  const allowed = new Set(['react', 'react/jsx-runtime', 'react/compiler-runtime', '@workspacekit/react']);
+  RENDERER_PACKAGES.forEach((name) => allowed.add(`@workspacekit/${name}`));
   expect(staticImports.filter((specifier) => !allowed.has(specifier))).toEqual([]);
   expect(dynamic).toEqual([]);
 });
@@ -36,10 +36,10 @@ test('the entry keeps the use client directive', () => {
   expect(distText('index.js').startsWith("'use client'")).toBe(true);
 });
 
-test('styles.css imports @scope/react first, then every renderer package', () => {
+test('styles.css imports @workspacekit/react first, then every renderer package', () => {
   const imports = [...distText('styles.css').matchAll(/@import '([^']+)'/g)].map((match) => match[1]);
   expect(imports).toEqual([
-    '@scope/react/styles.css',
-    ...RENDERER_PACKAGES.map((name) => `@scope/${name}/styles.css`),
+    '@workspacekit/react/styles.css',
+    ...RENDERER_PACKAGES.map((name) => `@workspacekit/${name}/styles.css`),
   ]);
 });

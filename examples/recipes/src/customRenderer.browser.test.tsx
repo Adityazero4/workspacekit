@@ -1,6 +1,6 @@
-import { createMemoryAdapter } from '@scope/core/memory';
-import { FileSystemProvider, FileViewer, lightRenderers, resolveRenderer } from '@scope/react';
-import '@scope/react/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { FileSystemProvider, FileViewer, lightRenderers, resolveRenderer } from '@workspacekit/react';
+import '@workspacekit/react/styles.css';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { logRenderer } from './customRenderer';

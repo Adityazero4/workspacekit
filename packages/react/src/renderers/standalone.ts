@@ -1,4 +1,5 @@
 'use client';
+import { docsLink } from '@workspacekit/core/docs';
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { ClassNames, Part } from '../parts';
 import { viewerError, type ViewerError } from '../viewer/errors';
@@ -238,7 +239,11 @@ async function mediaUrlOf(
 ): Promise<{ url: string; objectUrl?: string }> {
   if (typeof src === 'string') {
     const safe = safeUrlOrNull(src);
-    if (safe === null) throw new Error(`"${src}" is not an http, https or blob URL; pass one of those`);
+    if (safe === null) {
+      throw new Error(
+        `"${src}" is not an http, https or blob URL. Pass one of those, or a Blob or bytes. See ${docsLink('standalone-renderers', 'props')}`,
+      );
+    }
     return { url: safe };
   }
   const blob = src instanceof Blob ? src : new Blob([ArrayBuffer.isView(src) ? src.slice() : src]);

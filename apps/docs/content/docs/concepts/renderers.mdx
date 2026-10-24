@@ -7,28 +7,28 @@ A renderer decides whether it can show a file, how to load its component, and wh
 
 ## Which viewers ship
 
-| Package              | Files                                           | Entry                   |
-| -------------------- | ----------------------------------------------- | ----------------------- |
-| `@scope/react`       | text, HTML, images, audio, video, TIFF, folders | `lightRenderers`        |
-| `@scope/pdf`         | PDF                                             | `pdfRenderer()`         |
-| `@scope/docx`        | Word                                            | `docxRenderer()`        |
-| `@scope/pptx`        | PowerPoint                                      | `pptxRenderer()`        |
-| `@scope/spreadsheet` | XLSX, CSV, TSV                                  | `spreadsheetRenderer()` |
-| `@scope/markdown`    | Markdown, with `rendered` and `source` modes    | `markdownRenderer()`    |
-| `@scope/code`        | source and config files                         | `codeRenderer()`        |
+| Package                     | Files                                           | Entry                   |
+| --------------------------- | ----------------------------------------------- | ----------------------- |
+| `@workspacekit/react`       | text, HTML, images, audio, video, TIFF, folders | `lightRenderers`        |
+| `@workspacekit/pdf`         | PDF                                             | `pdfRenderer()`         |
+| `@workspacekit/docx`        | Word                                            | `docxRenderer()`        |
+| `@workspacekit/pptx`        | PowerPoint                                      | `pptxRenderer()`        |
+| `@workspacekit/spreadsheet` | XLSX, CSV, TSV                                  | `spreadsheetRenderer()` |
+| `@workspacekit/markdown`    | Markdown, with `rendered` and `source` modes    | `markdownRenderer()`    |
+| `@workspacekit/code`        | source and config files                         | `codeRenderer()`        |
 
-`@scope/workspace` registers all of them. Click through them here:
+`@workspacekit/workspace` registers all of them. Click through them here:
 
 <RendererGallery />
 
 ## Workspace users: allRenderers
 
-With `@scope/workspace`, use `allRenderers()`. It returns every renderer in a fixed order and takes each package's options. Pass the result to `Workspace`.
+With `@workspacekit/workspace`, use `allRenderers()`. It returns every renderer in a fixed order and takes each package's options. Pass the result to `Workspace`.
 
 ```tsx
-import { httpAdapter } from '@scope/core/http';
-import { allRenderers, Workspace } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { allRenderers, Workspace } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 
 const renderers = allRenderers({ pdf: { workerSrc: '/pdfjs/pdf.worker.min.mjs' } });
 
@@ -41,16 +41,16 @@ Each package README lists its options, such as the PDF data files and the code e
 
 To add your own renderer, put it first: `[logRenderer(), ...allRenderers()]`. The renderer with the highest score wins and a tie goes to the earlier one in the list, so yours wins any tie. A [renderer that scores `specific`](#write-a-renderer) also beats the built-in `generic` and `text` ones whatever its position.
 
-## With @scope/react alone
+## With @workspacekit/react alone
 
 Without the preset, choose the packages yourself. Put them before `lightRenderers` so they win ties for their own files. Create the array once, at module level.
 
 ```tsx
-import { httpAdapter } from '@scope/core/http';
-import { lightRenderers, Workspace } from '@scope/react';
-import { pdfRenderer } from '@scope/pdf';
-import '@scope/react/styles.css';
-import '@scope/pdf/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { lightRenderers, Workspace } from '@workspacekit/react';
+import { pdfRenderer } from '@workspacekit/pdf';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/pdf/styles.css';
 
 const adapter = httpAdapter('/api/files');
 const renderers = [pdfRenderer(), ...lightRenderers];
@@ -76,12 +76,12 @@ Files without an extension, such as `Makefile` and `.env`, match by `basename`.
 
 ## Write a renderer
 
-Renderer authors import `defineRenderer` and `MATCH_SCORE` from `@scope/react/renderer-kit`. `input` says what the component is given: `url`, `blob`, `arrayBuffer`, `text` or nothing. `maxBytes` makes a larger file show "too large" with a download instead of being read.
+Renderer authors import `defineRenderer` and `MATCH_SCORE` from `@workspacekit/react/renderer-kit`. `input` says what the component is given: `url`, `blob`, `arrayBuffer`, `text` or nothing. `maxBytes` makes a larger file show "too large" with a download instead of being read.
 
 ```tsx
-import { createMemoryAdapter } from '@scope/core/memory';
-import { lightRenderers, Workspace } from '@scope/react';
-import { defineRenderer, MATCH_SCORE, type RendererProps } from '@scope/react/renderer-kit';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { lightRenderers, Workspace } from '@workspacekit/react';
+import { defineRenderer, MATCH_SCORE, type RendererProps } from '@workspacekit/react/renderer-kit';
 
 function Plain({ source }: RendererProps): React.JSX.Element {
   return <pre>{source.kind === 'text' ? source.text : ''}</pre>;

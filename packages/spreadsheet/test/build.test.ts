@@ -42,9 +42,9 @@ test('the main-thread viewer chunk never imports the reader engines: they run on
   );
 });
 
-test('@scope/react/renderer-kit stays external: imported by specifier, none of its modules bundled', () => {
+test('@workspacekit/react/renderer-kit stays external: imported by specifier, none of its modules bundled', () => {
   const files = filesReachableFrom(DIST, 'index.js', { throughDynamicImports: true });
-  expect(importsOf(distText('index.js')).static).toContain('@scope/react/renderer-kit');
+  expect(importsOf(distText('index.js')).static).toContain('@workspacekit/react/renderer-kit');
   const bundledModules = files.flatMap((file) => modulesIn(distText(file)));
   expect(bundledModules.filter((module) => !module.startsWith('src/'))).toEqual([]);
 });

@@ -6,19 +6,20 @@
     "types": ["node"],
     "skipLibCheck": true,
     "paths": {
-      "@scope/code": ["../code/src/index.ts"],
-      "@scope/core": ["../core/src/index.ts"],
-      "@scope/core/http": ["../core/src/http/index.ts"],
-      "@scope/core/memory": ["../core/src/memory/index.ts"],
-      "@scope/docx": ["../docx/src/index.ts"],
-      "@scope/markdown": ["../markdown/src/index.ts"],
-      "@scope/pdf": ["../pdf/src/index.ts"],
-      "@scope/pptx": ["../pptx/src/index.ts"],
-      "@scope/react": ["../react/src/index.ts"],
-      "@scope/react/renderers": ["../react/src/renderers/index.ts"],
-      "@scope/react/renderer-kit": ["../react/src/renderer-kit/index.ts"],
-      "@scope/spreadsheet": ["../spreadsheet/src/index.ts"],
-      "@scope/workspace": ["./src/index.ts"]
+      "@workspacekit/code": ["../code/src/index.ts"],
+      "@workspacekit/core": ["../core/src/index.ts"],
+      "@workspacekit/core/http": ["../core/src/http/index.ts"],
+      "@workspacekit/core/docs": ["../core/src/docs/index.ts"],
+      "@workspacekit/core/memory": ["../core/src/memory/index.ts"],
+      "@workspacekit/docx": ["../docx/src/index.ts"],
+      "@workspacekit/markdown": ["../markdown/src/index.ts"],
+      "@workspacekit/pdf": ["../pdf/src/index.ts"],
+      "@workspacekit/pptx": ["../pptx/src/index.ts"],
+      "@workspacekit/react": ["../react/src/index.ts"],
+      "@workspacekit/react/renderers": ["../react/src/renderers/index.ts"],
+      "@workspacekit/react/renderer-kit": ["../react/src/renderer-kit/index.ts"],
+      "@workspacekit/spreadsheet": ["../spreadsheet/src/index.ts"],
+      "@workspacekit/workspace": ["./src/index.ts"]
     }
   },
   "include": ["src", "../spreadsheet/src/reader/fast-formula-parser.d.ts"]

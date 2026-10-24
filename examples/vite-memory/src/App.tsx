@@ -1,8 +1,8 @@
-import { createMemoryAdapter } from '@scope/core/memory';
-import type { FileSystemAdapter } from '@scope/core';
-import { sampleFiles, simulateAgent } from '@scope/demo-kit';
-import { Workspace } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import type { FileSystemAdapter } from '@workspacekit/core';
+import { sampleFiles, simulateAgent } from '@workspacekit/demo-kit';
+import { Workspace } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 import { useEffect, useState } from 'react';
 import './app.css';
 import { fileSystemAccessAdapter } from './fileSystemAccessAdapter';

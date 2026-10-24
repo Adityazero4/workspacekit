@@ -1,5 +1,5 @@
-import { statusOf, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import { statusOf, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { EditorView } from '@codemirror/view';
 import {
   FileSystemProvider,
@@ -7,8 +7,8 @@ import {
   lightRenderers,
   useFileSystem,
   type FileSystemContext,
-} from '@scope/react';
-import '@scope/react/styles.css';
+} from '@workspacekit/react';
+import '@workspacekit/react/styles.css';
 import { useEffect } from 'react';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';

@@ -1,5 +1,5 @@
 'use client';
-import type { Entry, VisibleRow, VisibleRowIndex } from '@scope/core';
+import type { Entry, VisibleRow, VisibleRowIndex } from '@workspacekit/core';
 import type { MenuAnchor } from '../components';
 import { partProps } from '../cx';
 import type { TreeDragHandlers } from '../dnd/useTreeDnd';

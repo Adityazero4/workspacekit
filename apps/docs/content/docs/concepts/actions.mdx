@@ -18,9 +18,9 @@ Built-in actions follow the adapter's capabilities, so a read-only adapter shows
 An action is data: an `id`, a `label`, optionally an `icon`, a `group`, a `shortcut` and a `when(entry, context)` that decides whether it appears, and a `run(entry, context)`. The context gives you the file system, the tree and helpers such as `confirm`.
 
 ```tsx
-import { createMemoryAdapter } from '@scope/core/memory';
-import { Workspace, type Action } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { Workspace, type Action } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 
 const adapter = createMemoryAdapter({ files: { 'README.md': '# Hello' } });
 

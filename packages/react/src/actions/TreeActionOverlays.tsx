@@ -1,5 +1,5 @@
 'use client';
-import { joinPath, toFsError, type Entry, type EntryKind } from '@scope/core';
+import { joinPath, toFsError, type Entry, type EntryKind } from '@workspacekit/core';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { Components } from '../components';
 import { ConfirmDialog } from '../dialogs/ConfirmDialog';

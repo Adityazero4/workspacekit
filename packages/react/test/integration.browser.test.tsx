@@ -1,5 +1,5 @@
-import { FsError, type DropEntry, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import { FsError, type DropEntry, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import { afterEach, expect, test, vi } from 'vitest';
 import { commands } from 'vitest/browser';
 import { render } from 'vitest-browser-react';

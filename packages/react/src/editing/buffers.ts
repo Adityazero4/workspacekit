@@ -8,7 +8,7 @@ import {
   remapPrefix,
   uniqueName,
   type Entry,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { isBeingMoved } from '../tabs/followTree';
 import { isDeletedFromTree, openTab, setTabDirty } from '../tabs/tabs-store';
 import { createAutosaver, hasUnsavedEdits } from './autosaver';

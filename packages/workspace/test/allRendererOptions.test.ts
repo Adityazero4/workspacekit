@@ -1,39 +1,39 @@
-import { codeRenderer } from '@scope/code';
-import { docxRenderer } from '@scope/docx';
-import { markdownRenderer } from '@scope/markdown';
-import { pdfRenderer } from '@scope/pdf';
-import { pptxRenderer } from '@scope/pptx';
-import { spreadsheetRenderer } from '@scope/spreadsheet';
-import type * as CodePackage from '@scope/code';
-import type * as DocxPackage from '@scope/docx';
-import type * as MarkdownPackage from '@scope/markdown';
-import type * as PdfPackage from '@scope/pdf';
-import type * as PptxPackage from '@scope/pptx';
-import type * as SpreadsheetPackage from '@scope/spreadsheet';
+import { codeRenderer } from '@workspacekit/code';
+import { docxRenderer } from '@workspacekit/docx';
+import { markdownRenderer } from '@workspacekit/markdown';
+import { pdfRenderer } from '@workspacekit/pdf';
+import { pptxRenderer } from '@workspacekit/pptx';
+import { spreadsheetRenderer } from '@workspacekit/spreadsheet';
+import type * as CodePackage from '@workspacekit/code';
+import type * as DocxPackage from '@workspacekit/docx';
+import type * as MarkdownPackage from '@workspacekit/markdown';
+import type * as PdfPackage from '@workspacekit/pdf';
+import type * as PptxPackage from '@workspacekit/pptx';
+import type * as SpreadsheetPackage from '@workspacekit/spreadsheet';
 import { expect, test, vi } from 'vitest';
 import { allRenderers, type AllRenderersOptions } from '../src';
 
-vi.mock('@scope/code', async (importOriginal) => {
+vi.mock('@workspacekit/code', async (importOriginal) => {
   const original = await importOriginal<typeof CodePackage>();
   return { ...original, codeRenderer: vi.fn(original.codeRenderer) };
 });
-vi.mock('@scope/docx', async (importOriginal) => {
+vi.mock('@workspacekit/docx', async (importOriginal) => {
   const original = await importOriginal<typeof DocxPackage>();
   return { ...original, docxRenderer: vi.fn(original.docxRenderer) };
 });
-vi.mock('@scope/markdown', async (importOriginal) => {
+vi.mock('@workspacekit/markdown', async (importOriginal) => {
   const original = await importOriginal<typeof MarkdownPackage>();
   return { ...original, markdownRenderer: vi.fn(original.markdownRenderer) };
 });
-vi.mock('@scope/pdf', async (importOriginal) => {
+vi.mock('@workspacekit/pdf', async (importOriginal) => {
   const original = await importOriginal<typeof PdfPackage>();
   return { ...original, pdfRenderer: vi.fn(original.pdfRenderer) };
 });
-vi.mock('@scope/pptx', async (importOriginal) => {
+vi.mock('@workspacekit/pptx', async (importOriginal) => {
   const original = await importOriginal<typeof PptxPackage>();
   return { ...original, pptxRenderer: vi.fn(original.pptxRenderer) };
 });
-vi.mock('@scope/spreadsheet', async (importOriginal) => {
+vi.mock('@workspacekit/spreadsheet', async (importOriginal) => {
   const original = await importOriginal<typeof SpreadsheetPackage>();
   return { ...original, spreadsheetRenderer: vi.fn(original.spreadsheetRenderer) };
 });

@@ -1,27 +1,27 @@
-# @scope/workspace
+# @workspacekit/workspace
 
-> The one-install preset: `Workspace` with every renderer, plus the whole `@scope/react` API.
+> The one-install preset: `Workspace` with every renderer, plus the whole `@workspacekit/react` API.
 
-- API reference: https://docs.example.invalid/api/workspace
-- Install: `npm install @scope/workspace @scope/core react react-dom`
+- API reference: https://adityazero4.github.io/workspacekit/api/workspace
+- Install: `npm install @workspacekit/workspace @workspacekit/core react react-dom`
 
 ## README sections
 
 - Install
 - Entry
 - Standalone use: To show one file without the tree, put `FileViewer` inside a `FileSystemProvider` and give it `allRenderers()`.
-- CSS: Import `@scope/workspace/styles.css` once.
-- Why `@scope/react` is a dependency: `@scope/react` is a dependency here, not a peer.
+- CSS: Import `@workspacekit/workspace/styles.css` once.
+- Why `@workspacekit/react` is a dependency: `@workspacekit/react` is a dependency here, not a peer.
 - Renderer options: `Workspace` uses `allRenderers()`.
 - Vite: Vite 7 and 8 are supported.
 - pdf.js data files: Without them, JPX and JBIG2 images are missing and PDFs that do not embed their CJK or standard fonts draw with fallback glyphs.
 
 ## Entry points
 
-- `@scope/workspace`
-- `@scope/workspace/styles.css` (stylesheet)
+- `@workspacekit/workspace`
+- `@workspacekit/workspace/styles.css` (stylesheet)
 
-## Exports of `@scope/workspace`
+## Exports of `@workspacekit/workspace`
 
 - `Action`: One command on an entry, rendered in the context menu, the row's "More actions" button and as a keyboard shortcut.
 - `ActionContext`: What an action's `when` and `run` receive besides the entry.
@@ -105,7 +105,7 @@
 - `VirtualPages`: A vertically scrolling, virtualized stack of pages (a multi-page TIFF, a PDF), centred horizontally and scrolling sideways when a zoomed page is wider than the viewport.
 - `VirtualPagesHandle`: What a `ref` on `VirtualPages` can do.
 - `VirtualPagesProps`: Props of `VirtualPages`.
-- `Workspace`: `@scope/react`'s `Workspace` with every renderer installed: `renderers` defaults to `allRenderers()`, and a `renderers` you pass still wins.
+- `Workspace`: `@workspacekit/react`'s `Workspace` with every renderer installed: `renderers` defaults to `allRenderers()`, and a `renderers` you pass still wins.
 - `WorkspaceController`: What `useWorkspace` returns: calls that drive the workspace from anywhere under its provider.
 - `WorkspaceProps`: Props of `Workspace`: the provider's props plus the shell's.
 - `activateTab`: Activates the open tab at `path`; unknown paths change nothing.

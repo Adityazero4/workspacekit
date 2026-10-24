@@ -5,7 +5,7 @@ import {
   useStandaloneBytes,
   type StandaloneViewerProps,
   type ViewerError,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { lazy, Suspense, useState } from 'react';
 import type { PptxClassNames, PptxPart } from './parts';
 import { PPTX_MAX_BYTES, type PptxRendererOptions } from './pptxRenderer';

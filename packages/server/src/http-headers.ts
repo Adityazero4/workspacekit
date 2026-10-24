@@ -1,4 +1,4 @@
-import { extname } from '@scope/core';
+import { extname } from '@workspacekit/core';
 
 const PLAIN_TEXT = 'text/plain; charset=utf-8';
 const OCTET_STREAM = 'application/octet-stream';

@@ -1,4 +1,9 @@
-import { defineRenderer, MATCH_SCORE, type Renderer, type RendererProps } from '@scope/react/renderer-kit';
+import {
+  defineRenderer,
+  MATCH_SCORE,
+  type Renderer,
+  type RendererProps,
+} from '@workspacekit/react/renderer-kit';
 import { createElement } from 'react';
 import type { TemplateClassNames } from './parts';
 
@@ -8,7 +13,7 @@ export type { TemplateClassNames, TemplatePart } from './parts';
 
 /**
  * Options of `templateRenderer`. `classNames` adds classes to this package's parts; the viewer's own
- * `classNames` only know `@scope/react` parts.
+ * `classNames` only know `@workspacekit/react` parts.
  *
  * @example
  * ```ts

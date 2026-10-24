@@ -2,49 +2,31 @@
   {
     "spec": "@aiden0z/pptx-renderer@1.4.0",
     "kind": "release-age",
-    "reason": "Direct dependency of @scope/pptx; reviewed and tested at this version, published 2026-10-18.",
+    "reason": "Direct dependency of @workspacekit/pptx; reviewed and tested at this version, published 2026-10-18.",
     "expires": "2026-10-25"
-  },
-  {
-    "spec": "@asamuzakjp/css-color@7.1.7",
-    "kind": "release-age",
-    "reason": "Transitive of the jsdom test stack; locked version published 2026-10-17.",
-    "expires": "2026-10-24"
-  },
-  {
-    "spec": "@asamuzakjp/dom-selector@10.0.4",
-    "kind": "release-age",
-    "reason": "Transitive of the jsdom test stack; locked version published 2026-10-17.",
-    "expires": "2026-10-24"
   },
   {
     "spec": "@codemirror/autocomplete@6.20.4",
     "kind": "release-age",
-    "reason": "Transitive of the CodeMirror editor in @scope/code; published 2026-10-19.",
+    "reason": "Transitive of the CodeMirror editor in @workspacekit/code; published 2026-10-19.",
     "expires": "2026-10-26"
   },
   {
     "spec": "@codemirror/view@6.43.15",
     "kind": "release-age",
-    "reason": "Direct dependency of @scope/code; reviewed and tested at this version, published 2026-10-19.",
+    "reason": "Direct dependency of @workspacekit/code; reviewed and tested at this version, published 2026-10-19.",
     "expires": "2026-10-26"
   },
   {
     "spec": "@lezer/markdown@1.8.1",
     "kind": "release-age",
-    "reason": "Transitive of the CodeMirror editor in @scope/code; published 2026-10-19.",
+    "reason": "Transitive of the CodeMirror editor in @workspacekit/code; published 2026-10-19.",
     "expires": "2026-10-26"
-  },
-  {
-    "spec": "electron-to-chromium@1.5.459",
-    "kind": "release-age",
-    "reason": "Transitive browserslist data; locked version published 2026-10-17.",
-    "expires": "2026-10-24"
   },
   {
     "spec": "numfmt@4.1.0",
     "kind": "release-age",
-    "reason": "Direct dependency of @scope/spreadsheet; reviewed and tested at this version, published 2026-10-20.",
+    "reason": "Direct dependency of @workspacekit/spreadsheet; reviewed and tested at this version, published 2026-10-20.",
     "expires": "2026-10-27"
   },
   {

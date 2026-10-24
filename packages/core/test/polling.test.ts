@@ -169,6 +169,49 @@ test('paused while hidden; one poll on resume', async () => {
   expect(stopResumeSignal).toHaveBeenCalledOnce();
 });
 
+function resumable(results: Array<'fail' | 'succeed'>) {
+  const recorder = listRecorder(results);
+  const startedAt = Date.now();
+  let resume: () => void = () => undefined;
+  const { stop } = watchPolled(recorder.adapter, {
+    paths: () => [''],
+    resumeSignal: (poll) => {
+      resume = poll;
+      return () => undefined;
+    },
+  });
+  const listedSinceStart = (): number[] => recorder.listedAt.map((at) => at - startedAt);
+  return { listedSinceStart, resume: () => resume(), stop };
+}
+
+test('a resume signal sooner than the interval after the last round waits out the rest of it', async () => {
+  const { listedSinceStart, resume, stop } = resumable([]);
+  await vi.advanceTimersByTimeAsync(3000);
+  await vi.advanceTimersByTimeAsync(1000);
+  resume();
+  resume();
+  await vi.advanceTimersByTimeAsync(1999);
+  expect(listedSinceStart(), 'no round before the interval is up').toEqual([3000]);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(listedSinceStart()).toEqual([3000, 6000]);
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(listedSinceStart(), 'then at the normal interval').toEqual([3000, 6000, 9000]);
+  stop();
+});
+
+test('after failures, a resume signal waits out the rest of the backoff', async () => {
+  const { listedSinceStart, resume, stop } = resumable(['fail', 'fail']);
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(listedSinceStart(), 'the second round came 6 s after the first').toEqual([3000, 9000]);
+  await vi.advanceTimersByTimeAsync(1000);
+  resume();
+  await vi.advanceTimersByTimeAsync(10_999);
+  expect(listedSinceStart(), 'nothing before the 12 s backoff is up').toEqual([3000, 9000]);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(listedSinceStart()).toEqual([3000, 9000, 21_000]);
+  stop();
+});
+
 test('unsubscribe stops all timers', async () => {
   let release!: () => void;
   let signal: AbortSignal | undefined;
@@ -212,6 +255,19 @@ test('polls at most maxFoldersPerRound distinct folders, in the order given', as
   });
   await vi.advanceTimersByTimeAsync(100);
   expect(listed).toEqual(['b', 'a', 'c']);
+  stop();
+});
+
+test('a frozen adapter can be wrapped, listed and watched', async () => {
+  const { memory, withoutWatch } = memoryWithoutWatch({ 'a.txt': 'a' });
+  const polled = withPolling(Object.freeze(withoutWatch), { paths: () => [''] });
+  const batches: ChangeEvent[][] = [];
+  const stop = polled.watch!((events) => batches.push(events));
+  expect('watch' in polled).toBe(true);
+  expect((await polled.list('', { depth: 1 })).map((entry) => entry.path)).toEqual(['a.txt']);
+  await memory.write!('b.txt', 'b');
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(batches.map(byTypeAndPath)).toEqual([['created b.txt']]);
   stop();
 });
 
@@ -345,6 +401,18 @@ test("the user's own change after the app's own listing and before the first pol
   await memory.write!('dir/agent.txt', 'an agent edit');
   await vi.advanceTimersByTimeAsync(3000);
   expect(batches.map(byTypeAndPath)).toEqual([['created dir/agent.txt']]);
+  stop();
+});
+
+test("the app's own listing seeds a subscription that polls the folder through pollPaths", async () => {
+  const { memory, withoutWatch } = memoryWithoutWatch({ 'dir/c.txt': 'c' });
+  const polled = withPolling(withoutWatch, { paths: () => [''] });
+  const batches: ChangeEvent[][] = [];
+  const stop = polled.watch!((events) => batches.push(events), { pollPaths: () => ['dir'] });
+  await polled.list('dir', { depth: 1 });
+  await memory.write!('dir/c.txt', 'an agent edit');
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(batches.map(byTypeAndPath)).toEqual([['updated dir/c.txt']]);
   stop();
 });
 

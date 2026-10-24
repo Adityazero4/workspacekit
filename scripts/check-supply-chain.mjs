@@ -54,6 +54,8 @@ const FORBIDDEN_MANIFEST_FIELDS = ['overrides', 'resolutions', 'pnpm'];
 const PNPMFILES = ['.pnpmfile.mjs', '.pnpmfile.cjs'];
 const CODEOWNER_PROTECTED_PATHS = [
   '.github/workflows/security.yml',
+  '.github/workflows/ci.yml',
+  '.github/workflows/pages.yml',
   '.github/CODEOWNERS',
   '.github/dependabot.yml',
   'scripts/check-supply-chain.mjs',
@@ -422,7 +424,15 @@ const ALLOWED_ACTIONS = [
   'actions/setup-node',
   'pnpm/action-setup',
   'actions/dependency-review-action',
+  'actions/upload-pages-artifact',
+  'actions/deploy-pages',
 ];
+const PAGES_WRITE_SCOPES = ['pages', 'id-token'];
+const UNTRUSTED_TRIGGERS = ['pull_request', 'pull_request_target'];
+const DISPATCH_TRIGGERS = ['workflow_dispatch', 'repository_dispatch'];
+const MAIN_BRANCH_PIN = "github.ref == 'refs/heads/main'";
+const WORKFLOW_FILE = /\.ya?ml$/;
+const REQUIRED_WORKFLOWS = ['security.yml', 'ci.yml', 'pages.yml'];
 const PINNED_ACTION = /^([\w.-]+\/[\w.-]+)@[0-9a-f]{40}$/;
 
 const envOf = (holder) => (isPlainObject(holder?.env) ? holder.env : {});
@@ -446,7 +456,28 @@ function stepProblems(jobName, step, index, inherited) {
   return [...stray, ...unhardened, ...unpinned];
 }
 
-function jobProblems(name, job, workflowEnv) {
+const triggersOf = (workflow) => {
+  const on = workflow?.on;
+  if (typeof on === 'string') return [on];
+  if (Array.isArray(on)) return on;
+  return isPlainObject(on) ? Object.keys(on) : [];
+};
+
+function permissionProblems(where, permissions, untrustedTriggers) {
+  if (permissions === 'write-all') return [`${where} permissions write-all is not allowed`];
+  if (!isPlainObject(permissions)) return [];
+  return Object.entries(permissions)
+    .filter(([, level]) => level === 'write')
+    .flatMap(([scope]) => {
+      if (!PAGES_WRITE_SCOPES.includes(scope)) return [`${where} permissions ${scope}: write is not allowed`];
+      return untrustedTriggers.map(
+        (trigger) =>
+          `${where} permissions ${scope}: write is not allowed in a workflow triggered by ${trigger}`,
+      );
+    });
+}
+
+function jobProblems(name, job, workflowEnv, untrustedTriggers) {
   if (typeof job?.uses === 'string') {
     return [`workflow job ${name} calls the reusable workflow ${job.uses}, which this check cannot read`];
   }
@@ -455,7 +486,31 @@ function jobProblems(name, job, workflowEnv) {
     .filter((key) => PNPM_CONFIG_ENV.test(key) && !Object.hasOwn(PNPM_HARDENING_ENV, key))
     .map((key) => `workflow job ${name} env sets ${key}, which is not on the allow-list`);
   const steps = Array.isArray(job?.steps) ? job.steps : [];
-  return [...stray, ...steps.flatMap((step, index) => stepProblems(name, step, index, inherited))];
+  return [
+    ...permissionProblems(`workflow job ${name}`, job?.permissions, untrustedTriggers),
+    ...stray,
+    ...steps.flatMap((step, index) => stepProblems(name, step, index, inherited)),
+  ];
+}
+
+const pagesWriteScopesOf = (permissions) =>
+  isPlainObject(permissions) ? PAGES_WRITE_SCOPES.filter((scope) => permissions[scope] === 'write') : [];
+
+function pinsMainBranch(condition) {
+  if (typeof condition !== 'string') return false;
+  const expression = condition.trim().replace(/^\$\{\{([\s\S]*)\}\}$/, '$1');
+  if (expression.includes('||')) return false;
+  return expression.split('&&').some((part) => part.trim() === MAIN_BRANCH_PIN);
+}
+
+function dispatchProblems(name, job, workflowPermissions, dispatchTriggers) {
+  if (dispatchTriggers.length === 0) return [];
+  const held = pagesWriteScopesOf(job?.permissions === undefined ? workflowPermissions : job.permissions);
+  if (held.length === 0 || pinsMainBranch(job?.if)) return [];
+  const scopes = held.map((scope) => `${scope}: write`).join(' and ');
+  return [
+    `workflow job ${name} holds ${scopes} in a workflow that ${dispatchTriggers.join(' or ')} can trigger, so it needs if: ${MAIN_BRANCH_PIN}`,
+  ];
 }
 
 /**
@@ -463,8 +518,11 @@ function jobProblems(name, job, workflowEnv) {
  * run code this check does not know. For each step that runs `pnpm`, the effective env (workflow, then job,
  * then step) must hold both hardening variables (`--ignore-pnpmfile` is rejected by `pnpm run` and
  * `pnpm config`, so env is the only way). Any other `pnpm_config_*` or `npm_config_*` key in an env, any job
- * that calls a reusable workflow, and any `uses:` step that is not one of the four allowed actions pinned
- * to a full 40-hex commit SHA is a problem.
+ * that calls a reusable workflow, and any `uses:` step that is not one of the allowed actions pinned to a
+ * full 40-hex commit SHA is a problem. So is any `write` permission (or `write-all`) except `pages` and
+ * `id-token`, and those two in a workflow that a `pull_request` or `pull_request_target` can trigger. A job
+ * holding either of them in a workflow that `workflow_dispatch` or `repository_dispatch` can trigger must
+ * have an `if:` that requires `github.ref == 'refs/heads/main'`, alone or joined with `&&`.
  *
  * @example
  * workflowProblems('jobs:\n  a:\n    steps:\n      - run: pnpm audit\n');
@@ -477,10 +535,40 @@ export function workflowProblems(text) {
   const stray = Object.keys(workflowEnv)
     .filter((key) => PNPM_CONFIG_ENV.test(key) && !Object.hasOwn(PNPM_HARDENING_ENV, key))
     .map((key) => `workflow env sets ${key}, which is not on the allow-list`);
+  const untrustedTriggers = triggersOf(workflow).filter((trigger) => UNTRUSTED_TRIGGERS.includes(trigger));
+  const dispatchTriggers = triggersOf(workflow).filter((trigger) => DISPATCH_TRIGGERS.includes(trigger));
   return [
+    ...permissionProblems('workflow', workflow.permissions, untrustedTriggers),
     ...stray,
-    ...Object.entries(workflow.jobs).flatMap(([name, job]) => jobProblems(name, job, workflowEnv)),
+    ...Object.entries(workflow.jobs).flatMap(([name, job]) => [
+      ...jobProblems(name, job, workflowEnv, untrustedTriggers),
+      ...dispatchProblems(name, job, workflow.permissions, dispatchTriggers),
+    ]),
   ];
+}
+
+/**
+ * `workflowProblems` for every `.yml` and `.yaml` file in `directory` (a URL ending in `/`), each problem
+ * prefixed with its file name, so a new workflow is checked the moment it is added. Each of `required`
+ * (by default `security.yml`, `ci.yml` and `pages.yml`) that is absent is a problem too, so deleting a
+ * workflow cannot make the check pass.
+ *
+ * @example
+ * allWorkflowProblems(new URL('.github/workflows/', ROOT)); // []
+ */
+export function allWorkflowProblems(directory, { required = REQUIRED_WORKFLOWS } = {}) {
+  const names = readdirSync(directory).filter((name) => WORKFLOW_FILE.test(name));
+  const missing = required
+    .filter((name) => !names.includes(name))
+    .map((name) => `.github/workflows/${name} is missing`);
+  const perFile = names
+    .sort()
+    .flatMap((name) =>
+      workflowProblems(readFileSync(new URL(name, directory), 'utf8')).map(
+        (problem) => `${name}: ${problem}`,
+      ),
+    );
+  return [...missing, ...perFile];
 }
 
 /**
@@ -696,7 +784,7 @@ export function collectProblems(today, readEffective, { release = false } = {}) 
     ...pnpmfileProblems(workspace.dirs, (file) => existsSync(new URL(file, ROOT))),
     ...codeownersProblems(codeowners),
     ...(release ? placeholderOwnerProblems(codeowners) : []),
-    ...workflowProblems(read('.github/workflows/security.yml')),
+    ...allWorkflowProblems(new URL('.github/workflows/', ROOT)),
     ...unexpectedWorkspaceKeys(settings),
     ...settingProblems(settings),
     ...effectiveProblems(settings, readEffective()),

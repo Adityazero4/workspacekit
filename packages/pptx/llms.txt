@@ -1,25 +1,25 @@
-# @scope/pptx
+# @workspacekit/pptx
 
 > A PowerPoint renderer for the file workspace: .pptx slides in a virtualized list, each drawn in its own shadow root.
 
-- API reference: https://docs.example.invalid/api/pptx
-- Install: `npm install @scope/pptx @scope/react react react-dom`
+- API reference: https://adityazero4.github.io/workspacekit/api/pptx
+- Install: `npm install @workspacekit/pptx @workspacekit/react react react-dom`
 
 ## README sections
 
 - Install
 - Entry: `pptxRenderer()` returns a renderer.
 - Standalone use: `PptxViewer` shows one file without a tree or a provider.
-- CSS: Import `@scope/react/styles.css` and `@scope/pptx/styles.css` once each.
+- CSS: Import `@workspacekit/react/styles.css` and `@workspacekit/pptx/styles.css` once each.
 - Options: `externalMedia`: `'block'` (default) or `'allow'`.
 - Vite: No configuration is needed in a build or in the dev server.
 
 ## Entry points
 
-- `@scope/pptx`
-- `@scope/pptx/styles.css` (stylesheet)
+- `@workspacekit/pptx`
+- `@workspacekit/pptx/styles.css` (stylesheet)
 
-## Exports of `@scope/pptx`
+## Exports of `@workspacekit/pptx`
 
 - `PPTX_MAX_BYTES`: The largest `.pptx` the renderer and the standalone `PptxViewer` open: 200 MiB.
 - `PPTX_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `pptx-` prefix.

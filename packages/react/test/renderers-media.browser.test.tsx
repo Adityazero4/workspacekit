@@ -1,5 +1,5 @@
-import type { Entry, FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import type { Entry, FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import axe from 'axe-core';
 import type { ReactNode } from 'react';
 import { afterEach, expect, onTestFinished, test, vi } from 'vitest';

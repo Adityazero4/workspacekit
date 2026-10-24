@@ -1,5 +1,5 @@
-import type { FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import type { FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { afterEach, expect, test } from 'vitest';
 import { commands, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';

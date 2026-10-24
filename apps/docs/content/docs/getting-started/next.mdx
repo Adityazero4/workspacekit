@@ -12,10 +12,10 @@ Start from `create-next-app`, which sets up TypeScript, the React and Node types
 ```sh
 npx create-next-app@latest my-files --ts --app
 cd my-files
-npm install @scope/workspace @scope/core @scope/server
+npm install @workspacekit/workspace @workspacekit/core @workspacekit/server
 ```
 
-`@scope/workspace` is the preset: `Workspace` with every renderer. `@scope/core` provides `httpAdapter`, which the page imports. `@scope/server` is the request handler.
+`@workspacekit/workspace` is the preset: `Workspace` with every renderer. `@workspacekit/core` provides `httpAdapter`, which the page imports. `@workspacekit/server` is the request handler.
 
 ## Serve a directory
 
@@ -23,7 +23,7 @@ npm install @scope/workspace @scope/core @scope/server
 
 ```ts
 // app/api/files/[...path]/route.ts — Next.js; any Fetch-API server works the same way
-import { createFileHandler, nodeFsStore } from '@scope/server';
+import { createFileHandler, nodeFsStore } from '@workspacekit/server';
 
 const handler = createFileHandler({
   store: nodeFsStore(process.env.AGENT_WORKSPACE_DIR!),
@@ -56,9 +56,9 @@ If you set `AGENT_WORKSPACE_TOKEN`, that secret is required instead and is never
 ```tsx
 // page.tsx
 'use client';
-import { Workspace } from '@scope/workspace';
-import { httpAdapter } from '@scope/core/http';
-import '@scope/workspace/styles.css';
+import { Workspace } from '@workspacekit/workspace';
+import { httpAdapter } from '@workspacekit/core/http';
+import '@workspacekit/workspace/styles.css';
 
 export default function Files() {
   return <Workspace adapter={httpAdapter('/api/files')} />;
@@ -72,7 +72,7 @@ export default function Files() {
 ## Check these first
 
 - Put `'use client'` at the top of the file that renders `Workspace`.
-- Import `@scope/workspace/styles.css` once. Without it the components render unstyled.
+- Import `@workspacekit/workspace/styles.css` once. Without it the components render unstyled.
 - Create the adapter once, at module scope. A new adapter identity starts a new session.
 - Decide who may list and watch the whole tree: see [policy](/docs/concepts/policy).
 

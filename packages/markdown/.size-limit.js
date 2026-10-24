@@ -1,7 +1,7 @@
 const peersAndEnginesMeasuredElsewhere = [
   'react',
   'react-dom',
-  '@scope/react',
+  '@workspacekit/react',
   'lexical',
   '@lexical/code-core',
   '@lexical/extension',
@@ -18,7 +18,7 @@ const peersAndEnginesMeasuredElsewhere = [
 
 export default [
   {
-    name: '@scope/markdown: all of our own code, entry and lazy chunk, Lexical external',
+    name: '@workspacekit/markdown: all of our own code, entry and lazy chunk, Lexical external',
     path: 'dist/*.js',
     limit: '30 KB',
     gzip: true,

@@ -1,5 +1,5 @@
 'use client';
-import { entryAt } from '@scope/core';
+import { entryAt } from '@workspacekit/core';
 import { useEffect } from 'react';
 import { useFileSystem, type FileSystemContext } from '../provider/hooks';
 import { useFileSystemInternals, type FileSystemInternals } from '../provider/internals';

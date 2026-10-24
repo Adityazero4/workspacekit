@@ -1,4 +1,5 @@
 import {
+  appendFile,
   chmod,
   lstat,
   mkdir,
@@ -14,7 +15,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isFsError, type FsErrorKind } from '@scope/core';
+import { isFsError, type FsErrorKind } from '@workspacekit/core';
 import { nodeFsStore, type FileStore } from '../src';
 
 let base: string;
@@ -101,6 +102,24 @@ describe('visibility', () => {
     await writeFile(path.join(root, '.keep.tmp'), 'user file');
     expect((await store.list('', 1)).map((e) => e.path)).toEqual(['.keep.tmp']);
   });
+
+  it('refuses requests for names shaped like its temp files, so none can be stashed out of sight', async () => {
+    await store.write('dir/innocent.txt', enc.encode('i'));
+    expect(await kindOf(store.write('dir/.notes.0123456789ab.tmp', enc.encode('x')))).toBe('not_found');
+    expect(await kindOf(store.create('dir/.notes.0123456789ab.tmp', 'file'))).toBe('not_found');
+    await writeFile(path.join(root, 'dir', '.agent.0123456789ab.tmp'), 'stashed');
+    expect(await kindOf(store.read('dir/.agent.0123456789ab.tmp'))).toBe('not_found');
+    expect(await store.stat('dir/.agent.0123456789ab.tmp')).toBeNull();
+  });
+
+  it('leaves out names the API cannot address, such as ones with a backslash', async () => {
+    await mkdir(path.join(root, 'out', '..\\..\\Startup'), { recursive: true });
+    await writeFile(path.join(root, 'out', '..\\evil.bat'), 'x');
+    await writeFile(path.join(root, 'out', 'ok.txt'), 'ok');
+    expect((await store.list('out', 3)).map((e) => e.path)).toEqual(['out/ok.txt']);
+    expect(await store.search!('evil', 10)).toEqual([]);
+    expect(await store.search!('Startup', 10)).toEqual([]);
+  });
 });
 
 describe('write', () => {
@@ -186,6 +205,15 @@ describe('read', () => {
     expect(await kindOf(store.read('dir'))).toBe('invalid');
     await store.write('empty', enc.encode(''));
     expect(await slurp((await store.read('empty')).body)).toBe('');
+  });
+
+  it('sizes the body from the opened file, so bytes appended later never exceed it', async () => {
+    const oneMiB = 1024 * 1024;
+    await store.write('log.txt', new Uint8Array(oneMiB));
+    const opened = await store.read('log.txt');
+    await appendFile(path.join(root, 'log.txt'), 'APPENDED-AFTER-OPEN');
+    expect(opened.size).toBe(oneMiB);
+    expect((await new Response(opened.body).arrayBuffer()).byteLength).toBe(oneMiB);
   });
 });
 
@@ -520,6 +548,7 @@ describe('nodeFsStore with an unusable root', () => {
       const { kind, message } = await fail(lazy.list('', 1));
       expect(kind).toBe('unknown');
       expect(message).toContain('AGENT_WORKSPACE_DIR');
+      expect(message).toMatch(/See https:\/\/\S+\/docs\/server\/handler#stores$/);
       expect(await kindOf(lazy.stat('a.txt'))).toBe('unknown');
       expect(() =>
         lazy.watch?.(

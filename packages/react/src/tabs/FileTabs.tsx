@@ -1,5 +1,6 @@
 'use client';
-import { basename, remapPrefix, type Entry } from '@scope/core';
+import { basename, remapPrefix, type Entry } from '@workspacekit/core';
+import { docsLink } from '@workspacekit/core/docs';
 import {
   createContext,
   memo,
@@ -200,7 +201,12 @@ const FileTabContext = createContext<FileTabShared | null>(null);
 
 function useFileTabShared(): FileTabShared {
   const shared = use(FileTabContext);
-  if (!shared) throw new Error('FileTab rendered outside <FileTabs>; render tabs only through FileTabs.');
+  if (!shared) {
+    throw new Error(
+      'A tab was rendered outside <FileTabs>. Render tabs only through <FileTabs>, which provides the state they ' +
+        `share. See ${docsLink('concepts/adapter', 'tree-rows-and-tabs')}`,
+    );
+  }
   return shared;
 }
 

@@ -1,5 +1,5 @@
 'use client';
-import { partProps } from '@scope/react/renderer-kit';
+import { partProps } from '@workspacekit/react/renderer-kit';
 import type { CSSProperties, PointerEvent, ReactNode } from 'react';
 import type { SheetClassNames } from '../parts';
 import type { DrawnCell } from './merges';

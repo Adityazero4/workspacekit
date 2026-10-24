@@ -1,5 +1,5 @@
 'use client';
-import { partProps } from '@scope/react/renderer-kit';
+import { partProps } from '@workspacekit/react/renderer-kit';
 import { useState } from 'react';
 import { Grid } from './grid/Grid';
 import type { CellAddress } from './grid/model';

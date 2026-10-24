@@ -1,5 +1,6 @@
-import { joinPath, type ChangeEvent, type FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter, generateShape, type MemoryAdapter, type TreeShape } from '@scope/core/memory';
+import { joinPath, type ChangeEvent, type FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
+import { generateShape, type TreeShape } from '../../core/src/memory/generate';
 import { createRef, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../src/styles.css';

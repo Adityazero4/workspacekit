@@ -1,4 +1,4 @@
-import type { VisibleRow, VisibleRowIndex } from '@scope/core';
+import type { VisibleRow, VisibleRowIndex } from '@workspacekit/core';
 
 /**
  * What a key press on a tree row asks for. `move` targets a row index in the same `VisibleRowIndex`.

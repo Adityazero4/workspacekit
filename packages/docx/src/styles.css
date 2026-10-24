@@ -1,4 +1,4 @@
-/* Default look of @scope/docx. Everything lives in @layer fs, so any unlayered consumer CSS wins. The
+/* Default look of @workspacekit/docx. Everything lives in @layer fs, so any unlayered consumer CSS wins. The
    document's own styles live in its shadow root and cannot reach these parts. */
 @layer fs {
   [data-fs-part='docx-viewer'] {

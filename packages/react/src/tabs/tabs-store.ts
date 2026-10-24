@@ -5,7 +5,7 @@ import {
   remapPrefix,
   statusOf,
   type TreeSnapshot,
-} from '@scope/core';
+} from '@workspacekit/core';
 
 /**
  * One open file in the tab strip. A preview tab (shown in italics) is replaced by the next preview; `dirty`

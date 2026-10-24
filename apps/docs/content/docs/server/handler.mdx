@@ -7,7 +7,7 @@ description: createFileHandler turns a store and an authorize callback into a fu
 
 ```ts
 // app/api/files/[...path]/route.ts — Next.js; any Fetch-API server works the same way
-import { createFileHandler, nodeFsStore } from '@scope/server';
+import { createFileHandler, nodeFsStore } from '@workspacekit/server';
 
 const handler = createFileHandler({
   store: nodeFsStore(process.env.AGENT_WORKSPACE_DIR!),
@@ -16,14 +16,14 @@ const handler = createFileHandler({
 export { handler as GET, handler as POST, handler as PUT, handler as DELETE };
 ```
 
-The handler finds its route from the end of the URL path, so it works under any prefix. The client side is `httpAdapter('/api/files')` from `@scope/core/http`.
+The handler finds its route from the end of the URL path, so it works under any prefix. The client side is `httpAdapter('/api/files')` from `@workspacekit/core/http`.
 
 ## Run it without a framework
 
 The handler is a plain function, so it runs in a test or a script:
 
 ```ts
-import { createFileHandler, nodeFsStore } from '@scope/server';
+import { createFileHandler, nodeFsStore } from '@workspacekit/server';
 
 const handler = createFileHandler({
   store: nodeFsStore('/srv/workspace', { exclude: ['.git', 'node_modules'] }),
@@ -37,17 +37,70 @@ export const response = await handler(new Request('http://localhost/api/files/li
 
 ## Options
 
-| Option                                | What it does                                                                                                                                                          |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `authorize(request, operation, path)` | Required. A truthy result allows the request and a falsy one is a 403; return a boolean. `operation` is a key of the protocol's routes, such as `'list'` or `'write'` |
-| `readOnly`                            | Reject every mutating operation                                                                                                                                       |
-| `maxUploadBytes`, `maxWriteBytes`     | Size limits. Defaults are 1 GiB and 10 MiB                                                                                                                            |
-| `chunkSize`, `uploadTtlMs`            | Chunk size told to chunked-upload clients (8 MiB), and how long an idle upload session lives (1 hour)                                                                 |
-| `actor(request)`                      | The name of the principal making a request, `'user'` by default. A live-update stream marks a change as the watcher's own only when the actors match                  |
-| `watchHeartbeatMs`, `onError`         | The live-update ping interval (25 s), and a hook for unexpected failures, which answer with a generic 500                                                             |
+| Option                                | What it does                                                                                                                                         |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authorize(request, operation, path)` | Required. Only `true` allows the request; anything but `true` is a 403. `operation` is a key of the protocol's routes, such as `'list'` or `'write'` |
+| `readOnly`                            | Reject every mutating operation                                                                                                                      |
+| `maxUploadBytes`, `maxWriteBytes`     | Size limits. Defaults are 1 GiB and 10 MiB                                                                                                           |
+| `chunkSize`, `uploadTtlMs`            | Chunk size told to chunked-upload clients (8 MiB), and how long an idle upload session lives (1 hour)                                                |
+| `actor(request)`                      | The name of the principal making a request, `'user'` by default. A live-update stream marks a change as the watcher's own only when the actors match |
+| `watchHeartbeatMs`, `onError`         | The live-update ping interval (25 s), and a hook for unexpected failures, which answer with a generic 500                                            |
+
+## Limits
+
+Each limit has a default and can be overridden with a non-negative integer, or `Infinity` to lift it. Any other value makes `createFileHandler` throw.
+
+| Option                        | What it bounds                                                                                                                                                                                                      | Default                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `maxUploadSessions`           | Chunked uploads that may be unfinished at once. Past it, `upload/init` answers 503 with `Retry-After`                                                                                                               | 100                                |
+| `maxUploadSessionsPerActor`   | With an `actor` hook, unfinished chunked uploads one actor may hold. Before refusing, the actor's oldest idle upload is discarded to make room                                                                      | A quarter of `maxUploadSessions`   |
+| `maxUploadTempBytes`          | Bytes unfinished chunked uploads may keep in the upload temp folder. `upload/init` answers 503 when the declared sizes would pass it, and a chunk is refused with 413 while it streams when the bytes written would | 4 GiB                              |
+| `maxUploadTempBytesPerActor`  | With an `actor` hook, bytes one actor's unfinished chunked uploads may declare. Before refusing, the actor's oldest idle uploads are discarded if that makes room                                                   | A quarter of `maxUploadTempBytes`  |
+| `maxWatchConnections`         | Live-update streams open at once. Past it, `watch` answers 503 with `Retry-After`                                                                                                                                   | 100                                |
+| `maxWatchConnectionsPerActor` | With an `actor` hook, live-update streams one actor may hold open. Past it, `watch` answers 503                                                                                                                     | A quarter of `maxWatchConnections` |
+| `watchMaxLifetimeMs`          | How long a live-update stream stays open. Then the server closes it and the client reconnects                                                                                                                       | 1 hour                             |
+| `watchBufferBytes`            | Bytes a live-update stream may hold unread. A client that falls further behind is disconnected, then reconnects and reloads                                                                                         | 1 MiB                              |
+| `maxListDepth`                | The `depth` a `list` may ask for. A deeper one is a 400                                                                                                                                                             | 16                                 |
+| `maxListEntries`              | Entries one `list` answers. A larger listing is a 413, and the walk stops there                                                                                                                                     | 100,000                            |
+| `maxSearchVisits`             | Entries a `search` looks at. Past it, the search answers with what it found so far                                                                                                                                  | 100,000                            |
+| `searchTimeoutMs`             | Time a `search` may walk. Past it, the search answers with what it found so far                                                                                                                                     | 5 s                                |
+
+Every walk (`list`, `search`, the planning of a folder download, and the check of every descendant of a folder that is moved, copied or deleted) stops when the request is aborted. A folder download stops walking past 65,535 entries, and an archive of 4 GiB or more is refused while it is planned, before the first byte; a zip without zip64 can hold neither, and both answer 413. Each zip entry is authorized again when it is opened, and is left out if it is gone, if `authorize` now denies it or its link target, or if it changes while it is opened. A file that grows while it is zipped can make an archive past 4 GiB unreadable.
+
+One upload holds at most its declared size plus one chunk, sends at most 8 chunks at once, and sends each chunk once at a time; anything else is refused. Idle sessions are removed every quarter of `uploadTtlMs`.
+
+Without an `actor` hook every request counts as the same actor, so only the overall caps apply, and one client can use all of them.
+
+### uploadTempDir
+
+By default each handler keeps chunks in a fresh private folder (`mkdtemp`, mode 0700) under the system temp directory, removes it when the process exits, and recovers nothing after a restart. Set `uploadTempDir` to a folder you own to keep uploads in it instead. It works on POSIX systems only (Linux and macOS); on Windows every upload with it set answers 500, so leave it unset there:
+
+- it must be a folder, not a symlink, owned by the server's user with mode 0700, or every upload answers 500 and `onError` hears why;
+- give each handler its own folder: while one handler holds unfinished uploads in it, another handler in the same process is refused;
+- sessions live only in a `workspacekit-uploads` subfolder that the handler creates there, marked with a `.workspacekit-uploads` file. If that subfolder already exists with content but without the marker, uploads are refused, because the library did not make it;
+- on first use, the handler removes the session folders a previous run left in that subfolder once they are older than `uploadTtlMs`. Nothing else in `uploadTempDir` is ever touched.
+
+## authorize
+
+`createFileHandler` throws when `authorize` is missing, because there is no default-open mode. Pass a function that checks the session or token and returns a boolean for each request:
+
+```ts
+import { createFileHandler, nodeFsStore } from '@workspacekit/server';
+
+declare function isSignedIn(request: Request): boolean;
+
+export const handler = createFileHandler({
+  store: nodeFsStore('/srv/workspace'),
+  authorize: (request) => isSignedIn(request),
+});
+```
+
+Deny `'list'`, `'search'` and `'watch'` to anyone who must not see the whole tree: see [policy](/docs/concepts/policy). A denied `'watch'` makes `httpAdapter` poll `list` instead, so `'list'` is what to deny.
 
 ## Stores
 
 A `FileStore` is a small interface: `list`, `stat`, `read` (with an inclusive byte range), `write`, `create`, `move`, `copy` and `delete`, with optional `search` and `watch`. `nodeFsStore` implements it over a directory, including `watch` with Node's recursive `fs.watch`. For other backends see the [S3 recipe](/docs/recipes/s3). Without `watch`, clients poll.
+
+A store whose paths can be links should implement `canonicalPath` and honour `read`'s `expectedCanonicalPath`, or the symlink authorization does not apply. Honour the `signal` and budgets that `list` and `search` receive (`maxEntries`, `maxVisits`, `timeoutMs`), or the walk limits do not apply.
 
 The complete route and page for Next.js are in the [server route recipe](/docs/recipes/server-route).

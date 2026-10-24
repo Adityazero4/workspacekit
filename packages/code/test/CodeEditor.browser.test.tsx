@@ -2,7 +2,7 @@ import { undo } from '@codemirror/commands';
 import { language } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { EditorView } from '@codemirror/view';
-import '@scope/react/styles.css';
+import '@workspacekit/react/styles.css';
 import axe from 'axe-core';
 import { afterEach, expect, test, vi } from 'vitest';
 import { commands, userEvent } from 'vitest/browser';

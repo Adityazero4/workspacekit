@@ -1,5 +1,5 @@
 'use client';
-import { partProps } from '@scope/react/renderer-kit';
+import { partProps } from '@workspacekit/react/renderer-kit';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
   $getSelection,

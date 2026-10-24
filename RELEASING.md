@@ -28,7 +28,8 @@ A security checklist for maintainers, to complete before the first publish and t
 
 ## Once the repository is on GitHub
 
-- [ ] Add the private forbidden-strings list as the `FORBIDDEN_PATTERNS` secret for CI; `check:forbidden` fails in CI without it.
+- [ ] Add the private forbidden-strings list as the `FORBIDDEN_PATTERNS` secret for CI; `check:forbidden` fails in CI without it. `ci.yml` gives it only to the step that runs `check:forbidden`. GitHub withholds secrets from pull requests opened from forks, so that step is skipped for them and runs again on the push to `main`.
+- [ ] Enable GitHub Pages: Settings → Pages → Source: GitHub Actions. `pages.yml` then builds and deploys the docs to https://adityazero4.github.io/workspacekit on every push to `main`, or by hand from the Actions tab. It deploys independently of CI, so docs from a commit whose CI failed still reach the site.
 
 - [ ] Enable Dependabot alerts and Dependabot security updates.
 - [ ] Enable private vulnerability reporting (`SECURITY.md` points reporters at it).

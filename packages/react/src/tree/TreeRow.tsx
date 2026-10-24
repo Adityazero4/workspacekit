@@ -1,5 +1,6 @@
 'use client';
-import type { Entry, FolderStatus } from '@scope/core';
+import { type Entry, type FolderStatus } from '@workspacekit/core';
+import { docsLink } from '@workspacekit/core/docs';
 import {
   createContext,
   memo,
@@ -271,7 +272,7 @@ function useTreeRowShared(): TreeRowShared {
   if (!shared) {
     throw new Error(
       'A tree row was rendered outside <FileTree>. Render tree rows only inside <FileTree>, which provides the ' +
-        'state they share.',
+        `state they share. See ${docsLink('concepts/adapter', 'tree-rows-and-tabs')}`,
     );
   }
   return shared;

@@ -1,0 +1,8 @@
+@workspacekit/pptx PPTX_MAX_BYTES
+@workspacekit/pptx PPTX_PARTS
+@workspacekit/pptx PptxClassNames
+@workspacekit/pptx PptxPart
+@workspacekit/pptx PptxRendererOptions
+@workspacekit/pptx PptxViewer
+@workspacekit/pptx PptxViewerProps
+@workspacekit/pptx pptxRenderer

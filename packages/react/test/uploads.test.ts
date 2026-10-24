@@ -1,5 +1,5 @@
-import { captureDataTransfer, createTreeStore, type DropEntry, type FsError } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import { captureDataTransfer, createTreeStore, type DropEntry, type FsError } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { describe, expect, test } from 'vitest';
 import type { Notice } from '../src/provider/hooks';
 import { createRowLayout } from '../src/tree/rowLayout';

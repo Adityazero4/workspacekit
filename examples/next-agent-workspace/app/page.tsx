@@ -1,7 +1,7 @@
 'use client';
-import { Workspace } from '@scope/workspace';
-import { httpAdapter } from '@scope/core/http';
-import '@scope/workspace/styles.css';
+import { Workspace } from '@workspacekit/workspace';
+import { httpAdapter } from '@workspacekit/core/http';
+import '@workspacekit/workspace/styles.css';
 
 /**
  * The page: the workspace over the file API at `/api/files`.

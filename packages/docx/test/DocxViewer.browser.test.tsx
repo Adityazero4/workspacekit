@@ -284,7 +284,7 @@ const SHADOW_BREAKOUT =
   'position:fixed!important;inset:0!important;z-index:2147483647!important;contain:none!important;background:rgb(1,2,3)!important';
 
 test.each([
-  ['@scope (:host)', `X;}@scope/**/(:host)/**/{:scope{${SHADOW_BREAKOUT}}}.y{color:red`],
+  ['@scope (:host)', `X;}@workspacekit/**/(:host)/**/{:scope{${SHADOW_BREAKOUT}}}.y{color:red`],
   ['implicit @scope', `X;}@scope{:scope{${SHADOW_BREAKOUT}}}.y{color:red`],
   ['@scope in @layer', `X;}@layer a{@scope (:host){:scope{${SHADOW_BREAKOUT}}}}.y{color:red`],
   ['@scope in @media', `X;}@media all{@scope{:scope{${SHADOW_BREAKOUT}}}}.y{color:red`],
@@ -418,11 +418,53 @@ test("docx-preview's embedded-font CSS is scoped too, with the runs that use the
       },
     }),
   );
-  const faces = styleText(root).match(/@font-face \{ font-family: [^;]+/g) ?? [];
-  expect(faces).toHaveLength(1);
-  expect(faces[0]).toMatch(/fs-docx-\d+-Probe Sans/);
+  expect(styleText(root)).not.toContain('@font-face');
+  const faces = [...document.fonts].filter((face) => face.family.includes('fs-docx-'));
+  expect(faces.map((face) => face.family.replace(/"/g, ''))).toEqual([
+    expect.stringMatching(/^fs-docx-\d+-[0-9a-z]+-Probe Sans$/),
+  ]);
   const run = [...root.querySelectorAll<HTMLElement>('span')].find(
     (span) => span.textContent === 'embedded',
   )!;
-  expect(run.style.fontFamily).toMatch(/^"?fs-docx-\d+-Probe Sans"?$/);
+  expect(run.style.fontFamily).toMatch(/^"?fs-docx-\d+-[0-9a-z]+-Probe Sans"?$/);
+});
+
+const embeddedFontDocx = (): Uint8Array =>
+  docxBytes({
+    body: '<w:p><w:r><w:rPr><w:rFonts w:ascii="Probe Sans"/></w:rPr><w:t>embedded</w:t></w:r></w:p>',
+    relationships: [{ id: 'rFonts', type: 'fontTable', target: 'fontTable.xml' }],
+    parts: { 'word/fontTable.xml': FONT_TABLE, 'word/fonts/font1.odttf': new Uint8Array(64).fill(3) },
+    partRelationships: {
+      'word/fontTable.xml': [{ id: 'rFont', type: 'font', target: 'fonts/font1.odttf' }],
+    },
+  });
+
+const scopedFacesInTheDocument = (): string[] =>
+  [...document.fonts].map((face) => face.family).filter((family) => family.includes('fs-docx-'));
+
+test('unmounting a docx viewer leaves no fs-docx- faces in document.fonts', async () => {
+  const screen = await render(sized(<DocxViewer src={embeddedFontDocx()} fileName="fonts.docx" />));
+  await expect.poll(scopedFacesInTheDocument).not.toEqual([]);
+  await screen.unmount();
+  expect(scopedFacesInTheDocument()).toEqual([]);
+});
+
+async function withoutConstructableStyleSheets(run: () => Promise<void>): Promise<void> {
+  const adoptedStyleSheets = Object.getOwnPropertyDescriptor(Document.prototype, 'adoptedStyleSheets')!;
+  Reflect.deleteProperty(Document.prototype, 'adoptedStyleSheets');
+  try {
+    await run();
+  } finally {
+    Object.defineProperty(Document.prototype, 'adoptedStyleSheets', adoptedStyleSheets);
+  }
+}
+
+test('with the <style> fallback (Safari before 16.4), unmounting leaves no fs-docx- faces either', async () => {
+  await withoutConstructableStyleSheets(async () => {
+    const screen = await render(sized(<DocxViewer src={embeddedFontDocx()} fileName="fonts.docx" />));
+    await expect.poll(() => shown()?.styleSheets.length ?? 0).toBe(1);
+    await expect.poll(scopedFacesInTheDocument).not.toEqual([]);
+    await screen.unmount();
+    expect(scopedFacesInTheDocument()).toEqual([]);
+  });
 });

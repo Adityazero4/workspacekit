@@ -1,4 +1,5 @@
 'use client';
+import { docsLink } from '@workspacekit/core/docs';
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { Renderer, RendererProps } from './registry';
 
@@ -12,7 +13,8 @@ async function loadRendererModule(renderer: Renderer): Promise<RendererModule> {
   const module = await renderer.load();
   if (!module?.default) {
     throw new TypeError(
-      `renderer "${renderer.id}": load() resolved without a default export; export the component as default`,
+      `renderer "${renderer.id}": load() resolved without a default export. Export the component as default, ` +
+        `for example load: async () => ({ default: MyViewer }). See ${docsLink('concepts/renderers', 'write-a-renderer')}`,
     );
   }
   return module;

@@ -106,16 +106,18 @@ describe('createWorkspace', () => {
         const ranges = { ...manifest.dependencies, ...manifest.devDependencies } as Record<string, string>;
         for (const [name, range] of Object.entries(ranges)) {
           assert.doesNotMatch(range, /^(workspace|file|link):/, `${name} is ${range}`);
-          if (name.startsWith('@scope/')) assert.equal(range, PINNED, name);
+          if (name.startsWith('@workspacekit/')) assert.equal(range, PINNED, name);
         }
-        assert.ok(Object.keys(ranges).some((name) => name.startsWith('@scope/')));
+        assert.ok(Object.keys(ranges).some((name) => name.startsWith('@workspacekit/')));
         assert.equal(manifest.name, template);
       });
 
       it('depends only on publishable packages under packages/, never on examples/ or apps/', async () => {
         const manifest = JSON.parse(await readFile(path.join(generated[template], 'package.json'), 'utf8'));
         const ranges = { ...manifest.dependencies, ...manifest.devDependencies } as Record<string, string>;
-        for (const name of Object.keys(ranges).filter((dependency) => dependency.startsWith('@scope/'))) {
+        for (const name of Object.keys(ranges).filter((dependency) =>
+          dependency.startsWith('@workspacekit/'),
+        )) {
           assert.ok(PUBLISHABLE_NAMES.has(name), `${name} is not a package under packages/`);
         }
       });
@@ -195,7 +197,7 @@ describe('createWorkspace', () => {
 
   it('refuses when a version is missing and writes nothing', async () => {
     const directory = path.join(sandbox, 'missing-version');
-    await assert.rejects(createWorkspace({ template: 'next', directory, versions: {} }), /@scope\//);
+    await assert.rejects(createWorkspace({ template: 'next', directory, versions: {} }), /@workspacekit\//);
     await assert.rejects(readdir(directory), { code: 'ENOENT' });
   });
 });
@@ -212,10 +214,10 @@ describe('publish gate', () => {
         template: 'vite',
         directory,
         versions: VERSIONS,
-        privatePackages: ['@scope/demo-kit'],
+        privatePackages: ['@workspacekit/demo-kit'],
       }),
       (error: Error) =>
-        /not published yet: .*@scope\/demo-kit/.test(error.message) &&
+        /not published yet: .*@workspacekit\/demo-kit/.test(error.message) &&
         /once they are released/.test(error.message),
     );
     await assert.rejects(readdir(directory), { code: 'ENOENT' });
@@ -224,20 +226,24 @@ describe('publish gate', () => {
   it('refuses a dependency at version 0.0.0', async () => {
     const directory = path.join(sandbox, 'gate-zero');
     await assert.rejects(
-      createWorkspace({ template: 'next', directory, versions: { ...VERSIONS, '@scope/core': '0.0.0' } }),
-      /not published yet: .*@scope\/core/,
+      createWorkspace({
+        template: 'next',
+        directory,
+        versions: { ...VERSIONS, '@workspacekit/core': '0.0.0' },
+      }),
+      /not published yet: .*@workspacekit\/core/,
     );
   });
 
   it('fails loudly, naming the package, when a template dependency has no version', async () => {
-    const { '@scope/demo-kit': _omitted, ...withoutDemoKit } = VERSIONS;
+    const { '@workspacekit/demo-kit': _omitted, ...withoutDemoKit } = VERSIONS;
     await assert.rejects(
       createWorkspace({
         template: 'vite',
         directory: path.join(sandbox, 'gate-missing'),
         versions: withoutDemoKit,
       }),
-      /No version was given for @scope\/demo-kit/,
+      /No version was given for @workspacekit\/demo-kit/,
     );
   });
 });
@@ -270,7 +276,7 @@ describe('create-workspace command', () => {
   });
 
   it('refuses when a release is flagged private', async () => {
-    const releases = { ...RELEASED, '@scope/core': { version: PINNED, private: true } };
+    const releases = { ...RELEASED, '@workspacekit/core': { version: PINNED, private: true } };
     await assert.rejects(
       runCli([path.join(sandbox, 'cli-private')], async () => releases),
       /not published yet/,

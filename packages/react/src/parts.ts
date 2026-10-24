@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * import { PARTS } from '@scope/react';
+ * import { PARTS } from '@workspacekit/react';
  * PARTS.includes('tree-row'); // true
  * ```
  */

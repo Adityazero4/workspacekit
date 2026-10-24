@@ -1,6 +1,6 @@
 import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { FsError, isFsError, normalizePath, type FsErrorKind } from '@scope/core';
+import { FsError, isFsError, normalizePath, type FsErrorKind } from '@workspacekit/core';
 
 const KIND_BY_NODE_ERROR_CODE: Record<string, FsErrorKind> = {
   ENOENT: 'not_found',

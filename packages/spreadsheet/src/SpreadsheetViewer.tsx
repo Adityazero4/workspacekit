@@ -5,7 +5,7 @@ import {
   useStandaloneBytes,
   type StandaloneViewerProps,
   type ViewerError,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { lazy, Suspense, useState } from 'react';
 import type { SheetPart } from './parts';
 import { SPREADSHEET_MAX_BYTES, type SpreadsheetRendererOptions } from './spreadsheetRenderer';

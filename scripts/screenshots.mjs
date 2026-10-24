@@ -14,7 +14,8 @@ const MARKDOWN_VIEWER = '[data-fs-part=md-viewer]';
 /**
  * Takes `workspace-light.png` and `workspace-dark.png` in `docs/assets/` with Chromium, from the Vite memory
  * example served at `SCREENSHOT_URL` (default `http://127.0.0.1:4173`). Build and serve it first:
- * `pnpm --filter @scope/example-vite-memory build`, then `pnpm --filter @scope/example-vite-memory preview`.
+ * `pnpm --filter @workspacekit/example-vite-memory build`, then `pnpm --filter
+ * @workspacekit/example-vite-memory preview`.
  *
  * @example
  * await takeScreenshots('http://127.0.0.1:4173');

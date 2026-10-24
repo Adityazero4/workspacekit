@@ -1,4 +1,4 @@
-import { FsError, toFsError, type Entry } from '@scope/core';
+import { FsError, toFsError, type Entry } from '@workspacekit/core';
 
 /**
  * Where an edited text stands: nothing edited (`idle`), edits waiting (`dirty`), a save in flight

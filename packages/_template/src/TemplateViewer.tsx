@@ -1,5 +1,9 @@
 'use client';
-import { StandaloneRoot, useStandaloneBytes, type StandaloneViewerProps } from '@scope/react/renderer-kit';
+import {
+  StandaloneRoot,
+  useStandaloneBytes,
+  type StandaloneViewerProps,
+} from '@workspacekit/react/renderer-kit';
 import { lazy, Suspense } from 'react';
 import type { TemplatePart } from './parts';
 

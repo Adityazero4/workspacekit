@@ -1,5 +1,5 @@
 'use client';
-import type { ConflictChoice, Entry, EntryKind } from '@scope/core';
+import type { ConflictChoice, Entry, EntryKind } from '@workspacekit/core';
 import { useFileSystemInternals } from '../provider/internals';
 import { createUiStore, type UiStore } from '../provider/ui-store';
 

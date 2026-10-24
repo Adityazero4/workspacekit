@@ -5,17 +5,17 @@ description: Use one viewer or editor on its own, with no provider, adapter, tab
 
 Every renderer package exports two things: a registry entry for the workspace, and a standalone React component. The workspace's `FileViewer` uses the same components inside, so the two paths cannot drift apart. Each component loads its engine the first time it renders, so importing one stays cheap and never pulls in another.
 
-| Package                  | Component                                                                             | Input                                      |
-| ------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `@scope/pdf`             | `PdfViewer`                                                                           | `src`                                      |
-| `@scope/spreadsheet`     | `SpreadsheetViewer`                                                                   | `src`, with `fileName` to pick CSV or XLSX |
-| `@scope/docx`            | `DocxViewer`                                                                          | `src`                                      |
-| `@scope/pptx`            | `PptxViewer`                                                                          | `src`                                      |
-| `@scope/markdown`        | `MarkdownEditor`                                                                      | `value` and `onChange`                     |
-| `@scope/code`            | `CodeEditor`, `CodeViewer`                                                            | `value`, `language`, `readOnly`            |
-| `@scope/react/renderers` | `TextViewer`, `ImageViewer`, `AudioViewer`, `VideoViewer`, `HtmlViewer`, `TiffViewer` | `src`                                      |
+| Package                         | Component                                                                             | Input                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `@workspacekit/pdf`             | `PdfViewer`                                                                           | `src`                                      |
+| `@workspacekit/spreadsheet`     | `SpreadsheetViewer`                                                                   | `src`, with `fileName` to pick CSV or XLSX |
+| `@workspacekit/docx`            | `DocxViewer`                                                                          | `src`                                      |
+| `@workspacekit/pptx`            | `PptxViewer`                                                                          | `src`                                      |
+| `@workspacekit/markdown`        | `MarkdownEditor`                                                                      | `value` and `onChange`                     |
+| `@workspacekit/code`            | `CodeEditor`, `CodeViewer`                                                            | `value`, `language`, `readOnly`            |
+| `@workspacekit/react/renderers` | `TextViewer`, `ImageViewer`, `AudioViewer`, `VideoViewer`, `HtmlViewer`, `TiffViewer` | `src`                                      |
 
-Install the renderer package with `@scope/react` and React, for example `npm install @scope/pdf @scope/react react react-dom`. `@scope/react` is a peer dependency of every renderer package and supplies the base stylesheet.
+Install the renderer package with `@workspacekit/react` and React, for example `npm install @workspacekit/pdf @workspacekit/react react react-dom`. `@workspacekit/react` is a peer dependency of every renderer package and supplies the base stylesheet.
 
 ## Props
 
@@ -31,12 +31,12 @@ The editors take `value` and `onChange` instead of `src`. Each package adds its 
 
 ## Examples
 
-Import the stylesheet of `@scope/react` first and the package's after it: both are in `@layer fs`, where a later rule wins at equal specificity, so the package can refine the base styles (the `@scope/workspace` stylesheet imports them in the same order). Put the viewer in a parent that has a height, because pages scroll inside the viewer.
+Import the stylesheet of `@workspacekit/react` first and the package's after it: both are in `@layer fs`, where a later rule wins at equal specificity, so the package can refine the base styles (the `@workspacekit/workspace` stylesheet imports them in the same order). Put the viewer in a parent that has a height, because pages scroll inside the viewer.
 
 ```tsx
-import { PdfViewer } from '@scope/pdf';
-import '@scope/react/styles.css';
-import '@scope/pdf/styles.css';
+import { PdfViewer } from '@workspacekit/pdf';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/pdf/styles.css';
 
 export function Preview(): React.JSX.Element {
   return (
@@ -48,9 +48,9 @@ export function Preview(): React.JSX.Element {
 ```
 
 ```tsx
-import { SpreadsheetViewer } from '@scope/spreadsheet';
-import '@scope/react/styles.css';
-import '@scope/spreadsheet/styles.css';
+import { SpreadsheetViewer } from '@workspacekit/spreadsheet';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/spreadsheet/styles.css';
 
 export function Sheet({ file }: { file: File }): React.JSX.Element {
   return (
@@ -62,9 +62,9 @@ export function Sheet({ file }: { file: File }): React.JSX.Element {
 ```
 
 ```tsx
-import { MarkdownEditor } from '@scope/markdown';
-import '@scope/react/styles.css';
-import '@scope/markdown/styles.css';
+import { MarkdownEditor } from '@workspacekit/markdown';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/markdown/styles.css';
 import { useState } from 'react';
 
 export function Notes(): React.JSX.Element {
@@ -78,9 +78,9 @@ export function Notes(): React.JSX.Element {
 ```
 
 ```tsx
-import { CodeEditor } from '@scope/code';
-import '@scope/react/styles.css';
-import '@scope/code/styles.css';
+import { CodeEditor } from '@workspacekit/code';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/code/styles.css';
 
 export function Snippet({ code }: { code: string }): React.JSX.Element {
   return (
@@ -95,4 +95,4 @@ Inside a workspace the same viewers run through `FileViewer`. Open each kind her
 
 <RendererGallery />
 
-To show one file from an adapter without the tree, put `FileViewer` inside a `FileSystemProvider` with `allRenderers()`; both come from `@scope/workspace`. A tested PDF example is the [standalone PDF recipe](/docs/recipes/standalone-pdf).
+To show one file from an adapter without the tree, put `FileViewer` inside a `FileSystemProvider` with `allRenderers()`; both come from `@workspacekit/workspace`. A tested PDF example is the [standalone PDF recipe](/docs/recipes/standalone-pdf).

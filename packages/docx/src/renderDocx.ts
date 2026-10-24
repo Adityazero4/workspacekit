@@ -1,5 +1,5 @@
 import { parseAsync, renderDocument } from 'docx-preview';
-import { forgetFontFaces, scopeFontFamilies, type FontScope } from './fontScope';
+import { forgetFontFaces, scopeFontFamilies, showFontFaces, type FontScope } from './fontScope';
 import { DOCX_LIMITS, repackWithinLimits } from './limits';
 import { assertRenderWithinLimits, type ParsedDocx } from './renderedWork';
 import { safeStyles, sanitizeBody, type DocumentStyles } from './sanitize';
@@ -52,6 +52,8 @@ function inertElementFactory(inert: Document): (description: ElementDescription)
 
 let renders = 0;
 
+const unguessablePart = (): string => crypto.getRandomValues(new Uint32Array(1))[0]!.toString(36);
+
 function scopeInlineFonts(body: HTMLElement, fonts: FontScope): void {
   for (const element of body.querySelectorAll<HTMLElement>('[style*="font"]')) {
     scopeFontFamilies(element.style, fonts);
@@ -72,9 +74,10 @@ function unwrapTextBoxes(body: HTMLElement): void {
  * `limits`, and the parsed document is counted against them before it is rendered. Embedded HTML
  * (`altChunk`) is never rendered, images become `data:` URLs, VML text boxes become plain blocks (their SVG
  * wrapper would be dropped by the sanitizer), the document's own fonts are renamed for this render alone
- * (`fs-docx-<n>-<name>`), and Symbol and Wingdings text becomes Unicode. Rejects with
- * `DocumentLimitExceeded` for a document over the limits, with the signal's reason when aborted (checked
- * between steps; nothing rendered is kept), or with docx-preview's error.
+ * (`fs-docx-<n>-<random>-<name>`, so a document cannot aim at another render's faces), and Symbol and
+ * Wingdings text becomes Unicode. Rejects with `DocumentLimitExceeded` for a document over the limits, with
+ * the signal's reason when aborted (checked between steps; nothing rendered is kept), or with docx-preview's
+ * error.
  *
  * @example
  * ```ts
@@ -97,7 +100,7 @@ export async function renderDocx(
   const cssTexts = rendered
     .filter((node) => node.nodeName === 'STYLE')
     .map((style) => style.textContent ?? '');
-  const styles = safeStyles(cssTexts, inert, `fs-docx-${++renders}-`);
+  const styles = safeStyles(cssTexts, inert, `fs-docx-${++renders}-${unguessablePart()}-`);
   const body = inert.createElement('div');
   body.append(...rendered.filter((node) => node.nodeName !== 'STYLE'));
   unwrapTextBoxes(body);
@@ -107,11 +110,12 @@ export async function renderDocx(
   return { nodes: [...body.childNodes], styles };
 }
 
-const shownFontPrefixes = new WeakMap<ShadowRoot, string>();
+const shownFontFaces = new WeakMap<ShadowRoot, FontFace[]>();
 
 /**
- * Mounts a rendered document in `shadowRoot`, replacing what it showed; `null` empties it. The font faces
- * of the render it replaces are taken out of `document.fonts`, where WebKit puts a shadow root's faces.
+ * Mounts a rendered document in `shadowRoot`, replacing what it showed; `null` empties it. The document's
+ * scoped font faces are in `document.fonts` only while it is shown: those of the render it replaces are
+ * deleted from the set (see `showFontFaces`).
  *
  * @example
  * ```ts
@@ -119,15 +123,11 @@ const shownFontPrefixes = new WeakMap<ShadowRoot, string>();
  * ```
  */
 export function showRendered(shadowRoot: ShadowRoot, rendered: RenderedDocx | null): void {
+  forgetFontFaces(shownFontFaces.get(shadowRoot) ?? []);
+  shownFontFaces.set(shadowRoot, rendered ? showFontFaces(rendered.styles.fonts) : []);
   const styleElement = rendered?.styles.element;
   shadowRoot.replaceChildren(...(styleElement ? [styleElement] : []), ...(rendered?.nodes ?? []));
   shadowRoot.adoptedStyleSheets = rendered?.styles.sheets ?? [];
-  const previousPrefix = shownFontPrefixes.get(shadowRoot);
-  if (previousPrefix !== undefined && previousPrefix !== rendered?.styles.fonts.prefix) {
-    forgetFontFaces(previousPrefix);
-  }
-  if (rendered) shownFontPrefixes.set(shadowRoot, rendered.styles.fonts.prefix);
-  else shownFontPrefixes.delete(shadowRoot);
 }
 
 /**

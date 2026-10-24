@@ -1,16 +1,25 @@
 {
-  "name": "@scope/demo-kit",
+  "name": "@workspacekit/demo-kit",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
   "author": "Aditya Jain <adityajain042001@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Adityazero4/workspacekit.git",
+    "directory": "packages/demo-kit"
+  },
+  "homepage": "https://adityazero4.github.io/workspacekit",
+  "bugs": "https://github.com/Adityazero4/workspacekit/issues",
   "type": "module",
   "sideEffects": false,
   "files": [
     "dist",
     "README.md",
     "AGENTS.md",
-    "llms.txt"
+    "llms.txt",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     ".": {
@@ -25,15 +34,15 @@
     "size": "size-limit"
   },
   "dependencies": {
-    "@scope/core": "workspace:*",
+    "@workspacekit/core": "workspace:*",
     "fflate": "0.8.3"
   },
   "devDependencies": {
     "@babel/core": "8.0.7",
     "@rolldown/plugin-babel": "0.2.4",
-    "@scope/react": "workspace:*",
-    "@scope/spreadsheet": "workspace:*",
-    "@scope/workspace": "workspace:*",
+    "@workspacekit/react": "workspace:*",
+    "@workspacekit/spreadsheet": "workspace:*",
+    "@workspacekit/workspace": "workspace:*",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

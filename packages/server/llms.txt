@@ -1,9 +1,9 @@
-# @scope/server
+# @workspacekit/server
 
 > A Fetch-API request handler that serves a directory to the file workspace, with a required per-request `authorize` callback.
 
-- API reference: https://docs.example.invalid/api/server
-- Install: `npm install @scope/server`
+- API reference: https://adityazero4.github.io/workspacekit/api/server
+- Install: `npm install @workspacekit/server`
 
 ## README sections
 
@@ -15,9 +15,9 @@
 
 ## Entry points
 
-- `@scope/server`
+- `@workspacekit/server`
 
-## Exports of `@scope/server`
+## Exports of `@workspacekit/server`
 
 - `FileHandlerOptions`: Options for `createFileHandler`: the store, the per-path authorization callback, limits and hooks.
 - `FileStore`: Storage backend the HTTP handler talks to.

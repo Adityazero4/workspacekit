@@ -1,4 +1,4 @@
-import type { Entry } from '@scope/core';
+import type { Entry } from '@workspacekit/core';
 import { expect, test } from 'vitest';
 import {
   defineRenderer,

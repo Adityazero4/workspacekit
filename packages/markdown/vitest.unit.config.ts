@@ -4,7 +4,7 @@ import { testAgainstWorkspaceSourcesWithoutABuild } from './vitest.shared.ts';
 export default defineConfig({
   resolve: testAgainstWorkspaceSourcesWithoutABuild,
   test: {
-    name: '@scope/markdown',
+    name: '@workspacekit/markdown',
     environment: 'node',
     include: ['test/**/*.test.ts'],
   },

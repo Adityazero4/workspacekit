@@ -30,13 +30,14 @@ All paths are relative to wherever you mount the handler. A `path` query paramet
 - Every request that is not a `GET` must send `X-FS-Request: 1`. Without it the answer is 403. `httpAdapter` adds it.
 - `If-Mtime-Ms` on `write` is the version the client read. If the file changed since, the answer is 409 `conflict` and nothing is written.
 - `X-Mtime-Ms` on `read` is the version of the file just read.
+- Every response carries `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`.
 
 ## Errors
 
-A failure is a JSON body `{ error: { kind, message, path? } }`. `kind` is one of `not_found`, `conflict`, `forbidden`, `too_large`, `invalid`, `network`, `timeout`, `cancelled` or `unknown`. The status follows the kind: 400 `invalid`, 403 `forbidden`, 404 `not_found`, 409 `conflict`, 413 `too_large`, 504 `timeout`, and 500 otherwise. An unsatisfiable range is 416.
+A failure is a JSON body `{ error: { kind, message, path? } }`. `kind` is one of `not_found`, `conflict`, `forbidden`, `too_large`, `invalid`, `network`, `timeout`, `cancelled` or `unknown`. The status follows the kind: 400 `invalid`, 403 `forbidden`, 404 `not_found`, 409 `conflict`, 413 `too_large`, 504 `timeout`, and 500 otherwise. An unsatisfiable range is 416. A server at capacity, with too many unfinished uploads or live-update streams, answers 503 with `Retry-After`. The server's limits are in [the handler](/docs/server/handler#limits).
 
 ## Live updates
 
 `watch` answers `text/event-stream`. Each message is `data: ` followed by a JSON array of change events, then a blank line. Each event is `{ type, path, oldPath?, mtimeMs?, actor?, entry? }` where `type` is `created`, `updated`, `deleted`, `moved` or `resync`. A `: ping` comment is sent on an interval to keep the connection open. A store without `watch` answers 501. One that cannot start watching answers 503 with a `Retry-After` header, which `httpAdapter` honors before it reconnects.
 
-`httpAdapter` is the reference client, in `@scope/core/http`.
+`httpAdapter` is the reference client, in `@workspacekit/core/http`. When `watch` answers 400, 403, 404 or 501 it stops watching and polls `list` instead.

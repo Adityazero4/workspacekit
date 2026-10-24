@@ -1,4 +1,4 @@
-import type { Entry, EntryKind } from '@scope/core';
+import type { Entry, EntryKind } from '@workspacekit/core';
 import type { ComponentType, SVGProps } from 'react';
 import type { FileSystemContext } from '../provider/hooks';
 import type { FileTreeApi } from '../tree/useFileTree';

@@ -10,9 +10,9 @@ import { apiEntries, assembleApiPages, missingExports } from './api-reference.mj
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 
 const entries = [
-  { folderName: 'core', specifier: '@scope/core', moduleName: 'core/src' },
-  { folderName: 'core', specifier: '@scope/core/http', moduleName: 'core/src/http' },
-  { folderName: 'react', specifier: '@scope/react', moduleName: 'react/src' },
+  { folderName: 'core', specifier: '@workspacekit/core', moduleName: 'core/src' },
+  { folderName: 'core', specifier: '@workspacekit/core/http', moduleName: 'core/src/http' },
+  { folderName: 'react', specifier: '@workspacekit/react', moduleName: 'react/src' },
 ];
 
 const modules = new Map([
@@ -31,9 +31,9 @@ test('assembleApiPages writes one page per package with a section per entry poin
   const pages = assembleApiPages(modules, entries);
   assert.deepEqual([...pages.keys()].sort(), ['core.md', 'index.md', 'meta.json', 'react.md']);
   const core = pages.get('core.md');
-  assert.match(core, /^---\ntitle: "@scope\/core"\n/);
-  assert.match(core, /^## @scope\/core$/m);
-  assert.match(core, /^## @scope\/core\/http$/m);
+  assert.match(core, /^---\ntitle: "@workspacekit\/core"\n/);
+  assert.match(core, /^## @workspacekit\/core$/m);
+  assert.match(core, /^## @workspacekit\/core\/http$/m);
   assert.match(core, /^### Functions$/m);
   assert.match(core, /^#### joinPath\(\)$/m);
   assert.match(core, /^# not a heading$/m);
@@ -43,14 +43,14 @@ test('assembleApiPages rewrites links between modules and packages', () => {
   const core = assembleApiPages(modules, entries).get('core.md');
   assert.ok(core.includes('[FileInfo](/api/react#fileinfo)'));
   assert.ok(core.includes('[self](#joinpath)'));
-  assert.ok(core.includes('[root](#scopecore)'));
+  assert.ok(core.includes('[root](#workspacekitcore)'));
   assert.ok(core.includes('[name](#joinpath)'));
   assert.ok(!core.includes('.md'));
 });
 
 test('assembleApiPages lists every package in the index and the navigation', () => {
   const pages = assembleApiPages(modules, entries);
-  assert.ok(pages.get('index.md').includes('[@scope/react](/api/react)'));
+  assert.ok(pages.get('index.md').includes('[@workspacekit/react](/api/react)'));
   assert.deepEqual(JSON.parse(pages.get('meta.json')).pages, ['index', 'core', 'react']);
 });
 
@@ -63,12 +63,12 @@ test('assembleApiPages is deterministic', () => {
 test('missingExports names an export that has no heading, and ignores () and escapes', () => {
   const pages = assembleApiPages(modules, entries);
   const expected = [
-    { folderName: 'core', specifier: '@scope/core', names: ['joinPath'] },
-    { folderName: 'core', specifier: '@scope/core/http', names: ['httpAdapter'] },
-    { folderName: 'react', specifier: '@scope/react', names: ['FileInfo', 'Missing_name'] },
+    { folderName: 'core', specifier: '@workspacekit/core', names: ['joinPath'] },
+    { folderName: 'core', specifier: '@workspacekit/core/http', names: ['httpAdapter'] },
+    { folderName: 'react', specifier: '@workspacekit/react', names: ['FileInfo', 'Missing_name'] },
   ];
   assert.deepEqual(missingExports(pages, expected), [
-    '@scope/react: the export Missing_name has no heading in /api/react.',
+    '@workspacekit/react: the export Missing_name has no heading in /api/react.',
   ]);
 });
 
@@ -76,17 +76,17 @@ test('missingExports ignores a same-named property or a name in another entry po
   const pages = new Map([
     [
       'core.md',
-      '## @scope/core\n\n### Interfaces\n\n#### Options\n\n##### joinPath\n\n## @scope/core/http\n\n#### httpAdapter()\n',
+      '## @workspacekit/core\n\n### Interfaces\n\n#### Options\n\n##### joinPath\n\n## @workspacekit/core/http\n\n#### httpAdapter()\n',
     ],
   ]);
   const expected = [
-    { folderName: 'core', specifier: '@scope/core', names: ['joinPath', 'httpAdapter'] },
-    { folderName: 'core', specifier: '@scope/core/http', names: ['httpAdapter', 'Options'] },
+    { folderName: 'core', specifier: '@workspacekit/core', names: ['joinPath', 'httpAdapter'] },
+    { folderName: 'core', specifier: '@workspacekit/core/http', names: ['httpAdapter', 'Options'] },
   ];
   assert.deepEqual(missingExports(pages, expected), [
-    '@scope/core: the export joinPath has no heading in /api/core.',
-    '@scope/core: the export httpAdapter has no heading in /api/core.',
-    '@scope/core/http: the export Options has no heading in /api/core.',
+    '@workspacekit/core: the export joinPath has no heading in /api/core.',
+    '@workspacekit/core: the export httpAdapter has no heading in /api/core.',
+    '@workspacekit/core/http: the export Options has no heading in /api/core.',
   ]);
 });
 
@@ -103,10 +103,10 @@ test('assembleApiPages gives an export that two entry points share its own ancho
   const pages = assembleApiPages(shared, entries.slice(0, 2));
   const core = pages.get('core.md');
   assert.match(core, /^#### joinPath\(\)$/m);
-  assert.match(core, /^#### joinPath\(\) \[#scopecorehttp-joinpath\]$/m);
+  assert.match(core, /^#### joinPath\(\) \[#workspacekitcorehttp-joinpath\]$/m);
   const expected = [
-    { folderName: 'core', specifier: '@scope/core', names: ['joinPath'] },
-    { folderName: 'core', specifier: '@scope/core/http', names: ['joinPath'] },
+    { folderName: 'core', specifier: '@workspacekit/core', names: ['joinPath'] },
+    { folderName: 'core', specifier: '@workspacekit/core/http', names: ['joinPath'] },
   ];
   assert.deepEqual(missingExports(pages, expected), []);
 });
@@ -116,7 +116,7 @@ test('assembleApiPages separates two exports whose names differ only by case', (
     ['core/src', '# core/src\n\n## Functions\n\n### fileInfo()\n\n## Type Aliases\n\n### FileInfo\n'],
   ]);
   const core = assembleApiPages(cased, entries.slice(0, 1)).get('core.md');
-  assert.match(core, /^#### FileInfo \[#scopecore-fileinfo\]$/m);
+  assert.match(core, /^#### FileInfo \[#workspacekitcore-fileinfo\]$/m);
 });
 
 test('assembleApiPages never gives two exports the same generated anchor', () => {
@@ -150,10 +150,10 @@ test('assembleApiPages leaves TSDoc text inert: no tags, expressions or include 
 test('apiEntries maps every public export to its src module and skips stylesheets', async () => {
   const found = await apiEntries(ROOT, PUBLIC_PACKAGES);
   const specifiers = found.map((entry) => entry.specifier);
-  assert.ok(specifiers.includes('@scope/core/http'));
-  assert.ok(specifiers.includes('@scope/react/renderer-kit'));
+  assert.ok(specifiers.includes('@workspacekit/core/http'));
+  assert.ok(specifiers.includes('@workspacekit/react/renderer-kit'));
   assert.ok(!specifiers.some((specifier) => specifier.endsWith('.css')));
-  const http = found.find((entry) => entry.specifier === '@scope/core/http');
+  const http = found.find((entry) => entry.specifier === '@workspacekit/core/http');
   assert.equal(http.moduleName, 'core/src/http');
   assert.equal(http.sourceFile, 'packages/core/src/http/index.ts');
   for (const entry of found) assert.ok(existsSync(path.join(ROOT, entry.sourceFile)), entry.sourceFile);

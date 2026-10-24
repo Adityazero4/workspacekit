@@ -1,5 +1,5 @@
-import { statusOf } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import { statusOf } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useRef } from 'react';
 import { expect, test, vi } from 'vitest';

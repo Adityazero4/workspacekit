@@ -1,11 +1,11 @@
-import { textRenderer } from '@scope/react';
+import { textRenderer } from '@workspacekit/react';
 import {
   defineRenderer,
   MATCH_SCORE,
   type FileInfo,
   type Renderer,
   type RendererProps,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { createElement, lazy } from 'react';
 import { MarkdownRendererView } from './MarkdownView';
 import type { MarkdownClassNames } from './parts';
@@ -34,8 +34,8 @@ function matchScore(file: FileInfo): number | false {
 
 /**
  * Options of `markdownRenderer`. `source` is the renderer that draws source mode (the light text renderer
- * by default; pass `codeRenderer()` from `@scope/code` for highlighting). `classNames` adds classes to this
- * package's parts.
+ * by default; pass `codeRenderer()` from `@workspacekit/code` for highlighting). `classNames` adds classes to
+ * this package's parts.
  *
  * @example
  * ```ts

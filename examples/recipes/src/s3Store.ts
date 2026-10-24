@@ -6,8 +6,8 @@ import {
   type Entry,
   type EntryKind,
   type TransferOptions,
-} from '@scope/core';
-import type { FileStore } from '@scope/server';
+} from '@workspacekit/core';
+import type { FileStore } from '@workspacekit/server';
 
 interface ListedObject {
   Key?: string;
@@ -507,7 +507,7 @@ class S3Store implements FileStore {
  *
  * @example
  * import { S3 } from '@aws-sdk/client-s3';
- * import { createFileHandler } from '@scope/server';
+ * import { createFileHandler } from '@workspacekit/server';
  *
  * const store = s3Store(new S3({ region: 'us-east-1' }), 'agent-files', 'tenant-a');
  * export const handler = createFileHandler({ store, authorize: async (req) => isSignedIn(req) });

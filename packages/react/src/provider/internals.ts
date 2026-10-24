@@ -1,5 +1,6 @@
 'use client';
-import type { TreeStore } from '@scope/core';
+import { type TreeStore } from '@workspacekit/core';
+import { docsLink } from '@workspacekit/core/docs';
 import type { FollowedMove } from '../actions/followMove';
 import type { EditBuffers } from '../editing/buffers';
 import type { TreeCommandsHost } from '../actions/treeCommands';
@@ -95,7 +96,7 @@ export function internalsOf(fs: Pick<FileSystemContext, 'store'>): FileSystemInt
   if (!internals) {
     throw new Error(
       'This file-system context does not come from <FileSystemProvider>. Read it with useFileSystem() inside ' +
-        '<FileSystemProvider adapter={yourAdapter}>…</FileSystemProvider>.',
+        `<FileSystemProvider adapter={yourAdapter}>…</FileSystemProvider>. See ${docsLink('concepts/adapter', 'provider-and-hooks')}`,
     );
   }
   return internals;

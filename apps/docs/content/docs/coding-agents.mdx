@@ -8,31 +8,31 @@ An agent should get the integration right using only what ships with the package
 ## llms.txt and llms-full.txt
 
 - [`/llms.txt`](/llms.txt) is a short map that links the start pages, the packages and the recipes. It does not list every export.
-- [`/llms-full.txt`](/llms-full.txt) is the text of every docs page in one file, with the `@scope/core` adapter contract (`FileSystemAdapter`, `Entry` and the option and error types) written out. The other API pages are linked from it, not copied.
+- [`/llms-full.txt`](/llms-full.txt) is the text of every docs page in one file, with the `@workspacekit/core` adapter contract (`FileSystemAdapter`, `Entry` and the option and error types) written out. The other API pages are linked from it, not copied.
 - Every npm package also contains its own `llms.txt`, generated from its README and its type declarations, with one line for every export. `pnpm agent-docs` regenerates them, and `pnpm check:agent-docs` fails when one is stale or an export is missing.
 
 Point your agent at `/llms.txt` first.
 
 ## AGENTS.md
 
-The repository has an `AGENTS.md`, and so does every package, inside its npm tarball. Each holds the install command, the one correct quick start, the rule that only public subpaths may be imported, and the common mistakes. An agent working in your app finds the package's `AGENTS.md` under `node_modules/@scope/<package>/`.
+The repository has an `AGENTS.md`, and so does every package, inside its npm tarball. Each holds the install command, the one correct quick start, the rule that only public subpaths may be imported, and the common mistakes. An agent working in your app finds the package's `AGENTS.md` under `node_modules/@workspacekit/<package>/`.
 
 ## Common mistakes
 
-The same list of five mistakes appears in every `AGENTS.md`, between the `common-mistakes` markers. It is generated from one source, so it cannot differ between packages. Read it in `node_modules/@scope/workspace/AGENTS.md`. The mistakes it covers are the ones agents make most:
+The same list of five mistakes appears in every `AGENTS.md`, between the `common-mistakes` markers. It is generated from one source, so it cannot differ between packages. Read it in `node_modules/@workspacekit/workspace/AGENTS.md`. The mistakes it covers are the ones agents make most:
 
 - no `authorize` on the handler;
 - no stylesheet;
 - an import from a path that is not public;
 - no `'use client'` in Next.js;
-- a Vite config that includes `@scope/spreadsheet` (as the `@scope/workspace` preset does) without `worker: { format: 'es' }`, or a dev-server exclude without the nested `include`. `@scope/pdf` on its own needs neither the worker format nor the nested `include`.
+- a Vite config that includes `@workspacekit/spreadsheet` (as the `@workspacekit/workspace` preset does) without `worker: { format: 'es' }`, or a dev-server exclude without the nested `include`. `@workspacekit/pdf` on its own needs neither the worker format nor the nested `include`.
 
 ## One correct way
 
-The docs, READMEs, `AGENTS.md` and `llms.txt` show one way to do each thing: the [Next.js quick start](/docs/getting-started/next), the public subpaths only, and `@scope/workspace/styles.css`. There are no aliases and no deprecated twins. Every code block that is TypeScript is typechecked against the built packages in CI, so what you copy compiles.
+The docs, READMEs, `AGENTS.md` and `llms.txt` show one way to do each thing: the [Next.js quick start](/docs/getting-started/next), the public subpaths only, and `@workspacekit/workspace/styles.css`. There are no aliases and no deprecated twins. Every code block that is TypeScript is typechecked against the built packages in CI, so what you copy compiles.
 
 Error messages say what to do. For example, `createFileHandler` throws when `authorize` is missing, so a server is never open by accident.
 
 ## Start a project with an agent
 
-`npm create @scope/workspace` copies a tested Next.js or Vite example into a new folder. See the package's README for options. Then give the agent `/llms.txt` and ask for the change.
+`npm create @workspacekit/workspace` copies a tested Next.js or Vite example into a new folder. See the package's README for options. Then give the agent `/llms.txt` and ask for the change.

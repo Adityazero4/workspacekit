@@ -42,9 +42,9 @@ test('no Lexical type leaks into the public declarations', () => {
   expect(distText('index.d.ts')).not.toMatch(/import\(['"](lexical|@lexical\/)/);
 });
 
-test('@scope/react stays external: imported by specifier, none of its modules bundled', () => {
+test('@workspacekit/react stays external: imported by specifier, none of its modules bundled', () => {
   const files = filesReachableFrom(DIST, 'index.js', { throughDynamicImports: true });
-  expect(importsOf(distText('index.js')).static).toContain('@scope/react/renderer-kit');
+  expect(importsOf(distText('index.js')).static).toContain('@workspacekit/react/renderer-kit');
   const bundledModules = files.flatMap((file) => modulesIn(distText(file)));
   expect(bundledModules.filter((module) => !module.startsWith('src/'))).toEqual([]);
 });

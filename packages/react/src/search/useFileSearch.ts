@@ -7,7 +7,7 @@ import {
   type Entry,
   type FileSystemAdapter,
   type FsError,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { useEffect, useState } from 'react';
 import { failureMessage, useFileSystem, useUiValue } from '../provider/hooks';
 

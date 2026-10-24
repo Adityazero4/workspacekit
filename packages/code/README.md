@@ -1,4 +1,4 @@
-# @scope/code
+# @workspacekit/code
 
 A code renderer for the file workspace: an editable CodeMirror 6 editor with syntax highlighting for code, configuration and data files.
 
@@ -7,21 +7,21 @@ It opens files such as .ts, .json, .yaml, Makefile and .env up to 10 MiB. CodeMi
 ## Install
 
 ```sh
-npm install @scope/code @scope/react react react-dom
+npm install @workspacekit/code @workspacekit/react react react-dom
 ```
 
-`@scope/react` and `react` are peer dependencies. If you want every renderer at once, install `@scope/workspace` instead.
+`@workspacekit/react` and `react` are peer dependencies. If you want every renderer at once, install `@workspacekit/workspace` instead.
 
 ## Entry
 
 `codeRenderer()` returns a renderer. Add it before `lightRenderers` so it wins for its own files, and pass the array to `Workspace`. Create the array once, at module level.
 
 ```tsx
-import { httpAdapter } from '@scope/core/http';
-import { lightRenderers, Workspace } from '@scope/react';
-import { codeRenderer } from '@scope/code';
-import '@scope/react/styles.css';
-import '@scope/code/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { lightRenderers, Workspace } from '@workspacekit/react';
+import { codeRenderer } from '@workspacekit/code';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/code/styles.css';
 
 const adapter = httpAdapter('/api/files');
 const renderers = [codeRenderer(), ...lightRenderers];
@@ -36,9 +36,9 @@ export default function Files(): React.JSX.Element {
 `CodeViewer` shows one file without a tree or a provider.
 
 ```tsx
-import { CodeViewer } from '@scope/code';
-import '@scope/react/styles.css';
-import '@scope/code/styles.css';
+import { CodeViewer } from '@workspacekit/code';
+import '@workspacekit/react/styles.css';
+import '@workspacekit/code/styles.css';
 
 export function Preview(): React.JSX.Element {
   return <CodeViewer src={new Blob(['export const answer = 42;'])} fileName="answer.ts" />;
@@ -49,7 +49,7 @@ export function Preview(): React.JSX.Element {
 
 ## CSS
 
-Import `@scope/react/styles.css` and `@scope/code/styles.css` once each. Both live in `@layer fs` and use only `--fs-*` tokens. With `@scope/workspace`, its single `@scope/workspace/styles.css` covers every package.
+Import `@workspacekit/react/styles.css` and `@workspacekit/code/styles.css` once each. Both live in `@layer fs` and use only `--fs-*` tokens. With `@workspacekit/workspace`, its single `@workspacekit/workspace/styles.css` covers every package.
 
 ## Options
 
@@ -62,4 +62,4 @@ Pass them to the factory, as in `codeRenderer({ nonce })`. `CodeViewer` takes `n
 
 No configuration is needed in a build or in the dev server.
 
-Every export is documented with an example in the [API reference](https://docs.example.invalid/api/code).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/code).

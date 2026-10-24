@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { cleanup, render } from 'vitest-browser-react';
-import '@scope/react/styles.css';
+import '@workspacekit/react/styles.css';
 import '../src/styles.css';
 import { MarkdownEditor } from '../src';
 import type * as Transformers from '../src/transformers';

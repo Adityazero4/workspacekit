@@ -7,7 +7,7 @@ import {
   type RendererProps,
   type ViewerError,
   type VirtualPagesHandle,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { useRef, useState } from 'react';
 import type { PageNavigation } from './linkService';
 import type { PdfEngineOptions, PdfFile } from './loadDocument';

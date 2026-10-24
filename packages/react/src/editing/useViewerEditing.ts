@@ -1,5 +1,5 @@
 'use client';
-import { basename, toFsError, type FsError } from '@scope/core';
+import { basename, toFsError, type FsError } from '@workspacekit/core';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { failureMessage, useFileSystem, type FileSystemContext } from '../provider/hooks';
 import { useFileSystemInternals } from '../provider/internals';

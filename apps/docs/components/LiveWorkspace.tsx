@@ -1,8 +1,8 @@
 'use client';
-import { createMemoryAdapter } from '@scope/core/memory';
-import { sampleFiles, simulateAgent } from '@scope/demo-kit';
-import { Workspace } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { sampleFiles, simulateAgent } from '@workspacekit/demo-kit';
+import { Workspace } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 import { useTheme } from 'fumadocs-ui/provider/base';
 import { useEffect, useRef, useState } from 'react';
 import { AGENT_INTERVAL_MS, AGENT_SCRIPT, countAgentWrites, markAgentRunning } from '../lib/agentProbe';

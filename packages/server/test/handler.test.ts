@@ -3,9 +3,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { unzipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CSRF_HEADER, createTreeStore, statusOf } from '@scope/core';
-import type { EntriesResponse, Entry, EntryResponse, ErrorBody, UploadInitResponse } from '@scope/core';
-import { httpAdapter } from '@scope/core/http';
+import { CSRF_HEADER, createTreeStore, statusOf } from '@workspacekit/core';
+import type {
+  EntriesResponse,
+  Entry,
+  EntryResponse,
+  ErrorBody,
+  UploadInitResponse,
+} from '@workspacekit/core';
+import { httpAdapter } from '@workspacekit/core/http';
 import { createFileHandler, nodeFsStore, type FileHandlerOptions, type FileStore } from '../src';
 
 const enc = new TextEncoder();
@@ -74,7 +80,9 @@ function spy(real: FileStore): { store: FileStore; calls: string[] } {
 
 describe('construction, routing and authorization', () => {
   it('throws at construction without authorize', () => {
-    expect(() => createFileHandler({ store } as unknown as FileHandlerOptions)).toThrow(/authorize/);
+    expect(() => createFileHandler({ store } as unknown as FileHandlerOptions)).toThrow(
+      /"authorize" is required.*docs\/server\/handler#authorize/s,
+    );
   });
 
   it('authorize false -> 403 ErrorBody, store not called, with the right op and normalized path', async () => {
@@ -532,7 +540,7 @@ describe('uploads', () => {
     const old = await init(h, 'old.bin', 8);
     await h(chunk(old.uploadId, 0, 0, 'abcd'));
     await sleep(120);
-    const fresh = await init(h, 'fresh.bin', 8); // any upload request sweeps
+    const fresh = await init(h, 'fresh.bin', 8); // the sweep timer removed old.bin meanwhile
     expect((await h(chunk(old.uploadId, 1, 4, 'efgh'))).status).toBe(404);
     expect(await tempFiles()).toHaveLength(1); // only fresh's session dir is left
     expect((await h(chunk(fresh.uploadId, 0, 0, 'abcd'))).status).toBe(204);
@@ -941,6 +949,64 @@ describe('errors', () => {
       },
     });
     expect((await h(new Request(url('stat', { path: 'a' })))).status).toBe(500);
+  });
+});
+
+describe('response hardening', () => {
+  it('every response is no-store and nosniff, whatever its route or status', async () => {
+    await put('a.txt', 'a');
+    const h = make({ authorize: (_r, op) => op !== 'stat' });
+    const responses = [
+      await h(new Request(url('list'))),
+      await h(new Request(url('read', { path: 'a.txt' }))),
+      await h(post('download', { paths: ['a.txt', ''] })),
+      await h(new Request(url('stat', { path: 'a.txt' }))),
+      await h(new Request(url('nope'))),
+      await h(new Request(url('delete', { path: 'a.txt' }), { method: 'DELETE', headers: H })),
+    ];
+    expect(responses.map((res) => res.status)).toEqual([200, 200, 200, 403, 404, 204]);
+    for (const res of responses) {
+      expect(res.headers.get('cache-control')).toContain('no-store');
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    }
+  });
+
+  it('a read never sends more bytes than its Content-Length, even when the file grows meanwhile', async () => {
+    await store.write('log.txt', new Uint8Array(1024 * 1024));
+    const res = await make()(new Request(url('read', { path: 'log.txt' })));
+    await writeFile(path.join(root, 'log.txt'), 'APPENDED-AFTER-OPEN', { flag: 'a' });
+    expect((await res.arrayBuffer()).byteLength).toBe(Number(res.headers.get('content-length')));
+  });
+
+  it('reports a file stream that fails mid-response to onError', async () => {
+    const onError = vi.fn();
+    const failing = new ReadableStream<Uint8Array>({
+      pull: (controller) => controller.error(new Error('EIO: disk went away')),
+    });
+    const entry: Entry = { path: 'a.txt', name: 'a.txt', kind: 'file', size: 1, mtimeMs: 1 };
+    const h = make({ store: { ...store, read: async () => ({ body: failing, size: 1, entry }) }, onError });
+    const res = await h(new Request(url('read', { path: 'a.txt' })));
+    await expect(res.arrayBuffer()).rejects.toThrow('EIO');
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'EIO: disk went away' }),
+      expect.any(Request),
+    );
+  });
+
+  it('reports a watcher that breaks down to onError and closes the stream', async () => {
+    const onError = vi.fn();
+    let breakDown: (error: unknown) => void = () => undefined;
+    const watching: FileStore = {
+      ...store,
+      watch: (_onChange, onFailure) => ((breakDown = onFailure!), () => undefined),
+    };
+    const res = await make({ store: watching, onError })(new Request(url('watch')));
+    breakDown(new Error('EMFILE: too many open files'));
+    await res.arrayBuffer();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'EMFILE: too many open files' }),
+      expect.any(Request),
+    );
   });
 });
 

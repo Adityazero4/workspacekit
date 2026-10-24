@@ -1,7 +1,7 @@
-@import '@scope/react/styles.css';
-@import '@scope/code/styles.css';
-@import '@scope/docx/styles.css';
-@import '@scope/markdown/styles.css';
-@import '@scope/pdf/styles.css';
-@import '@scope/pptx/styles.css';
-@import '@scope/spreadsheet/styles.css';
+@import '@workspacekit/react/styles.css';
+@import '@workspacekit/code/styles.css';
+@import '@workspacekit/docx/styles.css';
+@import '@workspacekit/markdown/styles.css';
+@import '@workspacekit/pdf/styles.css';
+@import '@workspacekit/pptx/styles.css';
+@import '@workspacekit/spreadsheet/styles.css';

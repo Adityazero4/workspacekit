@@ -1,5 +1,5 @@
-import { createTreeStore, type TreeSnapshot } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import { createTreeStore, type TreeSnapshot } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { expect, test } from 'vitest';
 import {
   activateTab,

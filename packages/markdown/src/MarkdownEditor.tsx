@@ -1,6 +1,6 @@
 'use client';
-import { StandaloneRoot, type StandaloneViewerProps } from '@scope/react/renderer-kit';
-import { TextViewer } from '@scope/react/renderers';
+import { StandaloneRoot, type StandaloneViewerProps } from '@workspacekit/react/renderer-kit';
+import { TextViewer } from '@workspacekit/react/renderers';
 import type { ComponentType } from 'react';
 import { MarkdownBody, type MarkdownMode } from './MarkdownView';
 import type { MarkdownPart } from './parts';
@@ -9,7 +9,8 @@ const SHOWN = { status: 'ready' } as const;
 const NO_BYTES = new Uint8Array();
 
 /**
- * Props of the editor `MarkdownEditor` uses for source mode. `CodeEditor` from `@scope/code` takes them.
+ * Props of the editor `MarkdownEditor` uses for source mode. `CodeEditor` from `@workspacekit/code` takes
+ * them.
  *
  * @example
  * ```tsx
@@ -27,7 +28,7 @@ export interface SourceEditorProps {
  * Props of `MarkdownEditor`: a controlled `value`, with every standalone viewer prop except `src`.
  * `onChange` receives the whole text after an edit; `mode` picks the `rendered` (default) or `source`
  * view; `sourceEditor` draws source mode (the light text editor by default; pass `CodeEditor` from
- * `@scope/code` for highlighting).
+ * `@workspacekit/code` for highlighting).
  *
  * @example
  * ```tsx

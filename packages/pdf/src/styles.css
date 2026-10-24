@@ -1,4 +1,4 @@
-/* Default look of @scope/pdf. Everything lives in @layer fs, so any unlayered consumer CSS wins. The build
+/* Default look of @workspacekit/pdf. Everything lives in @layer fs, so any unlayered consumer CSS wins. The build
    appends pdf.js's own page, text-layer and annotation-layer rules, scoped under the pdf-viewer part. */
 @layer fs {
   [data-fs-part='pdf-viewer'] {

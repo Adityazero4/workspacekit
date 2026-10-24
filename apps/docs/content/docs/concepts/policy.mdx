@@ -10,9 +10,9 @@ There are two layers, and they do different jobs. `canPerform` shapes the interf
 `canPerform(actionId, entry)` is asked for every built-in and custom action on every entry. Return `false` and the action is not offered. For example, keep an agent's `.git` read-only:
 
 ```tsx
-import { httpAdapter } from '@scope/core/http';
-import { Workspace, type CanPerform } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { Workspace, type CanPerform } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 
 const adapter = httpAdapter('/api/files');
 
@@ -34,9 +34,9 @@ Try it: `README.md` and `package.json` cannot be deleted, renamed or cut in this
 
 ## On the server: authorize
 
-`canPerform` is not a security control, because a client can call the server directly. `createFileHandler` requires `authorize(req, op, path)` and answers 403 when it returns a falsy value. It is asked once per affected path. Two rules matter:
+`canPerform` is not a security control, because a client can call the server directly. `createFileHandler` requires `authorize(req, op, path)` and answers 403 when it returns anything but `true`. It is asked at least once per affected path, and may be asked again for the same path (link targets, zip entries when opened), so keep it free of side effects. Two rules matter:
 
-- `list`, `search` and `stat` results are not filtered per entry. A principal who may see only part of the tree must be denied `'list'` and `'search'`, or the hidden parts must be protected with `exclude`.
+- `list` and `search` results are not filtered per entry. A principal who may see only part of the tree must be denied `'list'` and `'search'`, or the hidden parts must be protected with `exclude`.
 - `watch` is asked once, with `''`, and its events reveal paths anywhere under the root. Deny `'watch'` to anyone scoped to part of the tree.
 
 `readOnly: true` on the handler rejects every mutating operation. See [the handler](/docs/server/handler) and [security](/docs/server/security).

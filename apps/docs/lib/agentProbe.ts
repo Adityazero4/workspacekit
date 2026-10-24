@@ -1,5 +1,5 @@
-import type { MemoryAdapter } from '@scope/core/memory';
-import { DEFAULT_AGENT_SCRIPT, type AgentStep } from '@scope/demo-kit';
+import type { MemoryAdapter } from '@workspacekit/core/memory';
+import { DEFAULT_AGENT_SCRIPT, type AgentStep } from '@workspacekit/demo-kit';
 import { TEST_AGENT_INTERVAL_MS } from './testAgent';
 
 /**

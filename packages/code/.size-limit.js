@@ -1,6 +1,6 @@
 const peersAndEnginesMeasuredElsewhere = [
   'react',
-  '@scope/react',
+  '@workspacekit/react',
   '@codemirror/commands',
   '@codemirror/language',
   '@codemirror/language-data',
@@ -12,7 +12,7 @@ const peersAndEnginesMeasuredElsewhere = [
 
 export default [
   {
-    name: '@scope/code: all of our own code, entry and lazy chunk, CodeMirror external',
+    name: '@workspacekit/code: all of our own code, entry and lazy chunk, CodeMirror external',
     path: 'dist/*.js',
     limit: '5 KB',
     gzip: true,

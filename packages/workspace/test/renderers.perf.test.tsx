@@ -1,8 +1,8 @@
-import { createMemoryAdapter } from '@scope/core/memory';
-import { PdfViewer } from '@scope/pdf';
-import { PptxViewer } from '@scope/pptx';
-import { allRenderers } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { PdfViewer } from '@workspacekit/pdf';
+import { PptxViewer } from '@workspacekit/pptx';
+import { allRenderers } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 import { afterEach, expect, test } from 'vitest';
 import {
   heapWhileScrollingPages,

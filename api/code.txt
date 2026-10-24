@@ -1,0 +1,10 @@
+@workspacekit/code CODE_MAX_BYTES
+@workspacekit/code CODE_PARTS
+@workspacekit/code CodeClassNames
+@workspacekit/code CodeEditor
+@workspacekit/code CodeEditorProps
+@workspacekit/code CodePart
+@workspacekit/code CodeRendererOptions
+@workspacekit/code CodeViewer
+@workspacekit/code CodeViewerProps
+@workspacekit/code codeRenderer

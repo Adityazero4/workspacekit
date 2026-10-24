@@ -1,5 +1,5 @@
 'use client';
-import type { RendererProps } from '@scope/react/renderer-kit';
+import type { RendererProps } from '@workspacekit/react/renderer-kit';
 import TemplateText from './TemplateText';
 import type { TemplateClassNames } from './parts';
 

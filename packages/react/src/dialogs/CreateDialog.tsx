@@ -1,5 +1,5 @@
 'use client';
-import { validateName, type EntryKind, type NameProblem } from '@scope/core';
+import { validateName, type EntryKind, type NameProblem } from '@workspacekit/core';
 import { useEffect, useId, useState, type ComponentType } from 'react';
 import type { DialogSlotProps } from '../components';
 import { partProps } from '../cx';

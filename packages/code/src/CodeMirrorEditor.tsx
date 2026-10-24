@@ -12,7 +12,12 @@ import {
   lineNumbers,
   type ViewUpdate,
 } from '@codemirror/view';
-import { lineBreakOf, partProps, withLfLineBreaks, type RendererProps } from '@scope/react/renderer-kit';
+import {
+  lineBreakOf,
+  partProps,
+  withLfLineBreaks,
+  type RendererProps,
+} from '@workspacekit/react/renderer-kit';
 import { useEffect, useEffectEvent, useRef } from 'react';
 import { editReporter } from './editReporter';
 import { matchFilename, matchLanguageName } from './languages';

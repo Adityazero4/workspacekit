@@ -1,25 +1,25 @@
-# @scope/docx
+# @workspacekit/docx
 
 > A Word renderer for the file workspace: .docx files laid out in pages by docx-preview and sanitized before they are shown.
 
-- API reference: https://docs.example.invalid/api/docx
-- Install: `npm install @scope/docx @scope/react react react-dom`
+- API reference: https://adityazero4.github.io/workspacekit/api/docx
+- Install: `npm install @workspacekit/docx @workspacekit/react react react-dom`
 
 ## README sections
 
 - Install
 - Entry: `docxRenderer()` returns a renderer.
 - Standalone use: `DocxViewer` shows one file without a tree or a provider.
-- CSS: Import `@scope/react/styles.css` and `@scope/docx/styles.css` once each.
+- CSS: Import `@workspacekit/react/styles.css` and `@workspacekit/docx/styles.css` once each.
 - Options: `classNames`: classes for this package's `docx-*` parts.
 - Vite: No configuration is needed in a build or in the dev server.
 
 ## Entry points
 
-- `@scope/docx`
-- `@scope/docx/styles.css` (stylesheet)
+- `@workspacekit/docx`
+- `@workspacekit/docx/styles.css` (stylesheet)
 
-## Exports of `@scope/docx`
+## Exports of `@workspacekit/docx`
 
 - `DOCX_MAX_BYTES`: The largest `.docx` the renderer and the standalone `DocxViewer` open: 25 MiB.
 - `DOCX_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `docx-` prefix.

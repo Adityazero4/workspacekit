@@ -1,4 +1,4 @@
-import type { ChangeEvent } from '@scope/core';
+import type { ChangeEvent } from '@workspacekit/core';
 
 const dec = new TextDecoder();
 

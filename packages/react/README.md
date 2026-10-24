@@ -1,13 +1,13 @@
-# @scope/react
+# @workspacekit/react
 
 The React file workspace: a virtualized file tree, search, tabs, upload and viewers, in one `Workspace` component, plus every building block it is made of.
 
-It renders text, HTML, images, audio and video out of the box. For PDF, Word, PowerPoint, spreadsheets, Markdown and code, install `@scope/workspace`, which adds the renderer packages.
+It renders text, HTML, images, audio and video out of the box. For PDF, Word, PowerPoint, spreadsheets, Markdown and code, install `@workspacekit/workspace`, which adds the renderer packages.
 
 ## Install
 
 ```sh
-npm install @scope/react @scope/core react react-dom
+npm install @workspacekit/react @workspacekit/core react react-dom
 ```
 
 ## Entry
@@ -16,9 +16,9 @@ npm install @scope/react @scope/core react react-dom
 
 ```tsx
 'use client';
-import { httpAdapter } from '@scope/core/http';
-import { Workspace } from '@scope/react';
-import '@scope/react/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { Workspace } from '@workspacekit/react';
+import '@workspacekit/react/styles.css';
 
 const adapter = httpAdapter('/api/files');
 
@@ -32,9 +32,9 @@ export default function Files(): React.JSX.Element {
 `FileSystemProvider` owns the tree store. Everything below it reads it through hooks.
 
 ```tsx
-import { createMemoryAdapter } from '@scope/core/memory';
-import { FileSearch, FileSystemProvider, FileTree } from '@scope/react';
-import '@scope/react/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { FileSearch, FileSystemProvider, FileTree } from '@workspacekit/react';
+import '@workspacekit/react/styles.css';
 
 const adapter = createMemoryAdapter({ files: { 'README.md': '# Hello' } });
 
@@ -50,11 +50,11 @@ export function Browser(): React.JSX.Element {
 
 ## Standalone viewers
 
-`@scope/react/renderers` exports the light viewers, which take a file and need no provider.
+`@workspacekit/react/renderers` exports the light viewers, which take a file and need no provider.
 
 ```tsx
-import { TextViewer } from '@scope/react/renderers';
-import '@scope/react/styles.css';
+import { TextViewer } from '@workspacekit/react/renderers';
+import '@workspacekit/react/styles.css';
 
 export function Note(): React.JSX.Element {
   return <TextViewer src={new Blob(['Hello'])} fileName="note.txt" />;
@@ -63,12 +63,12 @@ export function Note(): React.JSX.Element {
 
 ## Write a renderer
 
-`@scope/react/renderer-kit` is the public API for renderer packages. `defineRenderer` registers a viewer for the files it matches; pass the result to `Workspace` in `renderers`.
+`@workspacekit/react/renderer-kit` is the public API for renderer packages. `defineRenderer` registers a viewer for the files it matches; pass the result to `Workspace` in `renderers`.
 
 ```tsx
-import { createMemoryAdapter } from '@scope/core/memory';
-import { lightRenderers, Workspace } from '@scope/react';
-import { defineRenderer, MATCH_SCORE, type RendererProps } from '@scope/react/renderer-kit';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { lightRenderers, Workspace } from '@workspacekit/react';
+import { defineRenderer, MATCH_SCORE, type RendererProps } from '@workspacekit/react/renderer-kit';
 
 function Plain({ source }: RendererProps): React.JSX.Element {
   return <pre>{source.kind === 'text' ? source.text : ''}</pre>;
@@ -94,7 +94,7 @@ Create the renderer array once, at module level.
 
 ## CSS
 
-Import `@scope/react/styles.css` once. It lives in `@layer fs`, so your own CSS wins without `!important`. Every element has a `data-fs-part` attribute and uses `--fs-*` tokens. Light and dark follow `prefers-color-scheme`; set `data-theme="light"` or `"dark"` on any ancestor to override.
+Import `@workspacekit/react/styles.css` once. It lives in `@layer fs`, so your own CSS wins without `!important`. Every element has a `data-fs-part` attribute and uses `--fs-*` tokens. Light and dark follow `prefers-color-scheme`; set `data-theme="light"` or `"dark"` on any ancestor to override.
 
 ## Options
 
@@ -105,4 +105,4 @@ Import `@scope/react/styles.css` once. It lives in `@layer fs`, so your own CSS 
 - `actions`, `canPerform`, `components`: extra tree actions, a per-entry policy, and replacement menus and dialogs.
 - `onError`, `onNotify`, `onUploadConflict`: hooks for failures, notices and upload conflicts.
 
-Every export is documented with an example in the [API reference](https://docs.example.invalid/api/react).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/react).

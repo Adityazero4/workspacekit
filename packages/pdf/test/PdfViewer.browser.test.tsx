@@ -1,5 +1,5 @@
-import type { ViewerError } from '@scope/react/renderer-kit';
-import '@scope/react/styles.css';
+import type { ViewerError } from '@workspacekit/react/renderer-kit';
+import '@workspacekit/react/styles.css';
 import axe from 'axe-core';
 import { StrictMode, type ReactNode } from 'react';
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';

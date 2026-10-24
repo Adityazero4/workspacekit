@@ -1,6 +1,6 @@
 'use client';
 import * as RadixMenu from '@radix-ui/react-dropdown-menu';
-import type { Entry } from '@scope/core';
+import type { Entry } from '@workspacekit/core';
 import { Fragment, useEffect, useRef, type ComponentType } from 'react';
 import type { MenuAnchor, MenuSlotItem, MenuSlotProps } from '../components';
 import { partProps } from '../cx';

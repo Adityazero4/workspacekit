@@ -1,0 +1,11 @@
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  publish:
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4

@@ -1,5 +1,5 @@
 'use client';
-import { partProps } from '@scope/react/renderer-kit';
+import { partProps } from '@workspacekit/react/renderer-kit';
 import { $createLinkNode, $isLinkNode, $toggleLink } from '@lexical/link';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $findMatchingParent } from '@lexical/utils';

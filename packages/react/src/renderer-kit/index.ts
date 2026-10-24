@@ -12,6 +12,13 @@ export type {
 } from '../renderers/standalone';
 export { lineBreakOf, withLfLineBreaks, withLineBreak } from '../renderers/lineBreaks';
 export { mediaUrlOfBlob, safeUrlOrNull } from '../renderers/safeUrls';
+export {
+  confineDeclarations,
+  keepWebOrMailLink,
+  safeFontSource,
+  SVG_ANIMATION_ELEMENTS,
+  svgAttributeFetches,
+} from './documentSafety';
 export { stepZoom, zoomTowards } from '../renderers/zoom';
 export { useSettledAnnouncement } from '../renderers/useSettledAnnouncement';
 export { VirtualPages } from '../renderers/pages/VirtualPages';

@@ -1,7 +1,7 @@
 'use client';
-import { createMemoryAdapter } from '@scope/core/memory';
-import { logRenderer } from '@scope/example-recipes/customRenderer';
-import { sampleFiles } from '@scope/demo-kit';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { logRenderer } from '@workspacekit/example-recipes/customRenderer';
+import { sampleFiles } from '@workspacekit/demo-kit';
 import {
   allRenderers,
   FileSystemProvider,
@@ -10,8 +10,8 @@ import {
   type Action,
   type CanPerform,
   type Components,
-} from '@scope/workspace';
-import '@scope/workspace/styles.css';
+} from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 import { useState, type ReactNode } from 'react';
 
 const WORKSPACE_HEIGHT = 360;

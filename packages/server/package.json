@@ -1,9 +1,16 @@
 {
-  "name": "@scope/server",
+  "name": "@workspacekit/server",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
   "author": "Aditya Jain <adityajain042001@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Adityazero4/workspacekit.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://adityazero4.github.io/workspacekit",
+  "bugs": "https://github.com/Adityazero4/workspacekit/issues",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -13,7 +20,9 @@
     "dist",
     "README.md",
     "AGENTS.md",
-    "llms.txt"
+    "llms.txt",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     ".": {
@@ -28,7 +37,7 @@
     "smoke:dist": "node smoke-dist.mjs"
   },
   "dependencies": {
-    "@scope/core": "workspace:*",
+    "@workspacekit/core": "workspace:*",
     "fflate": "0.8.3"
   },
   "devDependencies": {

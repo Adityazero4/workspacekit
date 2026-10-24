@@ -1,8 +1,8 @@
 'use client';
-import { createMemoryAdapter } from '@scope/core/memory';
-import { sampleFiles } from '@scope/demo-kit';
-import { allRenderers, FileSystemProvider, FileViewer } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { sampleFiles } from '@workspacekit/demo-kit';
+import { allRenderers, FileSystemProvider, FileViewer } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 import { useTheme } from 'fumadocs-ui/provider/base';
 import { useState, type KeyboardEvent } from 'react';
 

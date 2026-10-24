@@ -1,6 +1,6 @@
 # Renderer package template
 
-The skeleton every renderer package (`@scope/pdf`, `@scope/code`, …) starts from. It is a private workspace
+The skeleton every renderer package (`@workspacekit/pdf`, `@workspacekit/code`, …) starts from. It is a private workspace
 package, so `pnpm check` builds, tests, lints and size-checks it like a real one; it is never published.
 
 To start a package, copy this folder and then:

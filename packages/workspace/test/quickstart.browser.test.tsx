@@ -1,9 +1,9 @@
-import { createMemoryAdapter } from '@scope/core/memory';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import { httpAdapter } from '@scope/core/http';
-import { textRenderer, unsupportedRenderer, Workspace } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { httpAdapter } from '@workspacekit/core/http';
+import { textRenderer, unsupportedRenderer, Workspace } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 import { docxBytes, paragraph } from '../../docx/test/fixtures/docx';
 import { blankPages, pdfBytes } from '../../pdf/test/fixtures/pdf';
 import Files from './quickstart/page';

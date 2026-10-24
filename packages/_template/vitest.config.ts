@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  test: { name: '@scope/template' },
+  test: { name: '@workspacekit/template' },
 });

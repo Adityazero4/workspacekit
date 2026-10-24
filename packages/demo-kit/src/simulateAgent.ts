@@ -1,5 +1,4 @@
-import type { ChangeEvent } from '@scope/core';
-import type { MemoryAdapter } from '@scope/core/memory';
+import type { MemoryAdapter } from '@workspacekit/core/memory';
 
 /**
  * One thing the simulated agent does: `create` and `edit` write `content` to `path`, `rename` moves `path`
@@ -58,25 +57,11 @@ export const DEFAULT_AGENT_SCRIPT: AgentStep[] = [
 
 const AGENT_ACTOR = 'agent';
 const DEFAULT_INTERVAL_MS = 1500;
-const ANNOUNCED_TYPE: Record<'create' | 'edit' | 'delete', ChangeEvent['type']> = {
-  create: 'created',
-  edit: 'updated',
-  delete: 'deleted',
-};
 
 async function performStep(adapter: MemoryAdapter, step: AgentStep): Promise<void> {
   if (step.kind === 'delete') await adapter.delete!(step.path);
   else if (step.kind === 'rename') await adapter.move!(step.path, step.to ?? step.path);
   else await adapter.write!(step.path, step.content ?? '');
-}
-
-function announceStep(adapter: MemoryAdapter, step: AgentStep): void {
-  if (step.kind === 'rename') {
-    adapter.emit([{ type: 'moved', path: step.to ?? step.path, oldPath: step.path, actor: AGENT_ACTOR }]);
-  } else {
-    const type = ANNOUNCED_TYPE[step.kind];
-    adapter.emit([{ type, path: step.path, actor: AGENT_ACTOR }]);
-  }
 }
 
 function pauseUnlessAborted(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -94,22 +79,22 @@ function pauseUnlessAborted(milliseconds: number, signal: AbortSignal): Promise<
   });
 }
 
-async function runScript(adapter: MemoryAdapter, steps: AgentStep[], options: SimulateAgentOptions) {
+async function runScript(agent: MemoryAdapter, steps: AgentStep[], options: SimulateAgentOptions) {
   const { signal, intervalMs = DEFAULT_INTERVAL_MS } = options;
   for (const step of steps) {
     await pauseUnlessAborted(intervalMs, signal);
     if (signal.aborted) return;
-    await performStep(adapter, step);
-    announceStep(adapter, step);
+    await performStep(agent, step);
   }
 }
 
 /**
  * Plays a script of file changes against a memory adapter, one step per `intervalMs`, as if an agent were
- * working in the project. Each change is written and then announced with `actor: 'agent'`, so a workspace
- * shows it as someone else's change, with a marker and follow mode, rather than as the user's own write. It
- * stops for good when `signal` aborts, after announcing a step whose write already landed, and also if a
- * step fails, such as deleting a path that is gone; the failure goes to `onError`.
+ * working in the project. Each change is written through `adapter.withActor('agent')`, so it gives one
+ * event with `actor: 'agent'` (plus one for each folder it creates), and a workspace shows it as someone
+ * else's change, with a marker and follow mode, rather than as the user's own write. It stops for good when
+ * `signal` aborts (a step whose write has already landed still counts) and when a step fails, such as
+ * deleting a path that is gone; the failure goes to `onError`.
  *
  * @example
  * ```ts
@@ -118,7 +103,7 @@ async function runScript(adapter: MemoryAdapter, steps: AgentStep[], options: Si
  * ```
  */
 export function simulateAgent(adapter: MemoryAdapter, options: SimulateAgentOptions): void {
-  runScript(adapter, options.script ?? DEFAULT_AGENT_SCRIPT, options).catch(
+  runScript(adapter.withActor(AGENT_ACTOR), options.script ?? DEFAULT_AGENT_SCRIPT, options).catch(
     options.onError ?? (() => undefined),
   );
 }

@@ -4,7 +4,7 @@ import {
   StandaloneRoot,
   type StandaloneViewerProps,
   type ViewerError,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { lazy, Suspense, useState } from 'react';
 import type { PdfClassNames, PdfPart } from './parts';
 import type { PdfRendererOptions } from './pdfRenderer';

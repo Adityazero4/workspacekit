@@ -1,6 +1,6 @@
 import { treeRowRenders } from './support/countComponentRenders';
-import { statusOf } from '@scope/core';
-import { createMemoryAdapter } from '@scope/core/memory';
+import { statusOf } from '@workspacekit/core';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { useEffect } from 'react';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';

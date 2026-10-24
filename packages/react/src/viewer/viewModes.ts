@@ -1,5 +1,5 @@
 'use client';
-import { isSameOrDescendant, remapPrefix } from '@scope/core';
+import { isSameOrDescendant, remapPrefix } from '@workspacekit/core';
 import { createUiStore, type UiStore } from '../provider/ui-store';
 
 /**

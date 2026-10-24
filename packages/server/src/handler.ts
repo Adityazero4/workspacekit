@@ -9,7 +9,8 @@ import {
   parentPath,
   parseRoute,
   statusForKind,
-} from '@scope/core';
+} from '@workspacekit/core';
+import { docsLink } from '@workspacekit/core/docs';
 import type {
   ChangeEvent,
   CreateBody,
@@ -23,7 +24,7 @@ import type {
   UploadCompleteBody,
   UploadInitBody,
   UploadInitResponse,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { contentTypeFor, fileHeaders, parseRange, type ByteRange } from './http-headers';
 import {
   invalidRequest,
@@ -60,7 +61,11 @@ export type Operation = keyof typeof ROUTES;
 export interface FileHandlerOptions {
   store: FileStore;
   /**
-   * Called once per affected path before the store is touched; `false` -> 403. `watch` is asked with `''`.
+   * Called at least once per affected path before the store is touched; it may be asked again for the same
+   * path (link targets, zip entries when opened), so keep it free of side effects. Only `true` allows;
+   * anything else is a 403.
+   * A path that goes through a symlink inside the root is asked twice, as itself and as the link's target's
+   * real path, and both must allow. `watch` is asked with `''`.
    * `watch` is asked once, not per event: its events reveal the paths changed anywhere under the root, so
    * principals scoped to part of the tree must be denied `'watch'` (like `'list'`). Directory `move`/`copy`
    * also ask once per descendant (any denial rejects the whole operation) and a directory `download` asks
@@ -80,8 +85,39 @@ export interface FileHandlerOptions {
   maxWriteBytes?: number;
   /** Chunk size told to chunked-upload clients. Default 8 MiB. */
   chunkSize?: number;
-  /** Idle time after which an upload session is discarded. Default 1 hour. */
+  /** Idle time after which an upload session is discarded, checked every quarter of it. Default 1 hour. */
   uploadTtlMs?: number;
+  /** Most chunked uploads that may be unfinished at once; past it `upload/init` is a 503. Default 100. */
+  maxUploadSessions?: number;
+  /**
+   * With an `actor` hook, most unfinished chunked uploads one actor may hold. Before refusing a new one, the
+   * actor's oldest idle upload is discarded to make room. Default a quarter of `maxUploadSessions`.
+   * Without an `actor` hook every request is one actor, so only the overall caps apply and one client can
+   * use them all.
+   */
+  maxUploadSessionsPerActor?: number;
+  /**
+   * Most bytes that unfinished chunked uploads may keep in the upload temp folder: `upload/init` is a 503
+   * when the declared totals would pass it, and a chunk is refused (413) while it streams when the bytes
+   * actually written would. Default 4 GiB.
+   */
+  maxUploadTempBytes?: number;
+  /**
+   * With an `actor` hook, most bytes one actor's unfinished chunked uploads may declare; past it
+   * `upload/init` is a 503, after the actor's oldest idle uploads are evicted if that makes room. Default a
+   * quarter of `maxUploadTempBytes`. Without an `actor` hook only the overall cap applies.
+   */
+  maxUploadTempBytesPerActor?: number;
+  /**
+   * A folder you own (mode 0700) for chunked uploads, so a restarted server clears the sessions its previous
+   * run left once they are older than `uploadTtlMs`. Sessions live only in a `workspacekit-uploads`
+   * subfolder the handler creates and marks; an existing one with content but no marker is refused, and
+   * nothing else in the folder is touched. Give each handler its own folder: a second live handler on the
+   * same folder in one process is refused. By default each handler makes a fresh private folder under the
+   * system temp directory, removed when the process exits, and nothing survives a restart. POSIX only
+   * (Linux and macOS): on Windows every upload with `uploadTempDir` set answers 500, so leave it unset there.
+   */
+  uploadTempDir?: string;
   /**
    * Name of the principal making a request (default `'user'`), recorded for changes made through this
    * handler. A `watch` stream tags a change `'user'` only for 2 s after it was written by a request
@@ -91,6 +127,30 @@ export interface FileHandlerOptions {
   actor?(req: Request): string;
   /** Interval of the `: ping` comment sent to each `watch` client. Default 25 s. */
   watchHeartbeatMs?: number;
+  /** Most `watch` streams open at once; past it `watch` is a 503 with `Retry-After`. Default 100. */
+  maxWatchConnections?: number;
+  /**
+   * With an `actor` hook, most `watch` streams one actor may hold open; past it `watch` is a 503. Default a
+   * quarter of `maxWatchConnections`. Without an `actor` hook only the overall cap applies.
+   */
+  maxWatchConnectionsPerActor?: number;
+  /**
+   * Longest a `watch` stream stays open; then the server closes it and the client reconnects. Default 1 hour.
+   */
+  watchMaxLifetimeMs?: number;
+  /**
+   * Most bytes a `watch` stream may hold unread. A client that falls further behind is disconnected; it
+   * reconnects and reloads. Default 1 MiB.
+   */
+  watchBufferBytes?: number;
+  /** Deepest `list` a client may ask for; a deeper `depth` is a 400. Default 16. */
+  maxListDepth?: number;
+  /** Most entries one `list` answers; a larger listing is a 413 and its walk stops there. Default 100,000. */
+  maxListEntries?: number;
+  /** Entries a `search` looks at before it answers with what it found so far. Default 100,000. */
+  maxSearchVisits?: number;
+  /** Time a `search` may walk before it answers with what it found so far. Default 5 s. */
+  searchTimeoutMs?: number;
   /** Called for unexpected failures (the response is a generic 500). */
   onError?(e: unknown, req: Request): void;
 }
@@ -98,7 +158,6 @@ export interface FileHandlerOptions {
 const MiB = 1024 * 1024;
 const ACTOR_TAG_WINDOW_MS = 2000;
 const RECENT_WRITES_SWEEP_THRESHOLD = 1000;
-const WATCH_QUEUE_BYTES = 4 * MiB;
 const MAX_EVENTS_BEFORE_RESYNC = 10_000;
 const PING = new TextEncoder().encode(': ping\n\n');
 const WATCH_UNAVAILABLE = 'live updates are unavailable on this server';
@@ -109,6 +168,29 @@ const ZIP_LOCAL_HEADER_BYTES = 30;
 const ZIP_DATA_DESCRIPTOR_BYTES = 16;
 const ZIP_CENTRAL_ENTRY_BYTES = 46;
 const MAX_SEARCH_RESULTS = 200;
+const UPLOADS_BUSY = 'too many unfinished uploads on this server; try again later';
+const UPLOADS_RETRY_AFTER_SECONDS = '30';
+
+const LONGEST_TIMER_MS = 2 ** 31 - 1;
+const CUT_OFF = new FsError('too_large', 'the live-update client fell too far behind; reconnect to resume');
+const WATCHERS_BUSY = 'too many live-update connections on this server; try again later';
+
+const LIMIT_DEFAULTS = {
+  maxUploadSessions: 100,
+  maxUploadSessionsPerActor: 25,
+  maxUploadTempBytes: 4 * 1024 * MiB,
+  maxUploadTempBytesPerActor: 1024 * MiB,
+  maxWatchConnections: 100,
+  maxWatchConnectionsPerActor: 25,
+  watchBufferBytes: MiB,
+  watchMaxLifetimeMs: 3_600_000,
+  maxListDepth: 16,
+  maxListEntries: 100_000,
+  maxSearchVisits: 100_000,
+  searchTimeoutMs: 5_000,
+};
+
+type LimitName = keyof typeof LIMIT_DEFAULTS;
 
 const WRITE_OPS: ReadonlySet<Operation> = new Set<Operation>([
   'create',
@@ -122,13 +204,8 @@ const WRITE_OPS: ReadonlySet<Operation> = new Set<Operation>([
   'uploadComplete',
   'uploadAbort',
 ]);
-const UPLOAD_OPS: ReadonlySet<Operation> = new Set<Operation>([
-  'uploadInit',
-  'uploadChunk',
-  'uploadComplete',
-  'uploadAbort',
-]);
 const KINDS_WITH_RELATIVE_PATH_MESSAGES = new Set([
+  'cancelled',
   'not_found',
   'conflict',
   'forbidden',
@@ -142,6 +219,29 @@ const ROUTES_LONGEST_PATH_FIRST = (Object.entries(ROUTES) as [Operation, string]
   .sort((a, b) => b.path.length - a.path.length);
 
 const ignoreError = (): void => undefined;
+
+const quarterOf = (limit: number): number => Math.max(1, Math.floor(limit / 4));
+
+function limitsOf(options: FileHandlerOptions): Record<LimitName, number> {
+  const limits = { ...LIMIT_DEFAULTS };
+  for (const name of Object.keys(LIMIT_DEFAULTS) as LimitName[]) {
+    const value: unknown = options[name];
+    if (value === undefined) continue;
+    if (value !== Infinity && !(Number.isSafeInteger(value) && (value as number) >= 0)) {
+      throw new TypeError(
+        `createFileHandler: "${name}" must be a non-negative integer or Infinity. ` +
+          `See ${docsLink('server/handler', 'limits')}`,
+      );
+    }
+    limits[name] = value as number;
+  }
+  limits.maxUploadSessionsPerActor = options.maxUploadSessionsPerActor ?? quarterOf(limits.maxUploadSessions);
+  limits.maxUploadTempBytesPerActor =
+    options.maxUploadTempBytesPerActor ?? quarterOf(limits.maxUploadTempBytes);
+  limits.maxWatchConnectionsPerActor =
+    options.maxWatchConnectionsPerActor ?? quarterOf(limits.maxWatchConnections);
+  return limits;
+}
 
 const jsonResponse = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } });
@@ -171,9 +271,16 @@ function matchRoute(pathname: string, method: string): { op: Operation; method: 
   return match;
 }
 
+function withoutCachingOrSniffing(response: Response): Response {
+  if (!response.headers.has('Cache-Control')) response.headers.set('Cache-Control', 'private, no-store');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  return response;
+}
+
 function cancelWithRequest(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
+  onReadError: (error: unknown) => void = ignoreError,
 ): ReadableStream<Uint8Array> {
   const reader = body.getReader();
   const cancel = (): void => void reader.cancel().catch(ignoreError);
@@ -191,6 +298,7 @@ function cancelWithRequest(
           } else controller.enqueue(chunk.value);
         } catch (error) {
           stopListening();
+          if (!signal.aborted) onReadError(error);
           controller.error(error);
         }
       },
@@ -207,6 +315,9 @@ function zipBytesFor(entry: Entry, name: string): number {
   const wrapping = ZIP_LOCAL_HEADER_BYTES + ZIP_DATA_DESCRIPTOR_BYTES + ZIP_CENTRAL_ENTRY_BYTES;
   return (entry.size ?? 0) + wrapping + 2 * Buffer.byteLength(name);
 }
+
+const zipTooLarge = (): FsError =>
+  new FsError('too_large', 'download is too large for a zip archive; download fewer files at a time');
 
 function requestedDownloadPaths(body: Partial<DownloadBody>): string[] {
   if (!Array.isArray(body.paths) || body.paths.length === 0) {
@@ -273,24 +384,32 @@ class WatchConnection {
   #controller!: ReadableStreamDefaultController<Uint8Array>;
   #unsubscribe: (() => void) | undefined;
   #heartbeat: ReturnType<typeof setInterval> | undefined;
+  #lifetime: ReturnType<typeof setTimeout> | undefined;
   #closed = false;
   readonly #encoder = new TextEncoder();
 
-  constructor(request: Request) {
+  constructor(request: Request, bufferBytes: number) {
     this.#request = request;
     this.body = new ReadableStream<Uint8Array>(
-      { start: (controller) => void (this.#controller = controller), cancel: () => this.#close(false) },
-      new ByteLengthQueuingStrategy({ highWaterMark: WATCH_QUEUE_BYTES }),
+      { start: (controller) => void (this.#controller = controller), cancel: () => this.#close('cancelled') },
+      new ByteLengthQueuingStrategy({ highWaterMark: bufferBytes }),
     );
   }
 
-  start(unsubscribe: () => void, heartbeatMs: number): void {
+  start(unsubscribe: () => void, timing: { heartbeatMs: number; lifetimeMs: number }): void {
+    if (this.#closed) {
+      unsubscribe();
+      return;
+    }
     this.#unsubscribe = unsubscribe;
     this.#request.signal.addEventListener('abort', this.#onAbort, { once: true });
     this.#controller.enqueue(PING);
     this.#heartbeat = setInterval(() => {
       if (!this.#cutOffIfStuck()) this.#controller.enqueue(PING);
-    }, heartbeatMs);
+    }, timing.heartbeatMs);
+    if (timing.lifetimeMs <= LONGEST_TIMER_MS) {
+      this.#lifetime = setTimeout(this.closeFromSource, timing.lifetimeMs);
+    }
   }
 
   send(frames: string[]): void {
@@ -300,26 +419,31 @@ class WatchConnection {
     }
   }
 
-  closeFromSource = (): void => this.#close(true);
+  closeFromSource = (): void => this.#close('close');
 
-  readonly #onAbort = (): void => this.#close(true);
+  readonly #onAbort = (): void => this.#close('close');
 
   #cutOffIfStuck(): boolean {
     if (this.#closed) return true;
     const stoppedReading = (this.#controller.desiredSize ?? 0) <= 0;
-    if (stoppedReading) this.#close(true);
+    if (stoppedReading) this.#close('discard');
     return stoppedReading;
   }
 
-  #close(closeStream: boolean): void {
+  #close(stream: 'close' | 'discard' | 'cancelled'): void {
     if (this.#closed) return;
     this.#closed = true;
-    this.#unsubscribe?.();
-    clearInterval(this.#heartbeat);
-    this.#request.signal.removeEventListener('abort', this.#onAbort);
-    if (!closeStream) return;
     try {
-      this.#controller.close();
+      this.#unsubscribe?.();
+    } finally {
+      clearInterval(this.#heartbeat);
+      clearTimeout(this.#lifetime);
+      this.#request.signal.removeEventListener('abort', this.#onAbort);
+    }
+    if (stream === 'cancelled') return;
+    try {
+      if (stream === 'discard') this.#controller.error(CUT_OFF);
+      else this.#controller.close();
     } catch {
       return;
     }
@@ -345,9 +469,12 @@ class FileHandler {
   readonly #maxUploadBytes: number;
   readonly #maxWriteBytes: number;
   readonly #chunkSize: number;
+  readonly #limits: Record<LimitName, number>;
   readonly #uploads: ReturnType<typeof createUploads>;
   readonly #recentWrites: RecentWrites;
   readonly #routes: Record<Operation, Route>;
+  #openWatchConnections = 0;
+  readonly #openWatchConnectionsByActor = new Map<string, number>();
 
   constructor(options: FileHandlerOptions) {
     this.#options = options;
@@ -355,7 +482,16 @@ class FileHandler {
     this.#maxUploadBytes = options.maxUploadBytes ?? 1024 * MiB;
     this.#maxWriteBytes = options.maxWriteBytes ?? 10 * MiB;
     this.#chunkSize = options.chunkSize ?? 8 * MiB;
-    this.#uploads = createUploads({ ttlMs: options.uploadTtlMs ?? 3_600_000, chunkSize: this.#chunkSize });
+    this.#limits = limitsOf(options);
+    this.#uploads = createUploads({
+      ttlMs: options.uploadTtlMs ?? 3_600_000,
+      chunkSize: this.#chunkSize,
+      maxSessions: this.#limits.maxUploadSessions,
+      maxSessionsPerActor: this.#limits.maxUploadSessionsPerActor,
+      maxTempBytes: this.#limits.maxUploadTempBytes,
+      maxTempBytesPerActor: this.#limits.maxUploadTempBytesPerActor,
+      tempDir: options.uploadTempDir,
+    });
     this.#recentWrites = new RecentWrites(this.#store);
     this.#routes = {
       list: (route) => this.#list(route),
@@ -377,7 +513,10 @@ class FileHandler {
     };
   }
 
-  handle = async (request: Request): Promise<Response> => {
+  handle = async (request: Request): Promise<Response> =>
+    withoutCachingOrSniffing(await this.#respond(request));
+
+  async #respond(request: Request): Promise<Response> {
     try {
       const url = new URL(request.url);
       const match = matchRoute(url.pathname, request.method);
@@ -388,12 +527,11 @@ class FileHandler {
       if (this.#options.readOnly && WRITE_OPS.has(match.op)) {
         throw new FsError('forbidden', 'the file service is read-only');
       }
-      if (UPLOAD_OPS.has(match.op)) await this.#uploads.sweep().catch(ignoreError);
       return await this.#routes[match.op]({ request, url });
     } catch (error) {
       return this.#errorResponse(error, request);
     }
-  };
+  }
 
   #actorOf(request: Request): string {
     return this.#options.actor?.(request) ?? 'user';
@@ -408,14 +546,33 @@ class FileHandler {
     return this.#recentWrites.record(this.#actorOf(request), targets, mutation, inside);
   }
 
-  async #permitted(request: Request, op: Operation, path: string): Promise<boolean> {
-    return !!(await this.#options.authorize(request, op, path));
+  async #authorizedRealPath(request: Request, op: Operation, path: string): Promise<string | null> {
+    if ((await this.#options.authorize(request, op, path)) !== true) return null;
+    const canonical = await this.#canonicalPath(path);
+    if (canonical === path || (await this.#options.authorize(request, op, canonical)) === true) {
+      return canonical;
+    }
+    return null;
   }
 
-  async #allow(request: Request, op: Operation, path: string): Promise<void> {
-    if (!(await this.#permitted(request, op, path))) {
-      throw new FsError('forbidden', 'access denied', { path });
+  async #permitted(request: Request, op: Operation, path: string): Promise<boolean> {
+    return (await this.#authorizedRealPath(request, op, path)) !== null;
+  }
+
+  async #canonicalPath(path: string): Promise<string> {
+    if (!this.#store.canonicalPath) return path;
+    try {
+      return await this.#store.canonicalPath(path);
+    } catch (error) {
+      if (error instanceof FsError && error.kind === 'not_found') return path;
+      throw error;
     }
+  }
+
+  async #allow(request: Request, op: Operation, path: string): Promise<string> {
+    const realPath = await this.#authorizedRealPath(request, op, path);
+    if (realPath === null) throw new FsError('forbidden', 'access denied', { path });
+    return realPath;
   }
 
   async #writeRequestBody(
@@ -441,7 +598,8 @@ class FileHandler {
     headers.set('Content-Length', String(read.size));
     if (read.entry.mtimeMs !== undefined) headers.set(MTIME_HEADER, String(read.entry.mtimeMs));
     for (const [key, value] of Object.entries(extra.headers ?? {})) headers.set(key, value);
-    return new Response(cancelWithRequest(read.body, request.signal), {
+    const body = cancelWithRequest(read.body, request.signal, (error) => this.#report(error, request));
+    return new Response(body, {
       status: extra.status ?? 200,
       headers,
     });
@@ -455,7 +613,18 @@ class FileHandler {
     if (depthParam === '' || !Number.isInteger(depth) || depth < 0) {
       throw invalidRequest('depth must be a non-negative integer', path);
     }
-    return jsonResponse({ entries: await this.#store.list(path, depth) } satisfies EntriesResponse);
+    const { maxListDepth, maxListEntries } = this.#limits;
+    if (depth > maxListDepth) throw invalidRequest(`depth must be at most ${maxListDepth}`, path);
+    const entries = await this.#store.list(path, depth, {
+      signal: request.signal,
+      maxEntries: maxListEntries,
+    });
+    if (entries.length > maxListEntries) {
+      throw new FsError('too_large', `more than ${maxListEntries} entries; list fewer levels at a time`, {
+        path,
+      });
+    }
+    return jsonResponse({ entries } satisfies EntriesResponse);
   }
 
   async #stat({ request, url }: RouteRequest): Promise<Response> {
@@ -477,10 +646,10 @@ class FileHandler {
 
   async #read({ request, url }: RouteRequest): Promise<Response> {
     const path = pathParam(url);
-    await this.#allow(request, 'read', path);
+    const expectedCanonicalPath = await this.#allow(request, 'read', path);
     const range = await this.#requestedRange(request, path);
     if (range instanceof Response) return range;
-    const read = await this.#store.read(path, range);
+    const read = await this.#store.read(path, range, { expectedCanonicalPath });
     if (!range) {
       return this.#fileResponse(request, basename(path), read, { headers: { 'Accept-Ranges': 'bytes' } });
     }
@@ -494,7 +663,11 @@ class FileHandler {
   async #search({ request, url }: RouteRequest): Promise<Response> {
     await this.#allow(request, 'search', '');
     if (!this.#store.search) throw new FsError('not_found', 'search is not supported');
-    const entries = await this.#store.search(url.searchParams.get('q') ?? '', MAX_SEARCH_RESULTS);
+    const entries = await this.#store.search(url.searchParams.get('q') ?? '', MAX_SEARCH_RESULTS, {
+      signal: request.signal,
+      maxVisits: this.#limits.maxSearchVisits,
+      timeoutMs: this.#limits.searchTimeoutMs,
+    });
     return jsonResponse({ entries } satisfies EntriesResponse);
   }
 
@@ -528,7 +701,7 @@ class FileHandler {
   ): Promise<string[]> {
     if ((await this.#store.stat(from))?.kind !== 'directory') return [];
     const carried: string[] = [];
-    for (const entry of await this.#store.list(from, Infinity)) {
+    for (const entry of await this.#store.list(from, Infinity, { signal: request.signal })) {
       await this.#allow(request, op, entry.path);
       carried.push(entry.path, to + entry.path.slice(from.length));
     }
@@ -538,7 +711,7 @@ class FileHandler {
   async #authorizeDeleteInside(request: Request, path: string): Promise<string[]> {
     if ((await this.#store.stat(path))?.kind !== 'directory') return [];
     const inside: string[] = [];
-    for (const entry of await this.#store.list(path, Infinity)) {
+    for (const entry of await this.#store.list(path, Infinity, { signal: request.signal })) {
       await this.#allow(request, 'delete', entry.path);
       inside.push(entry.path);
     }
@@ -599,13 +772,18 @@ class FileHandler {
     if (existing && (existing.kind === 'directory' || !overwrite)) {
       throw new FsError('conflict', `already exists: ${path}`, { path });
     }
-    const session = await this.#uploads.init(path, total, overwrite);
+    const actor = this.#options.actor ? this.#actorOf(request) : undefined;
+    const session = await this.#uploads.init(path, total, overwrite, actor);
+    if (!session) {
+      return failure(503, 'unknown', UPLOADS_BUSY, { 'Retry-After': UPLOADS_RETRY_AFTER_SECONDS });
+    }
     return jsonResponse({ uploadId: session.id, chunkSize: this.#chunkSize } satisfies UploadInitResponse);
   }
 
   async #uploadChunk({ request, url }: RouteRequest): Promise<Response> {
-    const session = this.#uploads.get(url.searchParams.get('id') ?? '');
+    const session = this.#uploads.peek(url.searchParams.get('id') ?? '');
     await this.#allow(request, 'uploadChunk', session.path);
+    this.#uploads.touch(session);
     const index = nonNegativeIntegerParam(url.searchParams.get('index'), 'index');
     const offset = nonNegativeIntegerParam(url.searchParams.get('offset'), 'offset');
     rejectDeclaredTooLarge(request, session.chunkSize, session.path);
@@ -615,8 +793,9 @@ class FileHandler {
 
   async #uploadComplete({ request }: RouteRequest): Promise<Response> {
     const body = (await readJsonObject(request)) as Partial<UploadCompleteBody>;
-    const session = this.#uploads.get(requireString(body.uploadId, 'uploadId'));
+    const session = this.#uploads.peek(requireString(body.uploadId, 'uploadId'));
     await this.#allow(request, 'uploadComplete', session.path);
+    this.#uploads.touch(session);
     if (session.completing) {
       throw new FsError('conflict', 'upload is already completing', { path: session.path });
     }
@@ -638,7 +817,7 @@ class FileHandler {
   }
 
   async #uploadAbort({ request, url }: RouteRequest): Promise<Response> {
-    const session = this.#uploads.get(url.searchParams.get('id') ?? '');
+    const session = this.#uploads.peek(url.searchParams.get('id') ?? '');
     await this.#allow(request, 'uploadAbort', session.path);
     if (session.completing) throw new FsError('conflict', 'upload is completing', { path: session.path });
     await this.#uploads.remove(session.id);
@@ -656,28 +835,63 @@ class FileHandler {
     return toFrames(tagged);
   }
 
+  #claimWatchSlot(actor: string | undefined): (() => void) | undefined {
+    const byActor = this.#openWatchConnectionsByActor;
+    const ofActor = actor === undefined ? 0 : (byActor.get(actor) ?? 0);
+    if (this.#openWatchConnections >= this.#limits.maxWatchConnections) return undefined;
+    if (actor !== undefined && ofActor >= this.#limits.maxWatchConnectionsPerActor) return undefined;
+    this.#openWatchConnections++;
+    if (actor !== undefined) byActor.set(actor, ofActor + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.#openWatchConnections--;
+      if (actor === undefined) return;
+      const left = (byActor.get(actor) ?? 1) - 1;
+      if (left > 0) byActor.set(actor, left);
+      else byActor.delete(actor);
+    };
+  }
+
   async #watch({ request }: RouteRequest): Promise<Response> {
     await this.#allow(request, 'watch', '');
     const store = this.#store;
     if (!store.watch) return failure(501, 'unknown', WATCH_UNAVAILABLE);
     if (request.signal.aborted) return new Response(null, { status: 204 });
     const watcher = this.#actorOf(request);
-    const connection = new WatchConnection(request);
+    const release = this.#claimWatchSlot(this.#options.actor ? watcher : undefined);
+    if (!release) return failure(503, 'unknown', WATCHERS_BUSY, { 'Retry-After': WATCH_RETRY_AFTER_SECONDS });
+    const connection = new WatchConnection(request, this.#limits.watchBufferBytes);
     let unsubscribe: () => void;
     try {
       unsubscribe = store.watch(
         (events) => connection.send(this.#framesFor(events, watcher)),
-        connection.closeFromSource,
+        (error) => {
+          this.#report(error, request);
+          connection.closeFromSource();
+        },
       );
     } catch (error) {
+      release();
       this.#report(error, request);
       return failure(503, 'unknown', WATCH_UNAVAILABLE, { 'Retry-After': WATCH_RETRY_AFTER_SECONDS });
     }
-    connection.start(unsubscribe, this.#options.watchHeartbeatMs ?? 25_000);
+    const stopWatching = (): void => {
+      try {
+        unsubscribe();
+      } catch (error) {
+        this.#report(error, request);
+      } finally {
+        release();
+      }
+    };
+    const heartbeatMs = this.#options.watchHeartbeatMs ?? 25_000;
+    connection.start(stopWatching, { heartbeatMs, lifetimeMs: this.#limits.watchMaxLifetimeMs });
     return new Response(connection.body, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
+        'Cache-Control': 'private, no-store, no-transform',
         'X-Accel-Buffering': 'no',
       },
     });
@@ -699,14 +913,24 @@ class FileHandler {
       name,
       mtimeMs: entry.mtimeMs,
       open: async () => {
+        const expectedCanonicalPath = await this.#authorizedRealPath(request, 'download', entry.path);
+        if (expectedCanonicalPath === null) return null;
         try {
-          return cancelWithRequest((await this.#store.read(entry.path)).body, request.signal);
+          const read = await this.#store.read(entry.path, undefined, { expectedCanonicalPath });
+          return cancelWithRequest(read.body, request.signal);
         } catch (error) {
-          if (error instanceof FsError && error.kind === 'not_found') return null;
+          if (error instanceof FsError && (error.kind === 'not_found' || error.kind === 'conflict')) {
+            return null;
+          }
           throw error;
         }
       },
     };
+  }
+
+  #zipWalk(request: Request, root: Entry): Promise<Entry[]> {
+    const options = { signal: request.signal, maxEntries: MAX_ZIP_ENTRIES_WITHOUT_ZIP64 };
+    return this.#store.list(root.path, Infinity, options);
   }
 
   async #planZipArchive(request: Request, roots: Entry[]): Promise<ZipEntry[]> {
@@ -717,7 +941,8 @@ class FileHandler {
       const parent = parentPath(root.path);
       const nameStart = parent === '' ? 0 : parent.length + 1;
       const breadthFirst =
-        root.kind === 'directory' ? [root, ...(await this.#store.list(root.path, Infinity))] : [root];
+        root.kind === 'directory' ? [root, ...(await this.#zipWalk(request, root))] : [root];
+      if (plan.length + breadthFirst.length > MAX_ZIP_ENTRIES_WITHOUT_ZIP64) throw zipTooLarge();
       const deniedFolders: string[] = [];
       for (const entry of breadthFirst) {
         if (entry.path === '' || deniedFolders.some((denied) => entry.path.startsWith(`${denied}/`))) {
@@ -731,25 +956,22 @@ class FileHandler {
         if (names.has(name)) continue;
         names.add(name);
         bytes += zipBytesFor(entry, name);
+        if (bytes >= MAX_ZIP_BYTES_WITHOUT_ZIP64) throw zipTooLarge();
         plan.push(this.#zipEntry(request, entry, name));
       }
-    }
-    if (plan.length > MAX_ZIP_ENTRIES_WITHOUT_ZIP64 || bytes >= MAX_ZIP_BYTES_WITHOUT_ZIP64) {
-      throw new FsError(
-        'too_large',
-        'download is too large for a zip archive; download fewer files at a time',
-      );
     }
     return plan;
   }
 
   async #download({ request }: RouteRequest): Promise<Response> {
     const paths = requestedDownloadPaths(await readJsonObject(request));
-    for (const path of paths) await this.#allow(request, 'download', path);
+    const realPaths: string[] = [];
+    for (const path of paths) realPaths.push(await this.#allow(request, 'download', path));
     const entries = await this.#statAll(paths);
     const first = entries[0]!;
     if (entries.length === 1 && first.kind === 'file') {
-      return this.#fileResponse(request, basename(first.path), await this.#store.read(first.path));
+      const read = await this.#store.read(first.path, undefined, { expectedCanonicalPath: realPaths[0] });
+      return this.#fileResponse(request, basename(first.path), read);
     }
     const plan = await this.#planZipArchive(request, entries);
     const zipName = entries.length === 1 ? `${basename(first.path) || 'download'}.zip` : 'download.zip';
@@ -785,10 +1007,14 @@ class FileHandler {
  * to `onError`).
  *
  * Writes made through the handler are tagged with the writer's `actor` for 2 s, so a `watch` stream reports
- * them as `'user'` to the same principal and `'external'` to everyone else. A watch client that stops reading
- * is cut off (it reconnects and reloads) instead of being buffered without bound, and a batch of over 10,000
- * events becomes one `resync` event. A multi-file download is planned in full first: the zip writer has no
+ * them as `'user'` to the same principal and `'external'` to everyone else. A watch client that falls more
+ * than `watchBufferBytes` behind is cut off (it reconnects and reloads), and a batch of over 10,000 events
+ * becomes one `resync` event. A multi-file download is planned in full first: the zip writer has no
  * zip64 support, so an archive too large for it is refused before the first byte.
+ *
+ * Every size, count and walk is bounded by an overridable limit (see the options; each must be a
+ * non-negative integer or `Infinity`), every walk stops when the request is aborted, and every response is
+ * `Cache-Control: private, no-store` with `X-Content-Type-Options: nosniff`.
  *
  * @example
  * const handler = createFileHandler({
@@ -799,7 +1025,10 @@ class FileHandler {
  */
 export function createFileHandler(opts: FileHandlerOptions): (req: Request) => Promise<Response> {
   if (typeof opts?.authorize !== 'function') {
-    throw new TypeError('createFileHandler: `authorize` is required');
+    throw new TypeError(
+      'createFileHandler: "authorize" is required. Pass authorize: (req, op, path) => boolean, which must check the ' +
+        `signed-in user. See ${docsLink('server/handler', 'authorize')}`,
+    );
   }
   return new FileHandler(opts).handle;
 }

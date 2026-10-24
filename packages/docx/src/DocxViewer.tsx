@@ -5,7 +5,7 @@ import {
   useStandaloneBytes,
   type StandaloneViewerProps,
   type ViewerError,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { lazy, Suspense, useState } from 'react';
 import { DOCX_MAX_BYTES } from './docxRenderer';
 import type { DocxClassNames, DocxPart } from './parts';

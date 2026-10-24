@@ -1,14 +1,14 @@
-# @scope/react bench
+# @workspacekit/react bench
 
 A page that renders the full `<Workspace>` over an in-memory tree, and a Playwright runner that measures it in
 Chromium. It is not part of the published package (`files` ships `dist` only).
 
 ```sh
-pnpm --filter @scope/react bench                # every shape at 10k, 100k and 1M files
-pnpm --filter @scope/react bench 10000 100000   # only these sizes
+pnpm --filter @workspacekit/react bench                # every shape at 10k, 100k and 1M files
+pnpm --filter @workspacekit/react bench 10000 100000   # only these sizes
 ```
 
-`run.mjs` builds the page with Vite (production React, React Compiler on, `@scope/core` from source), serves it,
+`run.mjs` builds the page with Vite (production React, React Compiler on, `@workspacekit/core` from source), serves it,
 and for each shape (`wide`, `10x100k`, `chains64`) and size opens
 `?shape=<shape>&size=<files>`, which renders
 `<Workspace adapter={createMemoryAdapter({ files: generateShape(shape, files) })} />`. The tree is generated once

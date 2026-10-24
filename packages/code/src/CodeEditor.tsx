@@ -1,5 +1,5 @@
 'use client';
-import { partProps, StandaloneRoot, type StandaloneViewerProps } from '@scope/react/renderer-kit';
+import { partProps, StandaloneRoot, type StandaloneViewerProps } from '@workspacekit/react/renderer-kit';
 import { lazy, Suspense } from 'react';
 import type { CodeMirrorEditorProps } from './CodeMirrorEditor';
 import type { CodePart } from './parts';

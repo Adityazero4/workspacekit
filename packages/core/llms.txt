@@ -1,25 +1,26 @@
-# @scope/core
+# @workspacekit/core
 
 > The framework-free core of the file workspace: the adapter contract, the tree store, paths, naming rules, uploads, and an HTTP client and in-memory adapter.
 
-- API reference: https://docs.example.invalid/api/core
-- Install: `npm install @scope/core`
+- API reference: https://adityazero4.github.io/workspacekit/api/core
+- Install: `npm install @workspacekit/core`
 
 ## README sections
 
 - Install
-- Entry points: `@scope/core`: types, `FsError`, path helpers (`joinPath`, `parentPath`, `basename`), `createTreeStore`, `createVisibleRowIndex`, `createUploader` and the drop helpers.
+- Entry points: `@workspacekit/core`: types, `FsError`, path helpers (`joinPath`, `parentPath`, `basename`), `createTreeStore`, `createVisibleRowIndex`, `createUploader` and the drop helpers.
 - Use it on its own: `createTreeStore` wraps any `FileSystemAdapter` and subscribes to its `watch` itself.
 - CSS: None.
 - Options: `createTreeStore(adapter, { fetchDepth, root, onError })`: how deep each listing goes (default 2), the folder the store shows, and a callback for load failures.
 
 ## Entry points
 
-- `@scope/core`
-- `@scope/core/http`
-- `@scope/core/memory`
+- `@workspacekit/core`
+- `@workspacekit/core/http`
+- `@workspacekit/core/memory`
+- `@workspacekit/core/docs`
 
-## Exports of `@scope/core`
+## Exports of `@workspacekit/core`
 
 - `CSRF_HEADER`: Request header required on every non-GET request (value `1`); a missing or different value is rejected with 403 `forbidden`.
 - `CallOptions`: Options every read accepts: an `AbortSignal` that cancels the request.
@@ -50,7 +51,6 @@
 - `TransferBody`: The JSON body of `ROUTES.move` and `ROUTES.copy`.
 - `TransferOptions`: Options for `move` and `copy`: `overwrite` replaces an existing destination instead of failing with `conflict`.
 - `TreeData`: Keyed by folder path (root `''`).
-- `TreeOp`: One change `applyBatch` applies to a tree.
 - `TreeSnapshot`: An immutable view of a `TreeStore`; a new snapshot (with a higher `version`) follows every change.
 - `TreeStore`: The tree state for one adapter, created by `createTreeStore`.
 - `TreeStoreOptions`: Options of `createTreeStore`.
@@ -68,54 +68,45 @@
 - `VisibleRow`: One row of the flattened tree, with everything a renderer needs for ARIA attributes.
 - `VisibleRowIndex`: Random access to the rows `flattenVisible` would produce, without materializing them.
 - `WatchFrame`: Payload of one SSE `data:` line.
-- `applyBatch`: Applies `ops` in order and returns the new tree; `tree` itself is never changed.
+- `WatchOptions`: Hints a caller gives `FileSystemAdapter.watch`.
 - `basename`: The last path segment.
 - `captureDataTransfer`: Call synchronously inside the drop handler: the entries are invalid once the handler returns.
-- `compareEntries`: Folders always first; then the chosen key (reversed for `desc`); ties by name ascending, then path.
 - `createTreeStore`: The tree state for one adapter: folder listings, load errors, pending mutations and paths changed by others, as an external store for `useSyncExternalStore`.
 - `createUploader`: An uploader over an `UploadTransport`.
 - `createVisibleRowIndex`: The rendering path for the tree: a virtualized list asks for `count`, `rowAt(i)` for the rows on screen, `indexOf` to scroll to a path, and `ancestorsAt` for sticky headers.
-- `depthOf`: How many segments a path has; the root `''` has depth 0.
-- `emptyTree`: A tree with no folders loaded.
 - `entryAt`: The entry at `path`, if its parent folder is loaded; always `undefined` for the root.
 - `expandDropped`: Walks dropped folders into upload items, breadth-first with 8 directory reads in flight.
 - `extname`: Lowercase, no dot; `''` for dotfiles and extensionless names.
-- `flattenVisible`: Every visible row below `opts.root`, in display order.
 - `fromFileList`: Upload items for the files of an `<input type="file">`, keeping folder paths from `webkitdirectory` inputs.
 - `isFsError`: Whether `error` is an `FsError`.
 - `isSameOrDescendant`: Whether `path` is `ancestor` or lies below it.
 - `joinPath`: Joins path parts and normalizes the result.
-- `kindForStatus`: The error kind for an HTTP status (401 and 403 are both `forbidden`, 408 and 504 `timeout`).
-- `mergeListing`: `entries` are the descendants of `folder` down to `depth` relative levels.
-- `moveSubtree`: Moves `from` (and every loaded folder below it, even when `from`'s own entry is not loaded) to `to`; an existing subtree at `to` is replaced.
 - `normalizePath`: Canonical form: NFC, `/`-separated, no leading/trailing slash, no `.`/`..`.
 - `parentPath`: The parent folder's path; `''` for top-level entries and for the root.
 - `parseRoute`: Splits a `ROUTES` value into its HTTP method and its path below the base URL.
 - `remapPrefix`: Moves `path` from below `from` to below `to`; paths outside `from` are returned unchanged.
-- `removeSubtree`: Removes `path` and every loaded folder below it.
-- `resolveUnder`: Join an untrusted relative path onto `base`; throws `forbidden` if the result leaves `base`.
-- `shouldSkipPath`: Whether any segment of `relativePath` is skipped: folder segments are checked with `isDir` true, the last one with `isDir` (default false, a file).
 - `sortedChildren`: `node`'s children in display order, memoized until the node's children change.
 - `splitName`: `ext` includes the dot; leading-dot names (`.env`) and extensionless names have `ext: ''`.
 - `statusForKind`: The HTTP status the server answers for an error kind (500 for kinds without one).
 - `statusOf`: The load status of the folder at `path` (`'idle'` when it has no node).
 - `toFsError`: Converts anything thrown into an `FsError`: aborts become `cancelled`, fetch network failures (`TypeError`) become `network`, and everything else `unknown`, keeping the original as `cause`.
 - `uniqueName`: `name` if it is free among `taken`, else the first free `name copy`, `name copy 2`, … keeping the extension.
-- `upsertEntry`: Puts `entry` into its parent folder, replacing any entry at the same path.
 - `validateName`: Checks a new entry name against `siblings`.
 - `validateTransfer`: `from` and `toDir` must be normalized paths.
 - `withPolling`: Adds `watch` to an adapter that has none by diffing depth-1 listings into ChangeEvents (actor 'external').
 
-## Exports of `@scope/core/http`
+## Exports of `@workspacekit/core/http`
 
 - `HttpAdapterOptions`: Options for `httpAdapter`: a custom `fetch`, extra headers (or a function returning them), credentials and watch behavior.
 - `httpAdapter`: A `FileSystemAdapter` speaking the `ROUTES` protocol to a server made with `createFileHandler`.
 
-## Exports of `@scope/core/memory`
+## Exports of `@workspacekit/core/memory`
 
 - `MemoryAdapter`: An in-memory `FileSystemAdapter` that can also `emit` change events, as if made by someone else.
 - `MemoryAdapterOptions`: Options for `createMemoryAdapter`: seed files, artificial latency and the chunk size it reports.
-- `TreeShape`: The benchmark tree layouts `generateShape` can build.
 - `createMemoryAdapter`: A complete `FileSystemAdapter` kept in memory, for tests, demos and prototypes.
-- `generateShape`
-- `generateTree`: Deterministic tree of `files` files, at most `depth` directories deep with up to `breadth` subdirectories per level.
+
+## Exports of `@workspacekit/core/docs`
+
+- `DOCS_URL`: The documentation site's address, in one place so the examples, the site, the generated files and the error messages agree.
+- `docsLink`: The address of a documentation page, and of a heading on it, for error messages that point at the fix.

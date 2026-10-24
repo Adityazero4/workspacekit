@@ -1,5 +1,5 @@
-import { isFsError } from '@scope/core';
-import { httpAdapter } from '@scope/core/http';
+import { isFsError } from '@workspacekit/core';
+import { httpAdapter } from '@workspacekit/core/http';
 import { describe, expect, it } from 'vitest';
 import { runAdapterContract } from '../../../core/test/contract/adapter-contract';
 import { createFileHandler, type FileStore } from '../../src';

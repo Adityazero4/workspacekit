@@ -12,7 +12,7 @@ const DEFAULT_DIRECTORY = 'my-workspace';
 export const USAGE: string = `Usage: create-workspace [directory] [--template ${TEMPLATE_NAMES.join('|')}]`;
 
 /**
- * What the build recorded about one `@scope/*` package.
+ * What the build recorded about one `@workspacekit/*` package.
  *
  * @example
  * const release: PackageRelease = { version: '1.0.0', private: false };
@@ -26,7 +26,7 @@ export interface PackageRelease {
  * Runs the command with the given arguments and returns the text to print.
  *
  * `loadReleases` supplies the versions the build embedded; the command refuses to generate a project
- * whose `@scope/*` dependencies are private or still at `0.0.0`.
+ * whose `@workspacekit/*` dependencies are private or still at `0.0.0`.
  *
  * @example
  * const message = await runCli(['my-files', '--template', 'vite'], async () => ({}));

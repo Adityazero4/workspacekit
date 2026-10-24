@@ -1,5 +1,5 @@
 'use client';
-import { fromFileList, type UploadItem } from '@scope/core';
+import { fromFileList, type UploadItem } from '@workspacekit/core';
 import { useRef, type ChangeEvent } from 'react';
 import { partProps } from '../cx';
 import type { ClassNames } from '../parts';

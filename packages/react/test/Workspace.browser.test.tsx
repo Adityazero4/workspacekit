@@ -1,6 +1,6 @@
 import { fileViewerRenders, treeRowRenders } from './support/countComponentRenders';
-import type { FileSystemAdapter } from '@scope/core';
-import { createMemoryAdapter, type MemoryAdapter } from '@scope/core/memory';
+import type { FileSystemAdapter } from '@workspacekit/core';
+import { createMemoryAdapter, type MemoryAdapter } from '@workspacekit/core/memory';
 import axe from 'axe-core';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { page, server, userEvent } from 'vitest/browser';

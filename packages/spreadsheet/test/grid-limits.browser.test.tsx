@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { afterEach, expect, test } from 'vitest';
 import { cleanup, render } from 'vitest-browser-react';
-import '@scope/react/styles.css';
+import '@workspacekit/react/styles.css';
 import '../src/styles.css';
 import { Grid } from '../src/grid/Grid';
 import { textWidth } from '../src/grid/measure';

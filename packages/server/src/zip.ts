@@ -21,8 +21,8 @@ export interface ZipEntry {
   name: string;
   mtimeMs?: number | undefined;
   /**
-   * Opens the file's bytes lazily; `null` skips the entry (the file vanished meanwhile). Absent for
-   * directories.
+   * Opens the file's bytes lazily; `null` skips the entry (the file is gone, now denied, or changed while
+   * opening). Absent for directories.
    */
   open?: () => Promise<ReadableStream<Uint8Array> | null>;
 }

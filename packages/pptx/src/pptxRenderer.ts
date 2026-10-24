@@ -4,7 +4,7 @@ import {
   type FileInfo,
   type Renderer,
   type RendererProps,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { createElement } from 'react';
 import type { PptxClassNames } from './parts';
 
@@ -23,7 +23,7 @@ export const PPTX_MAX_BYTES: number = 200 * 1024 * 1024;
  * Options of `pptxRenderer` and `PptxViewer`. `externalMedia` is `'block'` by default: pictures, fills and
  * video posters a presentation links from outside the file are not fetched. `'allow'` lets the renderer
  * fetch them over `http(s):`. `classNames` adds classes to this package's parts; the viewer's own
- * `classNames` only know `@scope/react` parts.
+ * `classNames` only know `@workspacekit/react` parts.
  *
  * @example
  * ```ts
@@ -47,7 +47,7 @@ const matchScore = (file: FileInfo): number | false =>
  * size would cost too much work is `too_large`, and an encrypted one is `password_protected`; a single slide
  * that would cost too much to draw is replaced by a notice. The
  * renderer (with ECharts, about 384 KB gzipped) loads when the viewer first shows such a file. `classNames`
- * adds classes to this package's parts; the viewer's own `classNames` only know `@scope/react` parts.
+ * adds classes to this package's parts; the viewer's own `classNames` only know `@workspacekit/react` parts.
  *
  * Call it once, at module level, and reuse the result: the viewer caches each renderer's loaded component by
  * the renderer object's identity.

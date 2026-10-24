@@ -1,5 +1,11 @@
 'use client';
-import { basename, isSameOrDescendant, remapPrefix, type Entry, type FileSystemAdapter } from '@scope/core';
+import {
+  basename,
+  isSameOrDescendant,
+  remapPrefix,
+  type Entry,
+  type FileSystemAdapter,
+} from '@workspacekit/core';
 import { mediaUrlOfBlob, safeUrlOrNull } from '../renderers/safeUrls';
 import { viewerError, type RendererInput, type RendererSource, type ViewerError } from './registry';
 

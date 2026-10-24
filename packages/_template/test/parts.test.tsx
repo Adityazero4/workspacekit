@@ -3,7 +3,7 @@ import {
   StaleNotice,
   viewerError,
   type StandaloneRootProps,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { expect, expectTypeOf, test } from 'vitest';
 import TemplateText from '../src/TemplateText';
 import { TEMPLATE_PARTS, type TemplateClassNames, type TemplatePart } from '../src';

@@ -4,7 +4,7 @@ import { test, expect } from 'vitest';
 import { assertNoNestedRules } from '../../../scripts/css-nesting.mjs';
 import { filesReachableFrom, importsOf, modulesIn } from '../../../scripts/import-graph.mjs';
 
-// Runs against the output of `pnpm --filter @scope/react build`.
+// Runs against the output of `pnpm --filter @workspacekit/react build`.
 const DIST = new URL('../dist/', import.meta.url);
 const distText = (file: string): string => readFileSync(new URL(file, DIST), 'utf8');
 const resolveInDist = (fromFile: string, specifier: string): string =>
@@ -142,6 +142,7 @@ const MODULES_A_PROVIDER_FREE_SUBPATH_MAY_CONTAIN = [
   /^\\0rolldown\/runtime\.js$/,
 ];
 const PACKAGES_A_PROVIDER_FREE_SUBPATH_MAY_IMPORT = new Set([
+  '@workspacekit/core/docs',
   'react',
   'react/jsx-runtime',
   'react/compiler-runtime',
@@ -209,6 +210,7 @@ const RENDERER_KIT_EXPORTS = [
   'RendererInput',
   'RendererProps',
   'RendererSource',
+  'SVG_ANIMATION_ELEMENTS',
   'StaleNotice',
   'StaleNoticeProps',
   'StandaloneFile',
@@ -222,12 +224,16 @@ const RENDERER_KIT_EXPORTS = [
   'VirtualPages',
   'VirtualPagesHandle',
   'VirtualPagesProps',
+  'confineDeclarations',
   'defineRenderer',
+  'keepWebOrMailLink',
   'lineBreakOf',
   'mediaUrlOfBlob',
   'partProps',
+  'safeFontSource',
   'safeUrlOrNull',
   'stepZoom',
+  'svgAttributeFetches',
   'useSettledAnnouncement',
   'useStandaloneBytes',
   'viewerError',

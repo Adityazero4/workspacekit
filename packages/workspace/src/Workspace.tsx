@@ -1,11 +1,11 @@
-import { Workspace as WorkspaceShell, type WorkspaceProps } from '@scope/react';
+import { Workspace as WorkspaceShell, type WorkspaceProps } from '@workspacekit/react';
 import { allRenderers } from './allRenderers';
 
 const everyRenderer = allRenderers();
 
 /**
- * `@scope/react`'s `Workspace` with every renderer installed: `renderers` defaults to `allRenderers()`, and a
- * `renderers` you pass still wins. All other props are the same.
+ * `@workspacekit/react`'s `Workspace` with every renderer installed: `renderers` defaults to
+ * `allRenderers()`, and a `renderers` you pass still wins. All other props are the same.
  *
  * @example
  * ```tsx

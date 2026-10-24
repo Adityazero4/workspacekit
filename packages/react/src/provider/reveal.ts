@@ -6,7 +6,7 @@ import {
   parentPath,
   statusOf,
   type TreeStore,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { withMembership, type UiStore } from './ui-store';
 
 /**

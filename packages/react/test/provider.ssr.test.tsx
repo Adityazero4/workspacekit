@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { createMemoryAdapter } from '@scope/core/memory';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
 import { renderToString } from 'react-dom/server';
 import { expect, test, vi } from 'vitest';
 import { FileSystemProvider } from '../src/provider/FileSystemProvider';

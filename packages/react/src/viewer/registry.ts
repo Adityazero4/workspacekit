@@ -1,4 +1,4 @@
-import type { Entry } from '@scope/core';
+import type { Entry } from '@workspacekit/core';
 import type { ComponentType } from 'react';
 import type { ClassNames } from '../parts';
 import type { ViewerError } from './errors';

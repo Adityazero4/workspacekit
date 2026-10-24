@@ -1,4 +1,4 @@
-import { withLfLineBreaks } from '@scope/react/renderer-kit';
+import { withLfLineBreaks } from '@workspacekit/react/renderer-kit';
 import { expect, test } from 'vitest';
 import { splitDocument } from '../src/frontmatter';
 import { estimatedImportWork, fitsTheRenderedView } from '../src/renderedView';

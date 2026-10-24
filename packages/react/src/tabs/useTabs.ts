@@ -1,5 +1,5 @@
 'use client';
-import { isSameOrDescendant, normalizePath } from '@scope/core';
+import { isSameOrDescendant, normalizePath } from '@workspacekit/core';
 import { useFileSystem, useUiValue, type FileSystemContext } from '../provider/hooks';
 import {
   activateTab,

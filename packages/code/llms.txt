@@ -1,25 +1,25 @@
-# @scope/code
+# @workspacekit/code
 
 > A code renderer for the file workspace: an editable CodeMirror 6 editor with syntax highlighting for code, configuration and data files.
 
-- API reference: https://docs.example.invalid/api/code
-- Install: `npm install @scope/code @scope/react react react-dom`
+- API reference: https://adityazero4.github.io/workspacekit/api/code
+- Install: `npm install @workspacekit/code @workspacekit/react react react-dom`
 
 ## README sections
 
 - Install
 - Entry: `codeRenderer()` returns a renderer.
 - Standalone use: `CodeViewer` shows one file without a tree or a provider.
-- CSS: Import `@scope/react/styles.css` and `@scope/code/styles.css` once each.
+- CSS: Import `@workspacekit/react/styles.css` and `@workspacekit/code/styles.css` once each.
 - Options: `nonce`: set on the `<style>` elements CodeMirror adds, for a strict `style-src` Content-Security-Policy.
 - Vite: No configuration is needed in a build or in the dev server.
 
 ## Entry points
 
-- `@scope/code`
-- `@scope/code/styles.css` (stylesheet)
+- `@workspacekit/code`
+- `@workspacekit/code/styles.css` (stylesheet)
 
-## Exports of `@scope/code`
+## Exports of `@workspacekit/code`
 
 - `CODE_MAX_BYTES`: The largest file the code renderer and the standalone `CodeViewer` open: 10 MiB.
 - `CODE_PARTS`: Every element this package renders carries `data-fs-part="<part>"`; these are its part names, all with the `code-` prefix.

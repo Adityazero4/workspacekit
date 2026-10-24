@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CSRF_HEADER } from '@scope/core';
-import type { ChangeEvent, ErrorBody } from '@scope/core';
-import { httpAdapter } from '@scope/core/http';
+import { CSRF_HEADER } from '@workspacekit/core';
+import type { ChangeEvent, ErrorBody } from '@workspacekit/core';
+import { httpAdapter } from '@workspacekit/core/http';
 import { createFileHandler, nodeFsStore, type FileHandlerOptions, type FileStore } from '../src';
 import { createWatcher } from '../src/watch';
 import { armed, sleep, sse, watchReq } from './watch-fixture';
@@ -388,17 +388,10 @@ describe('watch route framing, backpressure and lifecycle', () => {
     const spy = fake();
     const res = await make({ store: spy.store })(watchReq());
     const batch = Array.from({ length: 10_000 }, (_, i) => ev(i)); // ~1.1 MB
-    for (let i = 0; i < 6; i++) spy.emit(batch); // never read: the 4 MiB budget fills during the 4th batch
+    for (let i = 0; i < 6; i++) spy.emit(batch); // never read: the default 1 MiB budget fills during the 1st batch
     expect(spy.unsubs()).toBe(1);
     expect(spy.subs()).toBe(0);
-    const reader = res.body!.getReader();
-    let bytes = 0;
-    for (;;) {
-      const r = await reader.read();
-      if (r.done) break;
-      bytes += r.value.byteLength;
-    }
-    expect(bytes).toBeLessThan(8 * 1024 * 1024);
+    await expect(res.body!.getReader().read()).rejects.toThrow(/fell too far behind/); // the queue was discarded
   });
 
   it('re-checks the byte budget before every frame, so one batch cannot overshoot it', async () => {
@@ -410,14 +403,7 @@ describe('watch route framing, backpressure and lifecycle', () => {
     })); // ~10 MB
     spy.emit(big);
     expect(spy.unsubs()).toBe(1);
-    const reader = res.body!.getReader();
-    let bytes = 0;
-    for (;;) {
-      const r = await reader.read();
-      if (r.done) break;
-      bytes += r.value.byteLength;
-    }
-    expect(bytes).toBeLessThan(4 * 1024 * 1024 + 600 * 1024);
+    await expect(res.body!.getReader().read()).rejects.toThrow(/fell too far behind/);
   });
 
   it('replaces a batch of more than 10,000 events by one resync event', async () => {
@@ -441,7 +427,7 @@ describe('watch route framing, backpressure and lifecycle', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     const spy = fake();
     const s = sse(await make({ store: spy.store, watchHeartbeatMs: 25_000 })(watchReq()));
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(2); // the heartbeat and the stream's maximum lifetime
     expect(await s.raw()).toBe(': ping\n\n'); // the connect ping
     await vi.advanceTimersByTimeAsync(25_000);
     expect(await s.raw()).toBe(': ping\n\n');

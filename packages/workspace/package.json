@@ -1,9 +1,16 @@
 {
-  "name": "@scope/workspace",
+  "name": "@workspacekit/workspace",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
   "author": "Aditya Jain <adityajain042001@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Adityazero4/workspacekit.git",
+    "directory": "packages/workspace"
+  },
+  "homepage": "https://adityazero4.github.io/workspacekit",
+  "bugs": "https://github.com/Adityazero4/workspacekit/issues",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -12,7 +19,9 @@
     "dist",
     "README.md",
     "AGENTS.md",
-    "llms.txt"
+    "llms.txt",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     ".": {
@@ -33,14 +42,14 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "@scope/code": "workspace:*",
-    "@scope/core": "workspace:*",
-    "@scope/docx": "workspace:*",
-    "@scope/markdown": "workspace:*",
-    "@scope/pdf": "workspace:*",
-    "@scope/pptx": "workspace:*",
-    "@scope/react": "workspace:*",
-    "@scope/spreadsheet": "workspace:*"
+    "@workspacekit/code": "workspace:*",
+    "@workspacekit/core": "workspace:*",
+    "@workspacekit/docx": "workspace:*",
+    "@workspacekit/markdown": "workspace:*",
+    "@workspacekit/pdf": "workspace:*",
+    "@workspacekit/pptx": "workspace:*",
+    "@workspacekit/react": "workspace:*",
+    "@workspacekit/spreadsheet": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "8.0.7",

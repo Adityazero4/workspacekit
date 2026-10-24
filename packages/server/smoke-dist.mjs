@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { httpAdapter } from '@scope/core/http';
-import { createFileHandler, nodeFsStore } from '@scope/server';
+import { httpAdapter } from '@workspacekit/core/http';
+import { createFileHandler, nodeFsStore } from '@workspacekit/server';
 
 const dir = await mkdtemp(join(tmpdir(), 'fs-smoke-'));
 try {

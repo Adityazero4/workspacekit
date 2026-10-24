@@ -1,7 +1,7 @@
-import { isFsError } from './errors';
+import { isFsError, type FsError } from './errors';
 import { normalizedOrUndefined } from './adapter-paths';
 import { isSameOrDescendant, parentPath } from './path';
-import type { ChangeEvent, Entry, FileSystemAdapter, UploadTransport } from './types';
+import type { ChangeEvent, Entry, FileSystemAdapter, UploadTransport, WatchOptions } from './types';
 
 /**
  * Options for `withPolling`: which folders to poll each round, how often, and when to pause.
@@ -27,9 +27,18 @@ export interface PollingOptions {
   isPaused?: () => boolean;
   /**
    * Subscribes `poll` to the moment polling should resume, such as `visibilitychange`, and returns the
-   * unsubscribe. `poll` runs a round at once unless paused or a round is running.
+   * unsubscribe. `poll` runs a round at once unless paused or a round is running; sooner than the current
+   * delay (the interval, or the backoff after failures) since the last round started, it waits out the rest
+   * of that delay instead.
    */
   resumeSignal?: (poll: () => void) => () => void;
+  /**
+   * Stops a subscription's polling for good once `rounds` rounds in a row had every folder they listed
+   * refused (`forbidden`) with at least one refusal other than an HTTP 401, and calls `onGiveUp` once with
+   * the last such refusal. Rounds refused only with 401 (a sign-in may fix it) and rounds that skipped
+   * every folder while it backs off count for neither side; a round that lists a folder resets the count.
+   */
+  giveUpWhenDenied?: { rounds: number; onGiveUp: (error: FsError) => void };
 }
 
 type Listing = Map<string, Entry>;
@@ -37,6 +46,13 @@ type Timer = ReturnType<typeof setTimeout>;
 interface OwnChange {
   path: string;
   entry: Entry | undefined;
+}
+interface PollRound {
+  events: ChangeEvent[];
+  failed: boolean;
+  listed: number;
+  refusals: number;
+  lastRefusalSignInWontFix: FsError | undefined;
 }
 interface OwnChangeNotes {
   noteOwnEntry: (entry: Entry) => Entry;
@@ -83,6 +99,7 @@ function changesBetween(before: Listing, after: Listing): ChangeEvent[] {
 const isGoneFolder = (error: unknown): boolean =>
   isFsError(error) && (error.kind === 'not_found' || error.kind === 'invalid');
 
+const UNAUTHORIZED_STATUS = 401;
 const isDeniedFolder = (error: unknown): boolean => isFsError(error) && error.kind === 'forbidden';
 
 const MOST_ROUNDS_SKIPPED_WHILE_DENIED = 10;
@@ -94,6 +111,8 @@ function applyOwnChange(listing: Listing | undefined, change: OwnChange): void {
 }
 
 class FolderBaselines implements OwnChangeNotes {
+  constructor(readonly paths: () => readonly string[]) {}
+
   readonly #listings = new Map<string, Listing>();
   readonly #denied = new Map<string, { roundsToSkip: number; streak: number }>();
   readonly #ownChangesOfListingsInFlight = new Set<OwnChange[]>();
@@ -120,10 +139,7 @@ class FolderBaselines implements OwnChangeNotes {
     this.#noteOwn({ path: removed, entry: undefined });
   };
 
-  async poll(
-    folders: readonly string[],
-    list: (folder: string) => Promise<Entry[]>,
-  ): Promise<{ events: ChangeEvent[]; failed: boolean }> {
+  async poll(folders: readonly string[], list: (folder: string) => Promise<Entry[]>): Promise<PollRound> {
     const ownChangesDuringRound: OwnChange[] = [];
     this.#ownChangesOfListingsInFlight.add(ownChangesDuringRound);
     try {
@@ -190,14 +206,21 @@ class FolderBaselines implements OwnChangeNotes {
     folders: readonly string[],
     results: Array<PromiseSettledResult<Entry[]>>,
     ownChangesDuringRound: readonly OwnChange[],
-  ): { events: ChangeEvent[]; failed: boolean } {
+  ): PollRound {
     const events: ChangeEvent[] = [];
     let failed = false;
+    let refusals = 0;
+    let lastRefusalSignInWontFix: FsError | undefined;
     results.forEach((result, index) => {
       const folder = folders[index]!;
       if (result.status === 'rejected') {
-        if (isDeniedFolder(result.reason)) this.#noteDenied(folder);
-        else if (isGoneFolder(result.reason)) this.#listings.delete(folder);
+        if (isDeniedFolder(result.reason)) {
+          this.#noteDenied(folder);
+          refusals++;
+          if ((result.reason as FsError).status !== UNAUTHORIZED_STATUS) {
+            lastRefusalSignInWontFix = result.reason as FsError;
+          }
+        } else if (isGoneFolder(result.reason)) this.#listings.delete(folder);
         else failed = true;
         return;
       }
@@ -210,7 +233,7 @@ class FolderBaselines implements OwnChangeNotes {
       this.#listings.set(folder, listing);
       if (baseline) events.push(...changesBetween(baseline, listing));
     });
-    return { events, failed };
+    return { events, failed, listed: folders.length, refusals, lastRefusalSignInWontFix };
   }
 }
 
@@ -258,9 +281,9 @@ function recordingOwnChanges(adapter: FileSystemAdapter, notes: OwnChangeNotes):
   return recorders;
 }
 
-function isPolledFolder(options: PollingOptions, folder: string): boolean {
+function isPolledFolder(baselines: FolderBaselines, folder: string): boolean {
   try {
-    return options.paths().includes(folder);
+    return baselines.paths().includes(folder);
   } catch {
     return false;
   }
@@ -269,14 +292,15 @@ function isPolledFolder(options: PollingOptions, folder: string): boolean {
 function listingsKeptAsBaselines(
   adapter: FileSystemAdapter,
   subscriptions: ReadonlySet<FolderBaselines>,
-  options: PollingOptions,
 ): FileSystemAdapter['list'] {
   return async (path, opts) => {
     const folder = normalizedOrUndefined(path);
     const seeds =
-      folder === undefined || subscriptions.size === 0 || !isPolledFolder(options, folder)
+      folder === undefined
         ? []
-        : [...subscriptions].map((baselines) => baselines.keepTheAppsListingAsBaseline(folder));
+        : [...subscriptions]
+            .filter((baselines) => isPolledFolder(baselines, folder))
+            .map((baselines) => baselines.keepTheAppsListingAsBaseline(folder));
     let entries: Entry[] | undefined;
     try {
       entries = await adapter.list(path, opts);
@@ -284,6 +308,20 @@ function listingsKeptAsBaselines(
     } finally {
       for (const seed of seeds) seed(entries);
     }
+  };
+}
+
+function denialTracker(options: PollingOptions): (round: PollRound) => boolean {
+  const { rounds, onGiveUp } = options.giveUpWhenDenied ?? { rounds: Infinity, onGiveUp: () => undefined };
+  let deniedRoundsInARow = 0;
+  return (round) => {
+    if (round.listed === 0) return false;
+    if (round.refusals < round.listed) deniedRoundsInARow = 0;
+    if (round.refusals < round.listed || !round.lastRefusalSignInWontFix) return false;
+    deniedRoundsInARow++;
+    if (deniedRoundsInARow < rounds) return false;
+    onGiveUp(round.lastRefusalSignInWontFix);
+    return true;
   };
 }
 
@@ -300,12 +338,17 @@ function startPolling(
   let delayMs = intervalMs;
   let timer: Timer | undefined;
   let roundRunning = false;
+  let lastRoundAt = -Infinity;
+  const gaveUpAfter = denialTracker(options);
+  let gaveUp = false;
   const runRound = async (): Promise<ChangeEvent[]> => {
     roundRunning = true;
+    lastRoundAt = Date.now();
     let failed = true;
     try {
       const round = await baselines.poll([...new Set(options.paths())].slice(0, maxFoldersPerRound), list);
       failed = round.failed;
+      gaveUp = gaveUpAfter(round);
       return round.events;
     } catch {
       return [];
@@ -316,13 +359,20 @@ function startPolling(
   };
   const pollNow = async (): Promise<void> => {
     clearTimeout(timer);
-    if (roundRunning || stopped.signal.aborted) return;
+    if (roundRunning || gaveUp || stopped.signal.aborted) return;
     const events = isPaused?.() ? [] : await runRound();
     if (stopped.signal.aborted) return;
-    timer = setTimeout(pollNow, delayMs);
+    if (!gaveUp) timer = setTimeout(pollNow, delayMs);
     if (events.length > 0) onChange(events);
   };
-  const stopResumeSignal = options.resumeSignal?.(() => void pollNow());
+  const pollWhenDue = (): void => {
+    if (roundRunning || gaveUp || stopped.signal.aborted) return;
+    const remainingMs = lastRoundAt + delayMs - Date.now();
+    if (remainingMs <= 0) return void pollNow();
+    clearTimeout(timer);
+    timer = setTimeout(pollNow, remainingMs);
+  };
+  const stopResumeSignal = options.resumeSignal?.(pollWhenDue);
   timer = setTimeout(pollNow, delayMs);
   return () => {
     stopped.abort();
@@ -356,7 +406,8 @@ function everySubscription(subscriptions: ReadonlySet<FolderBaselines>): OwnChan
  * listing in flight, so polling never reports it. A round in which a listing fails (or `paths` or `list`
  * throws) doubles the delay up to `maxIntervalMs`; a folder that cannot be listed (`not_found`, `invalid` or
  * `forbidden`) only loses its baseline. Rounds never overlap, nothing is polled while `isPaused()`, and the
- * unsubscribe stops the timer and aborts the listings in flight. Every other member is the adapter's own,
+ * unsubscribe stops the timer and aborts the listings in flight. `watch`'s `pollPaths` replaces `paths` for
+ * that subscription. Every other member is the adapter's own,
  * bound to it.
  *
  * @example
@@ -365,8 +416,9 @@ function everySubscription(subscriptions: ReadonlySet<FolderBaselines>): OwnChan
  *   paths: () => ['', ...expanded],
  *   isPaused: () => document.hidden,
  *   resumeSignal: (poll) => {
- *     document.addEventListener('visibilitychange', poll);
- *     return () => document.removeEventListener('visibilitychange', poll);
+ *     const pollIfShown = () => !document.hidden && poll();
+ *     document.addEventListener('visibilitychange', pollIfShown);
+ *     return () => document.removeEventListener('visibilitychange', pollIfShown);
  *   },
  * });
  * ```
@@ -375,23 +427,32 @@ export function withPolling(adapter: FileSystemAdapter, options: PollingOptions)
   const subscriptions = new Set<FolderBaselines>();
   const recorders = {
     ...recordingOwnChanges(adapter, everySubscription(subscriptions)),
-    list: listingsKeptAsBaselines(adapter, subscriptions, options),
+    list: listingsKeptAsBaselines(adapter, subscriptions),
   };
-  const watch = (onChange: (events: ChangeEvent[]) => void): (() => void) => {
-    const baselines = new FolderBaselines();
+  const watch = (onChange: (events: ChangeEvent[]) => void, watchOptions?: WatchOptions): (() => void) => {
+    const paths = watchOptions?.pollPaths ?? options.paths;
+    const baselines = new FolderBaselines(paths);
     subscriptions.add(baselines);
-    const stopPolling = startPolling(adapter, baselines, options, onChange);
+    const stopPolling = startPolling(adapter, baselines, { ...options, paths }, onChange);
     return () => {
       subscriptions.delete(baselines);
       stopPolling();
     };
   };
-  return new Proxy(adapter, {
-    get(target, property) {
-      if (property === 'watch') return watch;
-      if (Object.hasOwn(recorders, property)) return recorders[property as keyof FileSystemAdapter];
-      const value: unknown = Reflect.get(target, property, target);
-      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
-    },
+  const member = (property: string | symbol): unknown => {
+    if (property === 'watch') return watch;
+    if (Object.hasOwn(recorders, property)) return recorders[property as keyof FileSystemAdapter];
+    const value: unknown = Reflect.get(adapter, property, adapter);
+    return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(adapter) : value;
+  };
+  const has = (property: string | symbol): boolean => property === 'watch' || Reflect.has(adapter, property);
+  return new Proxy(Object.create(null) as FileSystemAdapter, {
+    get: (_emptyTarget, property) => member(property),
+    has: (_emptyTarget, property) => has(property),
+    ownKeys: () => [...new Set([...Reflect.ownKeys(adapter), ...Reflect.ownKeys(recorders), 'watch'])],
+    getOwnPropertyDescriptor: (_emptyTarget, property) =>
+      has(property)
+        ? { value: member(property), enumerable: true, configurable: true, writable: true }
+        : undefined,
   });
 }

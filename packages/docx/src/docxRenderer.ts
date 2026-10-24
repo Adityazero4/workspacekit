@@ -4,7 +4,7 @@ import {
   type FileInfo,
   type Renderer,
   type RendererProps,
-} from '@scope/react/renderer-kit';
+} from '@workspacekit/react/renderer-kit';
 import { createElement } from 'react';
 import type { DocxClassNames } from './parts';
 
@@ -21,7 +21,7 @@ export const DOCX_MAX_BYTES: number = 25 * 1024 * 1024;
 
 /**
  * Options of `docxRenderer`. `classNames` adds classes to this package's parts; the viewer's own `classNames`
- * only know `@scope/react` parts.
+ * only know `@workspacekit/react` parts.
  *
  * @example
  * ```ts
@@ -44,7 +44,7 @@ const matchScore = (file: FileInfo): number | false =>
  * shadow root, so its styles and ids never touch the app. docx-preview, DOMPurify and fflate load when the
  * viewer first shows such a file. Legacy Word 97–2003
  * `.doc` files do not match, so they fall through to the unsupported view. `classNames` adds classes to
- * this package's parts; the viewer's own `classNames` only know `@scope/react` parts.
+ * this package's parts; the viewer's own `classNames` only know `@workspacekit/react` parts.
  *
  * Call it once, at module level, and reuse the result: the viewer caches each renderer's loaded component by
  * the renderer object's identity.

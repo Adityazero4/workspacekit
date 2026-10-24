@@ -7,7 +7,7 @@ import {
   uniqueName,
   type Entry,
   type FileSystemAdapter,
-} from '@scope/core';
+} from '@workspacekit/core';
 import { entryOnTheServer } from '../actions/serverEntry';
 import type { EditBuffer, EditBufferHost } from './editBuffer';
 

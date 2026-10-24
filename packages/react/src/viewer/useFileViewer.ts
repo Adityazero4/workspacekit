@@ -1,5 +1,5 @@
 'use client';
-import { basename, toFsError, type Entry, type FileSystemAdapter } from '@scope/core';
+import { basename, toFsError, type Entry, type FileSystemAdapter } from '@workspacekit/core';
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import { downloadEntry, downloadUrl } from '../actions/download';
 import { failureMessage, useFileSystem, type FileSystemContext } from '../provider/hooks';

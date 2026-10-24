@@ -1,6 +1,6 @@
-import { createMemoryAdapter } from '@scope/core/memory';
-import { Workspace } from '@scope/workspace';
-import '@scope/workspace/styles.css';
+import { createMemoryAdapter } from '@workspacekit/core/memory';
+import { Workspace } from '@workspacekit/workspace';
+import '@workspacekit/workspace/styles.css';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { sampleFiles, simulateAgent } from '../src';

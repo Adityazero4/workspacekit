@@ -2,7 +2,7 @@ import axe from 'axe-core';
 import { afterEach, expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { cleanup, render } from 'vitest-browser-react';
-import '@scope/react/styles.css';
+import '@workspacekit/react/styles.css';
 import '../src/styles.css';
 import { Grid } from '../src/grid/Grid';
 import type { GridModel } from '../src/grid/model';

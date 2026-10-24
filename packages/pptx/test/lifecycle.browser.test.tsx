@@ -3,7 +3,7 @@ import { StrictMode, type ReactNode } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { cleanup, render } from 'vitest-browser-react';
-import '@scope/react/styles.css';
+import '@workspacekit/react/styles.css';
 import '../src/styles.css';
 import { PptxViewer, type PptxViewerProps } from '../src';
 import { closePresentation, hideSlide, openPresentation, showSlide } from '../src/slides';

@@ -1,4 +1,4 @@
-import type { VisibleRowIndex } from '@scope/core';
+import type { VisibleRowIndex } from '@workspacekit/core';
 import type { PlaceholderGroup, PlaceholderRow } from '../tree/rowLayout';
 import type { UploadRun } from './uploads';
 
