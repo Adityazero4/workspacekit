@@ -18,7 +18,7 @@ const MEBIBYTE = 1024 * 1024;
 const LARGE_FILE = 'large.ts';
 const WARM_UP_RUNS = 1;
 const MEDIAN_RUNS = 5;
-const BUDGET_MS = 200;
+const BUDGET_MS = 200 * Number(process.env.PERF_BUDGET_SCALE);
 const renderers = [codeRenderer(), ...lightRenderers];
 
 const oneMebibyteOfCode = (): string =>

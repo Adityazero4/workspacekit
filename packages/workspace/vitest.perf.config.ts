@@ -6,12 +6,15 @@ import {
 } from './vitest.shared.ts';
 
 const productionReactLikeTheShippedApp = { 'process.env.NODE_ENV': JSON.stringify('production') };
+const perfBudgetScale = {
+  'process.env.PERF_BUDGET_SCALE': JSON.stringify(process.env.PERF_BUDGET_SCALE ?? '1'),
+};
 const chromiumFlagsForGcAndExactHeapSizes = ['--js-flags=--expose-gc', '--enable-precise-memory-info'];
 
 export default defineConfig({
   root: import.meta.dirname,
   resolve: testAgainstWorkspaceSourcesWithoutABuild,
-  define: productionReactLikeTheShippedApp,
+  define: { ...productionReactLikeTheShippedApp, ...perfBudgetScale },
   oxc: { jsx: { runtime: 'automatic', development: false } },
   plugins: [compileReactSourcesLikeTheBuild()],
   optimizeDeps: {

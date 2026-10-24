@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { partProps } from '../src/cx';
@@ -6,6 +6,10 @@ import '../src/styles.css';
 
 const LIGHT_FG = 'rgb(31, 35, 40)';
 const DARK_FG = 'rgb(230, 237, 243)';
+
+beforeEach(async () => {
+  await commands.emulateMedia({ reducedMotion: 'no-preference' });
+});
 
 afterEach(async () => {
   document.head.querySelectorAll('style[data-test]').forEach((s) => s.remove());

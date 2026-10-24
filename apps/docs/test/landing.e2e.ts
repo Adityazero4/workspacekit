@@ -24,9 +24,12 @@ const treeRow = (page: Page, name: string) =>
   });
 
 async function readProbe(page: Page): Promise<AgentProbe> {
-  const probe = await page.evaluate(() => (window as unknown as { __docsAgent?: AgentProbe }).__docsAgent);
-  if (!probe) throw new Error('window.__docsAgent is missing: build the site with NEXT_PUBLIC_DOCS_TEST=1');
-  return probe;
+  await page
+    .waitForFunction(() => '__docsAgent' in window, undefined, AGENT_WAIT)
+    .catch(() => {
+      throw new Error('window.__docsAgent is missing: build the site with NEXT_PUBLIC_DOCS_TEST=1');
+    });
+  return page.evaluate(() => (window as unknown as { __docsAgent: AgentProbe }).__docsAgent);
 }
 
 const writesOf = async (page: Page): Promise<number> => (await readProbe(page)).writes;

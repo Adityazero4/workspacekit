@@ -14,8 +14,10 @@ import {
 import { createVisibleRowIndex } from '../src/tree/visible';
 import type { Entry } from '../src/types';
 
-// Generous wall-clock budgets (Node 22). Each figure is the median of 3 runs. Set CI_SLOW=1 to skip on slow machines.
+// Generous wall-clock budgets (Node 22). Each figure is the median of 3 runs. PERF_BUDGET_SCALE (CI sets 1.5) scales them;
+// CI_SLOW=1 skips them.
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+const PERF_BUDGET_SCALE = Number(env.PERF_BUDGET_SCALE ?? 1);
 const M = 1_000_000;
 const TIMEOUT = 120_000; // building the 1M inputs dominates; the budgets are asserted separately
 
@@ -45,8 +47,10 @@ function expectCold3(fn: () => unknown, budget: number, label: string): void {
     fn();
     return performance.now() - t0;
   });
-  expect(ms[0], `${label} (cold)`).toBeLessThanOrEqual(budget);
-  expect([...ms].sort((a, b) => a - b)[1], `${label} (median)`).toBeLessThanOrEqual(budget);
+  expect(ms[0], `${label} (cold)`).toBeLessThanOrEqual(budget * PERF_BUDGET_SCALE);
+  expect([...ms].sort((a, b) => a - b)[1], `${label} (median)`).toBeLessThanOrEqual(
+    budget * PERF_BUDGET_SCALE,
+  );
 }
 
 describe.skipIf(env.CI_SLOW)('tree model scale budgets', () => {
@@ -57,14 +61,14 @@ describe.skipIf(env.CI_SLOW)('tree model scale budgets', () => {
       expect(
         median3(() => mergeListing(emptyTree(), '', 100, entries)),
         'initial merge',
-      ).toBeLessThanOrEqual(1500);
+      ).toBeLessThanOrEqual(1500 * PERF_BUDGET_SCALE);
       const base = mergeListing(emptyTree(), '', 100, entries);
       const files = entries.filter((e) => e.kind === 'file');
       const leaf = files[0]!.path;
       expect(
         median3(() => moveSubtree(base, leaf, 'wide/renamed.txt')),
         'rename one leaf',
-      ).toBeLessThanOrEqual(20);
+      ).toBeLessThanOrEqual(20 * PERF_BUDGET_SCALE);
       const ops: TreeOp[] = [];
       for (let i = 0; i < 1250; i++) {
         ops.push({
@@ -78,7 +82,7 @@ describe.skipIf(env.CI_SLOW)('tree model scale budgets', () => {
       expect(
         median3(() => applyBatch(base, ops)),
         'applyBatch 5k mixed ops',
-      ).toBeLessThanOrEqual(60);
+      ).toBeLessThanOrEqual(60 * PERF_BUDGET_SCALE);
       expect(applyBatch(base, ops).folders.get('wide')!.children.size).toBe(M); // +1250 created, -1250 removed
     },
     TIMEOUT,
@@ -94,18 +98,18 @@ describe.skipIf(env.CI_SLOW)('tree model scale budgets', () => {
       expect(
         median3(() => mergeListing(shallow, 'd0', 1, listing)),
         'expand (merge 100k listing)',
-      ).toBeLessThanOrEqual(150);
+      ).toBeLessThanOrEqual(150 * PERF_BUDGET_SCALE);
       const base = mergeListing(emptyTree(), '', 100, entries);
       const renamed = moveSubtree(base, 'd0', 'renamed');
       expect(renamed.folders.get('renamed')!.children.size).toBe(100_000);
       expect(
         median3(() => moveSubtree(base, 'd0', 'renamed')),
         'rename folder with 100k descendants',
-      ).toBeLessThanOrEqual(250);
+      ).toBeLessThanOrEqual(250 * PERF_BUDGET_SCALE);
       expect(
         median3(() => removeSubtree(base, listing[500]!.path)),
         'delete a leaf',
-      ).toBeLessThanOrEqual(10);
+      ).toBeLessThanOrEqual(10 * PERF_BUDGET_SCALE);
     },
     TIMEOUT,
   );
@@ -117,7 +121,7 @@ describe.skipIf(env.CI_SLOW)('tree model scale budgets', () => {
       expect(
         median3(() => mergeListing(emptyTree(), '', 100, entries)),
         'initial merge',
-      ).toBeLessThanOrEqual(1500);
+      ).toBeLessThanOrEqual(1500 * PERF_BUDGET_SCALE);
       // every folder down to the chain ends is loaded; the chain ends themselves (depth 64) are not
       const base = mergeListing(emptyTree(), '', 64, entries);
       const deep = entries.find((e) => e.kind === 'file' && e.path.startsWith('c500/'))!;
@@ -127,7 +131,7 @@ describe.skipIf(env.CI_SLOW)('tree model scale budgets', () => {
       expect(
         median3(() => mergeListing(base, folder, 1, listing)),
         'expand a deep folder',
-      ).toBeLessThanOrEqual(5);
+      ).toBeLessThanOrEqual(5 * PERF_BUDGET_SCALE);
     },
     TIMEOUT,
   );
@@ -154,7 +158,7 @@ describe.skipIf(env.CI_SLOW)('tree model scale budgets', () => {
         expect(
           median3(() => mergeListing(base, 'z', 1, [])),
           `${name} single-dir drop`,
-        ).toBeLessThanOrEqual(100);
+        ).toBeLessThanOrEqual(100 * PERF_BUDGET_SCALE);
         expect([...mergeListing(base, 'z', 1, []).folders.keys()].filter((k) => k.startsWith('z'))).toEqual([
           'z',
         ]);
@@ -183,7 +187,7 @@ describe.skipIf(env.CI_SLOW)('tree model scale budgets', () => {
       expect(
         median3(() => mergeListing(base, '', 1, [])),
         'relist dropping 10k loaded folders',
-      ).toBeLessThanOrEqual(50);
+      ).toBeLessThanOrEqual(50 * PERF_BUDGET_SCALE);
       expect([...mergeListing(base, '', 1, []).folders.keys()]).toEqual(['']);
     },
     TIMEOUT,
