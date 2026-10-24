@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile",
-  "buildCommand": "pnpm build && pnpm --filter @workspacekit/docs-site build:site",
-  "outputDirectory": "apps/docs/out",
+  "buildCommand": "cd ../.. && pnpm build && pnpm --filter @workspacekit/docs-site build:site",
+  "outputDirectory": "out",
   "routes": [
     { "src": "/(.*)", "headers": { "Vary": "Accept" }, "continue": true },
     {
