@@ -34,6 +34,12 @@ const CONTRACT_PREFACE = `Conventions every adapter follows:
 - Optional methods switch the UI on: \`create\` (New file, New folder), \`write\` (editing; without it the editors are read-only), \`move\` (rename, drag), \`copy\` (copy, paste, duplicate), \`delete\`, \`search\` (search box), \`upload\`, \`download\`, \`url\` (media and PDF streaming), \`stat\`, and \`watch\` (live updates; without it the workspace polls).`;
 const SAME_PAGE_LINK = /\[(`[^`]+`)\]\(#[^)]*\)/g;
 
+function unquoted(value) {
+  const quote = value[0];
+  if (value.length < 2 || (quote !== '"' && quote !== "'") || !value.endsWith(quote)) return value;
+  return quote === '"' ? JSON.parse(value) : value.slice(1, -1).replaceAll("''", "'");
+}
+
 /**
  * Splits a page into its front matter fields (`title`, `description`) and its body.
  *
@@ -47,7 +53,7 @@ export function frontMatterOf(text) {
   const fields = Object.fromEntries(
     match[1]
       .split('\n')
-      .map((line) => [line.slice(0, line.indexOf(':')), line.slice(line.indexOf(':') + 1).trim()]),
+      .map((line) => [line.slice(0, line.indexOf(':')), unquoted(line.slice(line.indexOf(':') + 1).trim())]),
   );
   return {
     title: fields.title ?? '',
