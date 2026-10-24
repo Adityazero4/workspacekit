@@ -1,21 +1,10 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
-import { Bricolage_Grotesque, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import type { ReactNode } from 'react';
 import './global.css';
 
-const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bricolage', display: 'swap' });
-const sans = IBM_Plex_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-body',
-  display: 'swap',
-});
-const mono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  variable: '--font-code',
-  display: 'swap',
-});
+const sans = Geist({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
+const mono = Geist_Mono({ subsets: ['latin'], variable: '--font-code', display: 'swap' });
 
 /**
  * The site's default title and description.
@@ -38,13 +27,11 @@ export const metadata = {
  */
 export default function RootLayout({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <html
-      lang="en"
-      className={`${display.variable} ${sans.variable} ${mono.variable}`}
-      suppressHydrationWarning
-    >
+    <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col">
-        <RootProvider search={{ enabled: false }}>{children}</RootProvider>
+        <RootProvider search={{ enabled: false }} theme={{ defaultTheme: 'light' }}>
+          {children}
+        </RootProvider>
       </body>
     </html>
   );

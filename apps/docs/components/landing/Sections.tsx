@@ -4,6 +4,7 @@ import { REPOSITORY_URL } from '../../lib/layoutOptions';
 import { RendererGallery } from '../RendererGallery';
 import { Code } from './Code';
 import { InstallCommand } from './Hero';
+import { Label, Title } from './Type';
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
@@ -56,137 +57,10 @@ export const handler = createFileHandler({
   },
 });`;
 
-function SectionHeading(props: { id: string; title: string; lead: string }): React.JSX.Element {
+function Section(props: { id: string; children: React.ReactNode; className?: string }): React.JSX.Element {
   return (
-    <>
-      <h2 id={props.id} className="max-w-[24ch] text-4xl font-bold tracking-tight text-balance">
-        {props.title}
-      </h2>
-      <p className="mt-4 max-w-[62ch] text-lg leading-relaxed text-fd-muted-foreground">{props.lead}</p>
-    </>
-  );
-}
-
-/**
- * What building a file workspace yourself takes, next to what workspacekit already does.
- *
- * @example
- * <Comparison />
- */
-export function Comparison(): React.JSX.Element {
-  return (
-    <section aria-labelledby="compare-heading" className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6">
-      <SectionHeading
-        id="compare-heading"
-        title="The part of your agent app you should not have to build"
-        lead="Showing files to people looks small until you build it. Here is what is behind each line."
-      />
-      <ul className="mt-10 flex flex-col gap-4 md:hidden">
-        {COMPARISON.map((row) => (
-          <li key={row.need} className="rounded-2xl border border-fd-border bg-fd-card p-5">
-            <h3 className="font-semibold">{row.need}</h3>
-            <p className="mt-3 text-sm text-fd-muted-foreground">Building it yourself: {row.diy}</p>
-            <p className="mt-2 text-sm">With workspacekit: {row.kit}</p>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-10 hidden overflow-x-auto rounded-2xl border border-fd-border bg-fd-card md:block">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-fd-border text-fd-muted-foreground">
-            <tr>
-              <th scope="col" className="w-[26%] px-5 py-3 font-medium">
-                You need
-              </th>
-              <th scope="col" className="w-[37%] px-5 py-3 font-medium">
-                Building it yourself
-              </th>
-              <th scope="col" className="px-5 py-3 font-medium text-fd-foreground">
-                With workspacekit
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {COMPARISON.map((row) => (
-              <tr key={row.need} className="border-b border-fd-border last:border-0">
-                <th scope="row" className="px-5 py-4 align-top font-semibold">
-                  {row.need}
-                </th>
-                <td className="px-5 py-4 align-top text-fd-muted-foreground">{row.diy}</td>
-                <td className="px-5 py-4 align-top">{row.kit}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-/**
- * The server's security guarantees, beside the handler that provides them.
- *
- * @example
- * <Security />
- */
-export function Security(): React.JSX.Element {
-  return (
-    <section aria-labelledby="security-heading" className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6">
-      <div className="grid gap-12 lg:grid-cols-2">
-        <div>
-          <SectionHeading
-            id="security-heading"
-            title="Closed until you open it"
-            lead="An agent's folder often holds things only some people may see. The server handler has no open mode: you decide, per request and per path."
-          />
-          <ul className="mt-8 flex flex-col gap-4">
-            {GUARANTEES.map((guarantee) => (
-              <li key={guarantee} className="flex gap-3 text-[0.95rem] leading-relaxed">
-                <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-blue" />
-                {guarantee}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="min-w-0 self-center">
-          <Code lang="ts" label="A server route that checks the signed-in user" code={SECURE_SNIPPET} />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/**
- * Three steps from install to a working workspace.
- *
- * @example
- * <QuickStart />
- */
-export function QuickStart(): React.JSX.Element {
-  return (
-    <section aria-labelledby="start-heading" className="border-y border-fd-border bg-fd-card">
-      <div className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6">
-        <SectionHeading
-          id="start-heading"
-          title="Running in three steps"
-          lead="Next.js shown here. Any server that speaks the Fetch API works the same way, and there is a Vite guide too."
-        />
-        <ol className="mt-10 flex flex-col gap-10">
-          <li className="flex max-w-3xl min-w-0 flex-col gap-3">
-            <h3 className="text-lg font-semibold">1. Install</h3>
-            <InstallCommand />
-          </li>
-          <li className="grid min-w-0 gap-10 lg:grid-cols-2">
-            <div className="flex min-w-0 flex-col gap-3">
-              <h3 className="text-lg font-semibold">2. Expose a folder on the server</h3>
-              <Code lang="ts" label="Step 2: the server route" code={SERVER_SNIPPET} />
-            </div>
-            <div className="flex min-w-0 flex-col gap-3">
-              <h3 className="text-lg font-semibold">3. Render it in the browser</h3>
-              <Code lang="tsx" label="Step 3: the browser page" code={BROWSER_SNIPPET} />
-            </div>
-          </li>
-        </ol>
-      </div>
+    <section aria-labelledby={props.id} className={`border-t border-fd-border ${props.className ?? ''}`}>
+      <div className="mx-auto w-full max-w-7xl px-5 py-28 sm:px-8">{props.children}</div>
     </section>
   );
 }
@@ -199,16 +73,120 @@ export function QuickStart(): React.JSX.Element {
  */
 export function Gallery(): React.JSX.Element {
   return (
-    <section aria-labelledby="gallery-heading" className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6">
-      <SectionHeading
-        id="gallery-heading"
-        title="Open the files your agent produces"
-        lead="Each viewer below is the one the workspace uses, on a real sample file."
-      />
-      <div className="mt-8">
+    <Section id="gallery-heading">
+      <div className="flex flex-col gap-5">
+        <Label>/viewers</Label>
+        <Title id="gallery-heading" lead="Nine viewers." rest="Every file your agent makes." />
+      </div>
+      <div className="wk-card mt-12 rounded-xl p-4 sm:p-6">
         <RendererGallery />
       </div>
-    </section>
+    </Section>
+  );
+}
+
+/**
+ * What building a file workspace yourself takes, next to what workspacekit already does.
+ *
+ * @example
+ * <Comparison />
+ */
+export function Comparison(): React.JSX.Element {
+  return (
+    <Section id="compare-heading">
+      <div className="flex flex-col gap-5">
+        <Label>/build-or-install</Label>
+        <Title id="compare-heading" lead="The part of your app" rest="you should not have to build." />
+      </div>
+      <dl className="mt-14 border-t border-fd-border">
+        {COMPARISON.map((row) => (
+          <div
+            key={row.need}
+            className="grid gap-3 border-b border-fd-border py-7 md:grid-cols-[1fr_1.2fr_1.2fr] md:gap-8"
+          >
+            <dt className="text-lg text-fd-foreground">{row.need}</dt>
+            <dd className="text-[0.95rem] leading-relaxed text-fd-muted-foreground">
+              <span className="mb-1.5 block text-xs font-medium text-fd-muted-foreground">On your own</span>
+              {row.diy}
+            </dd>
+            <dd className="text-[0.95rem] leading-relaxed text-fd-foreground">
+              <span className="mb-1.5 block text-xs font-medium text-accent">With workspacekit</span>
+              {row.kit}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Section>
+  );
+}
+
+/**
+ * The server's security guarantees, beside the handler that provides them.
+ *
+ * @example
+ * <Security />
+ */
+export function Security(): React.JSX.Element {
+  return (
+    <Section id="security-heading" className="bg-band">
+      <div className="grid gap-14 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
+          <Label>/security</Label>
+          <Title id="security-heading" lead="Closed until" rest="you open it." />
+          <p className="max-w-[46ch] text-lg leading-relaxed text-fd-muted-foreground">
+            An agent’s folder often holds things only some people may see. The handler has no open mode: you
+            decide, per request and per path.
+          </p>
+          <ul className="mt-2 flex flex-col">
+            {GUARANTEES.map((guarantee) => (
+              <li
+                key={guarantee}
+                className="border-b border-fd-border py-4 text-[0.95rem] leading-relaxed last:border-0"
+              >
+                {guarantee}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="min-w-0 lg:pt-16">
+          <Code lang="ts" label="A server route that checks the signed-in user" code={SECURE_SNIPPET} />
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * Three steps from install to a working workspace.
+ *
+ * @example
+ * <QuickStart />
+ */
+export function QuickStart(): React.JSX.Element {
+  return (
+    <Section id="start-heading">
+      <div className="flex flex-col gap-5">
+        <Label>/quick-start</Label>
+        <Title id="start-heading" lead="Running in" rest="three steps." />
+      </div>
+      <ol className="mt-14 grid gap-10 lg:grid-cols-3">
+        <li className="flex min-w-0 flex-col gap-4 border-t border-fd-border pt-6">
+          <span className="font-mono text-xs text-fd-muted-foreground">01</span>
+          <h3 className="text-xl">Install the packages.</h3>
+          <InstallCommand />
+        </li>
+        <li className="flex min-w-0 flex-col gap-4 border-t border-fd-border pt-6">
+          <span className="font-mono text-xs text-fd-muted-foreground">02</span>
+          <h3 className="text-xl">Expose a folder on the server.</h3>
+          <Code lang="ts" label="Step 2: the server route" code={SERVER_SNIPPET} />
+        </li>
+        <li className="flex min-w-0 flex-col gap-4 border-t border-fd-border pt-6">
+          <span className="font-mono text-xs text-fd-muted-foreground">03</span>
+          <h3 className="text-xl">Render it in the browser.</h3>
+          <Code lang="tsx" label="Step 3: the browser page" code={BROWSER_SNIPPET} />
+        </li>
+      </ol>
+    </Section>
   );
 }
 
@@ -221,30 +199,25 @@ export function Gallery(): React.JSX.Element {
 export function Closing(): React.JSX.Element {
   return (
     <>
-      <section aria-labelledby="closing-heading" className="mx-auto w-full max-w-7xl px-4 py-24 sm:px-6">
-        <h2 id="closing-heading" className="max-w-[20ch] text-5xl font-bold tracking-tight text-balance">
-          Put your agent’s work where people can see it.
-        </h2>
-        <div className="mt-8 flex max-w-2xl flex-col gap-4">
-          <InstallCommand />
-          <div className="flex flex-wrap gap-3">
+      <section aria-labelledby="closing-heading" className="border-t border-fd-border">
+        <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8 px-5 py-32 text-center sm:px-8">
+          <Label>/get-started</Label>
+          <Title id="closing-heading" lead="Show people" rest="what your agent did." />
+          <div className="flex flex-wrap items-center justify-center gap-6">
             <Link
-              href="/docs"
-              className="rounded-lg bg-fd-primary px-4 py-2.5 text-sm font-medium text-fd-primary-foreground hover:opacity-90"
+              href="/docs/getting-started/next"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 dark:text-slate-950"
             >
-              Read the docs
+              Add it to your app <span aria-hidden="true">→</span>
             </Link>
-            <a
-              href={REPOSITORY_URL}
-              className="rounded-lg border border-fd-border bg-fd-card px-4 py-2.5 text-sm font-medium hover:bg-fd-accent"
-            >
-              Source on GitHub
+            <a href={REPOSITORY_URL} className="text-sm text-fd-muted-foreground hover:text-fd-foreground">
+              Source on GitHub <span aria-hidden="true">↗</span>
             </a>
           </div>
         </div>
       </section>
       <footer className="border-t border-fd-border">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap justify-between gap-4 px-4 py-8 text-sm text-fd-muted-foreground sm:px-6">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-fd-muted-foreground sm:px-8">
           <p>workspacekit is open source under the Apache-2.0 licence.</p>
           <nav aria-label="Footer" className="flex gap-6">
             <Link href="/docs" className="hover:text-fd-foreground">

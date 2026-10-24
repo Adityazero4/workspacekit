@@ -1,4 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import { Logo } from '../components/Logo';
 
 /**
  * The repository the site links to.
@@ -16,7 +17,7 @@ export const REPOSITORY_URL = 'https://github.com/Adityazero4/workspacekit';
  */
 export const layoutOptions: BaseLayoutProps = {
   nav: {
-    title: <span className="font-display text-[1.05rem] font-semibold tracking-tight">workspacekit</span>,
+    title: <Logo />,
   },
   links: [
     { text: 'Documentation', url: '/docs', on: 'nav' },

@@ -1,4 +1,5 @@
 import { CopyButton } from '../CopyButton';
+import { Label, Title } from './Type';
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 const SITE = 'https://adityazero4.github.io/workspacekit';
@@ -11,11 +12,7 @@ const PACKAGES: readonly { name: string; what: string }[] = [
     what: 'The adapter contract and tree store, plus HTTP and in-memory adapters.',
   },
   { name: '@workspacekit/react', what: 'The components alone, for your own layout or your own viewers.' },
-  {
-    name: '@workspacekit/pdf, docx, pptx, spreadsheet, markdown, code',
-    what: 'One viewer each, if you want only some of them.',
-  },
-  { name: '@workspacekit/demo-kit', what: 'Sample files and a simulated agent for demos and tests.' },
+  { name: '@workspacekit/pdf, docx, pptx, …', what: 'One viewer each, if you want only some of them.' },
   { name: '@workspacekit/create-workspace', what: 'A starter project for Next.js or Vite, in one command.' },
 ];
 
@@ -29,25 +26,24 @@ const AGENT_PROMPT = `Add a file workspace to this app with workspacekit. Read $
  */
 export function Layers(): React.JSX.Element {
   return (
-    <section aria-labelledby="layers-heading" className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6">
-      <div className="grid gap-12 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div>
-          <h2 id="layers-heading" className="max-w-[18ch] text-4xl font-bold tracking-tight text-balance">
-            Take all of it, or only the part you need
-          </h2>
-          <p className="mt-4 max-w-[46ch] text-lg leading-relaxed text-fd-muted-foreground">
-            The preset is one import. Under it, every layer is its own package, so you can bring your own
-            storage, your own layout or your own viewers.
+    <section aria-labelledby="layers-heading" className="border-t border-fd-border">
+      <div className="mx-auto grid w-full max-w-7xl gap-14 px-5 py-28 sm:px-8 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
+          <Label>/packages</Label>
+          <Title id="layers-heading" lead="Take all of it," rest="or only what you need." />
+          <p className="max-w-[44ch] text-lg leading-relaxed text-fd-muted-foreground">
+            The preset is one import. Under it every layer is its own package, so you can bring your own
+            storage, layout or viewers.
           </p>
         </div>
-        <dl className="divide-y divide-fd-border border-y border-fd-border">
+        <dl className="border-t border-fd-border">
           {PACKAGES.map((item) => (
             <div
               key={item.name}
-              className="grid gap-1 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:gap-6"
+              className="grid gap-1 border-b border-fd-border py-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:gap-6"
             >
-              <dt className="font-mono text-[0.85rem] break-words">{item.name}</dt>
-              <dd className="text-sm text-fd-muted-foreground">{item.what}</dd>
+              <dt className="font-mono text-[0.82rem] break-words text-fd-foreground">{item.name}</dt>
+              <dd className="text-[0.95rem] text-fd-muted-foreground">{item.what}</dd>
             </div>
           ))}
         </dl>
@@ -64,13 +60,12 @@ export function Layers(): React.JSX.Element {
  */
 export function ForAgents(): React.JSX.Element {
   return (
-    <section aria-labelledby="agents-heading" className="mx-auto w-full max-w-7xl px-4 pb-20 sm:px-6">
-      <div className="grid gap-10 rounded-3xl border border-fd-border bg-fd-card p-6 sm:p-10 lg:grid-cols-2">
-        <div>
-          <h2 id="agents-heading" className="max-w-[20ch] text-3xl font-bold tracking-tight text-balance">
-            Your coding agent can set it up for you
-          </h2>
-          <p className="mt-4 max-w-[48ch] leading-relaxed text-fd-muted-foreground">
+    <section aria-labelledby="agents-heading" className="border-t border-fd-border">
+      <div className="mx-auto grid w-full max-w-7xl gap-14 px-5 py-28 sm:px-8 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
+          <Label>/agents</Label>
+          <Title id="agents-heading" lead="Your coding agent" rest="can set it up for you." />
+          <p className="max-w-[46ch] text-lg leading-relaxed text-fd-muted-foreground">
             Every package ships an AGENTS.md and an llms.txt, and this site serves{' '}
             <a className="text-fd-foreground underline underline-offset-4" href={`${BASE_PATH}/llms.txt`}>
               llms.txt
@@ -85,14 +80,14 @@ export function ForAgents(): React.JSX.Element {
             . Paste this into Claude Code, Cursor or Codex.
           </p>
         </div>
-        <figure className="flex min-w-0 flex-col gap-3 self-center">
-          <blockquote className="rounded-xl border border-fd-border bg-fd-background p-4 font-mono text-[0.82rem] leading-relaxed [overflow-wrap:anywhere]">
-            {AGENT_PROMPT}
-          </blockquote>
-          <figcaption className="flex items-center justify-between gap-3 text-sm text-fd-muted-foreground">
-            A prompt for your coding agent
+        <figure className="wk-card flex min-w-0 flex-col gap-4 self-center rounded-xl p-6">
+          <figcaption className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-fd-muted-foreground">Prompt</span>
             <CopyButton text={AGENT_PROMPT} label="Copy the prompt for your coding agent" />
           </figcaption>
+          <blockquote className="font-mono text-[0.85rem] leading-relaxed [overflow-wrap:anywhere] text-fd-foreground">
+            {AGENT_PROMPT}
+          </blockquote>
         </figure>
       </div>
     </section>

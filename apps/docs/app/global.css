@@ -7,36 +7,38 @@
 @theme inline {
   --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-code), ui-monospace, monospace;
-  --font-display: var(--font-bricolage), var(--font-body), ui-sans-serif, sans-serif;
   --color-paper: var(--wk-paper);
+  --color-surface: var(--wk-surface);
   --color-ink: var(--wk-ink);
   --color-graphite: var(--wk-graphite);
   --color-rule: var(--wk-rule);
-  --color-blue: var(--wk-blue);
-  --color-amber: var(--wk-amber);
-  --color-amber-soft: var(--wk-amber-soft);
+  --color-accent: var(--wk-accent);
+  --color-accent-soft: var(--wk-accent-soft);
+  --color-band: var(--wk-band);
 }
 
 :root {
-  --wk-paper: #f6f7f9;
+  --wk-paper: #ffffff;
   --wk-surface: #ffffff;
-  --wk-ink: #141b2d;
-  --wk-graphite: #4a5468;
-  --wk-rule: #d9dee7;
-  --wk-blue: #2563eb;
-  --wk-amber: #b7791f;
-  --wk-amber-soft: #fde68a;
+  --wk-ink: #0f172a;
+  --wk-graphite: #64748b;
+  --wk-rule: #e2e8f0;
+  --wk-accent: #2563eb;
+  --wk-accent-soft: rgb(37 99 235 / 0.1);
+  --wk-band: #f8fafc;
+  --wk-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 20px 50px -24px rgb(15 23 42 / 0.2);
 }
 
 .dark {
-  --wk-paper: #0f1626;
-  --wk-surface: #172036;
-  --wk-ink: #e6eaf2;
-  --wk-graphite: #a3adc2;
-  --wk-rule: #2a3550;
-  --wk-blue: #58a6ff;
-  --wk-amber: #e9b949;
-  --wk-amber-soft: #5c4813;
+  --wk-paper: #0b1120;
+  --wk-surface: #0f172a;
+  --wk-ink: #e2e8f0;
+  --wk-graphite: #94a3b8;
+  --wk-rule: #1e293b;
+  --wk-accent: #60a5fa;
+  --wk-accent-soft: rgb(96 165 250 / 0.16);
+  --wk-band: #0d1527;
+  --wk-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 20px 50px -24px rgb(0 0 0 / 0.6);
 }
 
 :root,
@@ -47,32 +49,92 @@
   --color-fd-card-foreground: var(--wk-ink);
   --color-fd-popover: var(--wk-surface);
   --color-fd-popover-foreground: var(--wk-ink);
-  --color-fd-primary: var(--wk-blue);
-  --color-fd-primary-foreground: #ffffff;
-  --color-fd-secondary: #eceff4;
+  --color-fd-primary: var(--wk-ink);
+  --color-fd-primary-foreground: var(--wk-paper);
+  --color-fd-secondary: color-mix(in oklab, var(--wk-ink) 4%, var(--wk-paper));
   --color-fd-secondary-foreground: var(--wk-ink);
-  --color-fd-muted: #eceff4;
+  --color-fd-muted: color-mix(in oklab, var(--wk-ink) 4%, var(--wk-paper));
   --color-fd-muted-foreground: var(--wk-graphite);
-  --color-fd-accent: #e4e9f2;
+  --color-fd-accent: color-mix(in oklab, var(--wk-ink) 6%, var(--wk-paper));
   --color-fd-accent-foreground: var(--wk-ink);
   --color-fd-border: var(--wk-rule);
-  --color-fd-ring: var(--wk-blue);
-}
-
-.dark {
-  --color-fd-primary-foreground: #0f1626;
-  --color-fd-secondary: #1c2740;
-  --color-fd-muted: #1c2740;
-  --color-fd-accent: #22304d;
+  --color-fd-ring: var(--wk-accent);
 }
 
 @layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+
   h1,
   h2,
   h3 {
-    font-family: var(--font-bricolage), var(--font-body), ui-sans-serif, sans-serif;
-    font-optical-sizing: auto;
+    font-weight: 600;
+    letter-spacing: -0.04em;
   }
+
+  ::selection {
+    background: var(--wk-accent-soft);
+  }
+}
+
+.wk-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-code), ui-monospace, monospace;
+  font-size: 0.8rem;
+  color: var(--wk-accent);
+}
+
+.wk-muted-phrase {
+  color: var(--wk-graphite);
+}
+
+.wk-card {
+  background: var(--wk-surface);
+  border: 1px solid var(--wk-rule);
+  box-shadow: var(--wk-shadow);
+}
+
+.wk-wire {
+  position: absolute;
+  top: 2.25rem;
+  bottom: 0;
+  left: 1.125rem;
+  width: 1px;
+  overflow: hidden;
+  background: var(--wk-rule);
+}
+
+@media (min-width: 1024px) {
+  .wk-wire {
+    top: 1.125rem;
+    right: 1rem;
+    bottom: auto;
+    left: 2.75rem;
+    width: auto;
+    height: 1px;
+  }
+}
+
+.wk-demo.wk-demo [data-fs-part='workspace'] {
+  --fs-font: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --fs-bg: var(--wk-surface);
+  --fs-bg-hover: color-mix(in oklab, var(--wk-ink) 5%, var(--wk-surface));
+  --fs-bg-selected: var(--wk-accent-soft);
+  --fs-border: var(--wk-rule);
+  --fs-input-border: color-mix(in oklab, var(--wk-ink) 14%, var(--wk-surface));
+  --fs-fg: var(--wk-ink);
+  --fs-muted: var(--wk-graphite);
+  --fs-accent: var(--wk-accent);
+  --fs-focus: var(--wk-accent);
+  --fs-changed: var(--wk-accent);
+  --fs-flash: var(--wk-accent-soft);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -80,10 +142,13 @@
     animation: wk-arrive 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
 
-  .wk-step[data-active='true'] {
-    transition:
-      background-color 240ms ease,
-      border-color 240ms ease;
+  .wk-pulse {
+    animation: wk-pulse 1.6s ease-in-out infinite;
+  }
+
+  .wk-rise {
+    animation: wk-rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--wk-delay, 0ms);
   }
 }
 
@@ -91,20 +156,14 @@
   from {
     opacity: 0;
     transform: translateY(-6px);
-    background-color: var(--wk-amber-soft);
+    background-color: var(--wk-accent-soft);
   }
   60% {
-    background-color: var(--wk-amber-soft);
+    background-color: var(--wk-accent-soft);
   }
   to {
     opacity: 1;
     transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .wk-pulse {
-    animation: wk-pulse 1.6s ease-in-out infinite;
   }
 }
 
@@ -114,68 +173,13 @@
   }
 }
 
-.wk-wire {
-  position: absolute;
-  top: 2.5rem;
-  bottom: 0;
-  left: 1.25rem;
-  width: 1px;
-  overflow: hidden;
-  background: var(--wk-rule);
-}
-
-@media (min-width: 1024px) {
-  .wk-wire {
-    top: 1.25rem;
-    right: 0;
-    bottom: auto;
-    left: 2.5rem;
-    width: auto;
-    height: 1px;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .wk-wire::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, transparent, var(--wk-amber), transparent);
-    animation: wk-wire-down 2.2s ease-in-out var(--wk-wire-delay, 0s) infinite both;
-  }
-
-  @media (min-width: 1024px) {
-    .wk-wire::after {
-      background: linear-gradient(to right, transparent, var(--wk-amber), transparent);
-      animation-name: wk-wire-across;
-    }
-  }
-}
-
-@keyframes wk-wire-down {
+@keyframes wk-rise {
   from {
-    transform: translateY(-100%);
+    opacity: 0;
+    transform: translateY(12px);
   }
   to {
-    transform: translateY(100%);
+    opacity: 1;
+    transform: none;
   }
-}
-
-@keyframes wk-wire-across {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-
-.wk-dots::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background-image: radial-gradient(var(--wk-rule) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 60% at 30% 30%, black, transparent);
 }

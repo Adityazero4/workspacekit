@@ -1,91 +1,109 @@
 import Link from 'next/link';
-import { REPOSITORY_URL } from '../../lib/layoutOptions';
 import { CopyButton } from '../CopyButton';
 import { LiveWorkspace } from '../LiveWorkspace';
+import { Code } from './Code';
+import { Label } from './Type';
 
 const INSTALL = 'npm install @workspacekit/workspace @workspacekit/core @workspacekit/server';
+const STARTER = 'npm create @workspacekit/workspace my-app';
 
-const FACTS: readonly string[] = [
-  'Open source under Apache-2.0',
-  'Every request goes through your authorize function',
-  'Tested in Chromium, Firefox and WebKit on every change',
-  'Trees of a million files stay fast',
-  'Every code sample in the docs type-checks in CI',
-];
+const HERO_SNIPPET = `'use client';
+import { Workspace } from '@workspacekit/workspace';
+import { httpAdapter } from '@workspacekit/core/http';
+import '@workspacekit/workspace/styles.css';
+
+const adapter = httpAdapter('/api/files');
+
+export default function Files() {
+  return <Workspace adapter={adapter} />;
+}`;
+
+const WORKS_WITH: readonly string[] = ['Next.js', 'Vite', 'Any Fetch API server', 'Your own storage'];
 
 /**
- * The install command with a copy button.
+ * The install command with a copy button, light or as a dark pill.
  *
  * @example
- * <InstallCommand />
+ * <InstallCommand tone="dark" command={STARTER} />
  */
-export function InstallCommand(): React.JSX.Element {
+export function InstallCommand(props: { tone?: 'light' | 'dark'; command?: string }): React.JSX.Element {
+  const command = props.command ?? INSTALL;
+  const tone =
+    props.tone === 'dark'
+      ? 'border-transparent bg-fd-foreground text-fd-background'
+      : 'border-fd-border bg-fd-card text-fd-foreground';
   return (
-    <div className="flex max-w-full items-center gap-2 rounded-lg border border-fd-border bg-fd-card py-1.5 pr-1.5 pl-3.5">
-      <code className="min-w-0 flex-1 font-mono text-[0.82rem] leading-relaxed break-words text-fd-foreground">
-        {INSTALL}
-      </code>
-      <CopyButton text={INSTALL} label="Copy the install command" />
+    <div
+      className={`flex max-w-full items-center gap-3 rounded-lg border py-1.5 pr-1.5 pl-4 text-left ${tone}`}
+    >
+      <code className="min-w-0 flex-1 font-mono text-[0.8rem] leading-relaxed break-words">{command}</code>
+      <CopyButton text={command} label={`Copy: ${command}`} />
+    </div>
+  );
+}
+
+function Pitch(): React.JSX.Element {
+  return (
+    <div className="flex max-w-3xl flex-col gap-6">
+      <Label>~/your-app/files</Label>
+      <h1
+        id="hero-heading"
+        className="text-[clamp(2.6rem,5.4vw,4.25rem)] leading-[1.03] text-balance text-fd-foreground"
+      >
+        Your agent works in files. <span className="wk-muted-phrase">Let your users watch.</span>
+      </h1>
+      <p className="max-w-[60ch] text-lg leading-relaxed text-fd-muted-foreground">
+        A React file tree, search, tabs, upload and real viewers for PDF, Word, PowerPoint, spreadsheets,
+        Markdown and code, over a folder on your server. Every change your agent makes shows up as it happens.
+      </p>
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+        <InstallCommand tone="dark" command={STARTER} />
+        <Link
+          href="/docs/getting-started/next"
+          className="shrink-0 text-sm font-medium text-accent hover:underline"
+        >
+          or add it to an existing app <span aria-hidden="true">→</span>
+        </Link>
+      </div>
     </div>
   );
 }
 
 /**
- * The opening: what workspacekit is, how to install it, and the real component running with an agent.
+ * The opening: what workspacekit is, the code it takes, and the real component running with a simulated
+ * agent beside it.
  *
  * @example
  * <Hero />
  */
 export function Hero(): React.JSX.Element {
   return (
-    <section aria-labelledby="hero-heading" className="wk-dots relative isolate">
-      <div className="mx-auto grid w-full max-w-7xl gap-12 px-4 pt-14 pb-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:gap-14 lg:pt-20">
-        <div className="flex flex-col gap-6 lg:pt-6">
-          <h1
-            id="hero-heading"
-            className="text-[clamp(2.4rem,4.3vw,3.75rem)] leading-[1.04] font-bold tracking-[-0.03em] text-balance"
-          >
-            A file workspace your agent can actually work in.
-          </h1>
-          <p className="max-w-[46ch] text-lg leading-relaxed text-fd-muted-foreground">
-            workspacekit puts a file tree, search, tabs, upload and real viewers for PDF, Word, PowerPoint,
-            spreadsheets, Markdown and code over a folder on your server. When your agent changes a file, your
-            users see it happen, highlighted.
-          </p>
-          <InstallCommand />
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/docs/getting-started/next"
-              className="rounded-lg bg-fd-primary px-4 py-2.5 text-sm font-medium text-fd-primary-foreground hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fd-ring"
-            >
-              Read the quick start
-            </Link>
-            <a
-              href={REPOSITORY_URL}
-              className="rounded-lg border border-fd-border bg-fd-card px-4 py-2.5 text-sm font-medium text-fd-foreground hover:bg-fd-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fd-ring"
-            >
-              Source on GitHub
-            </a>
+    <section aria-labelledby="hero-heading" className="border-b border-fd-border">
+      <div className="mx-auto w-full max-w-7xl px-5 pt-16 pb-16 sm:px-8 lg:pt-24">
+        <Pitch />
+        <div className="mt-14 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.65fr)]">
+          <div className="flex min-w-0 flex-col gap-3">
+            <p className="text-sm text-fd-muted-foreground">The browser side is one component:</p>
+            <Code lang="tsx" label="The browser page that renders the workspace" code={HERO_SNIPPET} />
+          </div>
+          <div className="flex min-w-0 flex-col gap-3">
+            <h2 id="demo-heading" className="text-sm font-normal tracking-normal text-fd-muted-foreground">
+              And this is what it renders, with a simulated agent at work:
+            </h2>
+            <div className="rounded-xl border-2 border-accent">
+              <LiveWorkspace activity />
+            </div>
           </div>
         </div>
-        <div className="flex min-w-0 flex-col gap-3">
-          <h2 id="demo-heading" className="font-sans text-sm font-medium text-fd-foreground">
-            Try it: an agent is editing these files right now
-          </h2>
-          <LiveWorkspace activity />
-          <p className="text-sm text-fd-muted-foreground">
-            This is the real component, on sample files in your browser. The agent's edits are simulated.
-          </p>
+        <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3">
+          <Label>/works-with</Label>
+          {WORKS_WITH.map((item) => (
+            <span key={item} className="text-sm text-fd-muted-foreground">
+              {item}
+            </span>
+          ))}
         </div>
       </div>
-      <ul className="mx-auto flex w-full max-w-7xl flex-wrap gap-x-8 gap-y-2 border-t border-fd-border px-4 py-5 text-sm text-fd-muted-foreground sm:px-6">
-        {FACTS.map((fact) => (
-          <li key={fact} className="flex items-center gap-2">
-            <span aria-hidden="true" className="size-1 rounded-full bg-fd-muted-foreground" />
-            {fact}
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

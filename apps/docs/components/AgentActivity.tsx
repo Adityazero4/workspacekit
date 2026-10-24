@@ -3,7 +3,7 @@ import type { ChangeEvent } from '@workspacekit/core';
 import type { MemoryAdapter } from '@workspacekit/core/memory';
 import { useEffect, useState } from 'react';
 
-const KEPT_ENTRIES = 5;
+const KEPT_ENTRIES = 3;
 
 const VERBS: Record<ChangeEvent['type'], string> = {
   created: 'created',
@@ -46,6 +46,7 @@ export function AgentActivity(props: { adapter: MemoryAdapter }): React.JSX.Elem
   const entries = useAgentActivity(props.adapter);
   return (
     <section aria-label="What the agent changed" className="border-t border-fd-border px-4 py-3">
+      <p className="mb-2 text-xs font-medium text-fd-muted-foreground">Agent activity</p>
       {entries.length === 0 ? (
         <p className="font-mono text-[0.8rem] text-fd-muted-foreground">
           Waiting for the agent's first change.
@@ -59,7 +60,7 @@ export function AgentActivity(props: { adapter: MemoryAdapter }): React.JSX.Elem
             >
               <span
                 aria-hidden="true"
-                className="size-1.5 shrink-0 translate-y-[-0.1rem] rounded-full bg-amber"
+                className="size-1.5 shrink-0 translate-y-[-0.1rem] rounded-full bg-accent"
               />
               <span className="w-16 shrink-0 text-fd-muted-foreground">{entry.verb}</span>
               <span className="truncate text-fd-foreground">{entry.path}</span>

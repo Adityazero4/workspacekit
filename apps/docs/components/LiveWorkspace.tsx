@@ -44,13 +44,35 @@ function useAgentWhile(adapter: ReturnType<typeof createMemoryAdapter>, isOn: bo
   }, [adapter, isOn]);
 }
 
+const FIRST_FILE = 'README.md';
+const FIRST_FILE_DELAY_MS = 300;
+
+function useFirstFileOpen(controller: React.RefObject<WorkspaceController | null>, isOn: boolean): void {
+  useEffect(() => {
+    if (!isOn) return;
+    let isCurrent = true;
+    const timer = setTimeout(() => {
+      void controller.current
+        ?.reveal(FIRST_FILE)
+        .then(() => {
+          if (isCurrent) controller.current?.open(FIRST_FILE, 'pin');
+        })
+        .catch(() => undefined);
+    }, FIRST_FILE_DELAY_MS);
+    return () => {
+      isCurrent = false;
+      clearTimeout(timer);
+    };
+  }, [controller, isOn]);
+}
+
 function AgentStatus(props: { isPaused: boolean; onToggle: () => void }): React.JSX.Element {
   return (
     <div className="flex items-center gap-3">
       <span className="flex items-center gap-2 text-[0.8rem] text-fd-muted-foreground">
         <span
           aria-hidden="true"
-          className={`size-2 rounded-full ${props.isPaused ? 'bg-fd-muted-foreground' : 'wk-pulse bg-amber'}`}
+          className={`size-2 rounded-full ${props.isPaused ? 'bg-fd-muted-foreground' : 'wk-pulse bg-accent'}`}
         />
         {props.isPaused ? 'Agent paused' : 'Agent at work'}
       </span>
@@ -83,15 +105,13 @@ export function LiveWorkspace(props: { activity?: boolean }): React.JSX.Element 
   const theme = useSiteTheme();
   const controller = useRef<WorkspaceController>(null);
   useAgentWhile(adapter, isVisible && !isPaused);
-  useEffect(() => {
-    if (props.activity) controller.current?.open('README.md', 'pin');
-  }, [props.activity]);
+  useFirstFileOpen(controller, props.activity === true);
   const workspace = (
     <Workspace
       adapter={adapter}
       ref={controller}
       theme={theme ?? 'system'}
-      style={{ height: props.activity ? 440 : 520 }}
+      style={{ height: props.activity ? 420 : 520 }}
       defaultFollow={props.activity === true}
     />
   );
@@ -106,10 +126,10 @@ export function LiveWorkspace(props: { activity?: boolean }): React.JSX.Element 
     <div
       ref={container}
       data-testid="live-workspace"
-      className="overflow-hidden rounded-xl border border-fd-border bg-fd-card shadow-[0_24px_60px_-28px_rgb(20_27_45/0.35)]"
+      className="wk-demo overflow-hidden rounded-[10px] bg-fd-card"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-fd-border px-4 py-2.5">
-        <span className="font-mono text-[0.8rem] text-fd-muted-foreground">your-app / files</span>
+        <span className="font-mono text-[0.78rem] text-fd-muted-foreground">your-app / files</span>
         <AgentStatus isPaused={isPaused} onToggle={() => setIsPaused((paused) => !paused)} />
       </div>
       {workspace}
