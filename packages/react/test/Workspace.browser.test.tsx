@@ -763,7 +763,7 @@ test('Tab follows the layout: toolbar, search, tree, upload buttons, separator, 
   }
   await expect.poll(async () => (await adapter.stat!('up.txt'))?.kind).toBe('file');
   await expect.poll(() => document.querySelector('[data-fs-part=upload-button]')).not.toBeNull();
-  const buttonsWithoutATabIndexAreTabStops = server.browser !== 'webkit';
+  const buttonsWithoutATabIndexAreTabStops = server.browser !== 'webkit' || server.platform !== 'darwin';
   expect(await tabStopsFromTheToolbar(buttonsWithoutATabIndexAreTabStops ? 7 : 6)).toEqual([
     'toolbar-button',
     'search-input',

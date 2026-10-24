@@ -243,6 +243,7 @@ describe('watch route over a real directory', () => {
     await mkdir(path.join(root, '.git'));
     await mkdir(path.join(root, '.GIT2'));
     await disk('.git/config');
+    await mkdir(path.join(root, '.GIT'), { recursive: true });
     await disk('.GIT/other'); // same directory on case-insensitive disks, a fresh one elsewhere
     await disk('.report.md.0123456789ab.tmp');
     await writeFile(path.join(outside, 'secret.txt'), 'x');

@@ -1,6 +1,6 @@
 import type { FileSystemAdapter } from '@workspacekit/core';
 import { createMemoryAdapter } from '@workspacekit/core/memory';
-import { afterEach, expect, test } from 'vitest';
+import { beforeEach, expect, test } from 'vitest';
 import { commands, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import '../src/styles.css';
@@ -32,8 +32,8 @@ const markerDotAnimations = (row: HTMLElement): Animation[] =>
     .getAnimations({ subtree: true })
     .filter((animation) => (animation.effect as KeyframeEffect | null)?.pseudoElement === '::after');
 
-afterEach(async () => {
-  await commands.emulateMedia({ reducedMotion: null });
+beforeEach(async () => {
+  await commands.emulateMedia({ reducedMotion: 'no-preference' });
 });
 
 function withoutWatchRecordingPollingRounds(files: Record<string, string>) {
