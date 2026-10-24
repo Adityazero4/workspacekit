@@ -54,6 +54,14 @@ export default defineConfig([
         { considerDefaultExhaustiveForUnions: true },
       ],
       'max-lines-per-function': ['error', { max: 60, skipBlankLines: true, skipComments: true, IIFEs: true }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "ForStatement > AssignmentExpression.update > CallExpression[callee.type='Identifier']",
+          message:
+            "Turbopack (Next.js 16) does not rewrite an imported function called in a for loop's update clause, so it throws 'is not defined' in apps that bundle this package. Use a while loop that assigns at the end of its body.",
+        },
+      ],
     },
   },
   {

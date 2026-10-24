@@ -77,8 +77,10 @@ interface RevealerParts {
  */
 export function foldersBetween(root: string, path: string): string[] {
   const folders: string[] = [];
-  for (let folder = parentPath(path); folder !== root && folder !== ''; folder = parentPath(folder)) {
+  let folder = parentPath(path);
+  while (folder !== root && folder !== '') {
     folders.unshift(folder);
+    folder = parentPath(folder);
   }
   return folders;
 }
