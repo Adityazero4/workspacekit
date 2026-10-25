@@ -66,6 +66,7 @@ npm configures a trusted publisher in a package's settings, so the package must 
 
 - [ ] Add the private forbidden-strings list as the `FORBIDDEN_PATTERNS` secret for CI; `check:forbidden` fails in CI without it. `ci.yml` gives it only to the step that runs `check:forbidden`. GitHub withholds secrets from pull requests opened from forks, so that step is skipped for them and runs again on the push to `main`.
 - [ ] The docs site deploys from Vercel: the project's root directory is `apps/docs`, whose `vercel.json` builds the packages and the site, and `NEXT_PUBLIC_SITE_URL` is set to https://docs-ashy-alpha.vercel.app. Vercel deploys every push to `main` independently of CI, so docs from a commit whose CI failed still reach the site.
+- [ ] Never delete or rename the Vercel project while published files link to `docs-ashy-alpha.vercel.app`. `DOCS_URL`, each package's `homepage`, README, `llms.txt` and `AGENTS.md` name that address, and those files tell coding agents what to read first; a `*.vercel.app` name the project gives up can be claimed by anyone. Move them to a custom domain once the project owns one, and keep the Vercel name until no supported release links to it.
 
 - [ ] Enable Dependabot alerts and Dependabot security updates.
 - [ ] Enable private vulnerability reporting (`SECURITY.md` points reporters at it).
