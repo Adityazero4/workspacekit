@@ -11,12 +11,14 @@ import { apiSource, source } from '../lib/source';
 export const dynamic = 'force-static';
 
 /**
- * Every page of the site, for search engines: the home page, the guides and the API reference.
+ * Every page of the site, for search engines: the home, about, contact and privacy pages, the guides and
+ * the API reference.
  *
  * @example
  * const entries = sitemap();
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   const pages = [...source.getPages(), ...apiSource.getPages()].map((page) => `${SITE_URL}${page.url}/`);
-  return [`${SITE_URL}/`, ...pages].map((url) => ({ url }));
+  const trustPages = ['about', 'contact', 'privacy'].map((name) => `${SITE_URL}/${name}/`);
+  return [`${SITE_URL}/`, ...trustPages, ...pages].map((url) => ({ url }));
 }
