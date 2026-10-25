@@ -81,3 +81,9 @@ test('every docs page has a Markdown copy, with llms.txt as the home page and a 
     );
   }
 });
+
+test('frontMatterOf reads quoted titles the way YAML does', () => {
+  assert.equal(frontMatterOf('---\ntitle: "@workspacekit/core"\n---\n').title, '@workspacekit/core');
+  assert.equal(frontMatterOf("---\ntitle: 'It''s here'\n---\n").title, "It's here");
+  assert.equal(frontMatterOf('---\ntitle: "\n---\n').title, '"');
+});
