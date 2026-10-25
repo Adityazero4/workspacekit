@@ -7,5 +7,6 @@ export default defineConfig({
     name: 'perf',
     include: ['packages/*/test/**/*.perf.test.ts'],
     fileParallelism: false,
+    execArgv: ['--expose-gc'],
   },
 });

@@ -40,9 +40,18 @@ function median3(fn: () => unknown): number {
   return ms.sort((a, b) => a - b)[1]!;
 }
 
+/**
+ * Collects the garbage that building a million-entry input leaves behind, so a collection it triggers does not
+ * land inside the timed run. Needs `--expose-gc`, which the perf config passes; without it this does nothing.
+ */
+function collectGarbageLeftByTheInputs(): void {
+  (globalThis as { gc?: () => void }).gc?.();
+}
+
 /** The first (cold) run and the median of 3, both asserted: a median alone can hide a slow first pass. */
 function expectCold3(fn: () => unknown, budget: number, label: string): void {
   const ms = [0, 1, 2].map(() => {
+    collectGarbageLeftByTheInputs();
     const t0 = performance.now();
     fn();
     return performance.now() - t0;
