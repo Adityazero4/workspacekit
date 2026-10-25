@@ -765,6 +765,7 @@ test('ci.yml and pages.yml keep the shapes the release checklist relies on', () 
   const read = (name) => readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
   const pages = read('pages');
   assert.match(pages, /NEXT_PUBLIC_BASE_PATH: \/workspacekit/);
+  assert.match(pages, /NEXT_PUBLIC_SITE_URL: https:\/\/docs-ashy-alpha\.vercel\.app/);
   assert.doesNotMatch(pages, /NEXT_PUBLIC_DOCS_TEST/);
   assert.doesNotMatch(pages, /pull_request/);
 });

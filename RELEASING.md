@@ -66,6 +66,8 @@ npm configures a trusted publisher in a package's settings, so the package must 
 
 - [ ] Add the private forbidden-strings list as the `FORBIDDEN_PATTERNS` secret for CI; `check:forbidden` fails in CI without it. `ci.yml` gives it only to the step that runs `check:forbidden`. GitHub withholds secrets from pull requests opened from forks, so that step is skipped for them and runs again on the push to `main`.
 - [ ] Enable GitHub Pages: Settings → Pages → Source: GitHub Actions. `pages.yml` then builds and deploys the docs to https://adityazero4.github.io/workspacekit on every push to `main`, or by hand from the Actions tab. It deploys independently of CI, so docs from a commit whose CI failed still reach the site.
+- [ ] The main docs site is the Vercel project (root directory `apps/docs`, `NEXT_PUBLIC_SITE_URL=https://docs-ashy-alpha.vercel.app`). The GitHub Pages copy is a mirror whose canonical links point at Vercel.
+- [ ] Published files link only to addresses this project owns: `DOCS_URL`, each package's `homepage`, README, `llms.txt` and `AGENTS.md` use the GitHub Pages address, never a `*.vercel.app` name. Anyone can claim a Vercel name the project gives up, and these files tell coding agents what to read first. If the Vercel project is ever renamed or deleted, update `NEXT_PUBLIC_SITE_URL` in `pages.yml` the same day. Move the published links to a custom domain only once the project owns one.
 
 - [ ] Enable Dependabot alerts and Dependabot security updates.
 - [ ] Enable private vulnerability reporting (`SECURITY.md` points reporters at it).
