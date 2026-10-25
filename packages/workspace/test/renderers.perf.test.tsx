@@ -30,6 +30,7 @@ import {
   textShape,
   type SlideFixture,
 } from '../../pptx/test/fixtures/pptx';
+import { perfBudgetScale } from '../../../test-support/perfBudgetScale';
 
 const PDF_PAGES = 500;
 const PDFS_OPENED = 20;
@@ -37,7 +38,7 @@ const PAGES_PER_OPENED_PDF = 3;
 const SLIDES = 200;
 const SLIDE_HEAP_CHECKPOINT = 20;
 const TEXT_BOXES_PER_SLIDE = 80;
-const FRAME_BUDGET_MS = 50 * Number(process.env.PERF_BUDGET_SCALE);
+const FRAME_BUDGET_MS = 50 * perfBudgetScale(Number(process.env.PERF_BUDGET_SCALE));
 const HEAP_DRIFT_ALLOWED = 0.1;
 const PERF_TIMEOUT_MS = 900_000;
 

@@ -13,11 +13,12 @@ import {
 } from '../src/tree/model';
 import { createVisibleRowIndex } from '../src/tree/visible';
 import type { Entry } from '../src/types';
+import { perfBudgetScale } from '../../../test-support/perfBudgetScale';
 
-// Generous wall-clock budgets (Node 22). Each figure is the median of 3 runs. PERF_BUDGET_SCALE (CI sets 2) scales them;
+// Generous wall-clock budgets (Node 22). Each figure is the median of 3 runs. perfBudgetScale scales them by this machine's speed;
 // CI_SLOW=1 skips them.
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
-const PERF_BUDGET_SCALE = Number(env.PERF_BUDGET_SCALE ?? 1);
+const PERF_BUDGET_SCALE = perfBudgetScale(Number(env.PERF_BUDGET_SCALE ?? 1));
 const M = 1_000_000;
 const TIMEOUT = 120_000; // building the 1M inputs dominates; the budgets are asserted separately
 

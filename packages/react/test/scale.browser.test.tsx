@@ -39,10 +39,12 @@ import {
   type FrameStats,
   type MountedWorkspace,
 } from '../bench/scenarios';
+import { perfBudgetScale } from '../../../test-support/perfBudgetScale';
 
 const MILLION = 1_000_000;
 const SCALE_TIMEOUT_MS = 900_000;
 const HEAP_DRIFT_ALLOWED = 0.1;
+const BUDGET_SCALE = perfBudgetScale(Number(process.env.PERF_BUDGET_SCALE));
 
 let mounted: MountedWorkspace | ControlledWorkspace | undefined;
 afterEach(() => {
@@ -59,7 +61,7 @@ const formatted = (samples: readonly number[]): string =>
   samples.map((sample) => (Number.isInteger(sample) ? String(sample) : sample.toFixed(3))).join(', ');
 
 function expectMedianAtMost(samples: number[], unscaledBudget: number, label: string): void {
-  const budget = unscaledBudget * Number(process.env.PERF_BUDGET_SCALE);
+  const budget = unscaledBudget * BUDGET_SCALE;
   const message = `${label}: median of [${formatted(samples)}]`;
   reportSamples(`${message} = ${formatted([median(samples)])}, budget ≤ ${budget}`);
   expect.soft(median(samples), message).toBeLessThanOrEqual(budget);

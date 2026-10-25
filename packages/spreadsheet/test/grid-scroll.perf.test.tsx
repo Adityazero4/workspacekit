@@ -4,13 +4,14 @@ import '@workspacekit/react/styles.css';
 import '../src/styles.css';
 import { Grid } from '../src/grid/Grid';
 import { spreadMerges, syntheticModel } from './support/syntheticModel';
+import { perfBudgetScale } from '../../../test-support/perfBudgetScale';
 
 const ROWS = 20_000;
 const COLS = 500;
 const MERGES = 1_000;
 const WARM_UP_RUNS = 1;
 const MEDIAN_RUNS = 5;
-const BUDGET_MS = 50 * Number(process.env.PERF_BUDGET_SCALE);
+const BUDGET_MS = 50 * perfBudgetScale(Number(process.env.PERF_BUDGET_SCALE));
 
 const nextFrame = (): Promise<number> => new Promise((resolve) => requestAnimationFrame(resolve));
 const median = (values: number[]): number =>

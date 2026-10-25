@@ -3,16 +3,17 @@ import { generateTree } from '../src/memory/generate';
 import { basename, parentPath } from '../src/path';
 import { emptyTree, flattenVisible, mergeListing, type SortSpec, type TreeData } from '../src/tree/model';
 import type { Entry } from '../src/types';
+import { perfBudgetScale } from '../../../test-support/perfBudgetScale';
 
 const dir = (path: string): Entry => ({ path, name: basename(path), kind: 'directory' });
 const file = (path: string): Entry => ({ path, name: basename(path), kind: 'file' });
 const allEntries = (t: TreeData): Entry[] => [...t.folders.values()].flatMap((n) => [...n.children.values()]);
 
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
-const BUDGET_MS = 150 * Number(env.PERF_BUDGET_SCALE ?? 1);
+const BUDGET_MS = 150 * perfBudgetScale(Number(env.PERF_BUDGET_SCALE ?? 1));
 
 // Wall-clock budget: median of 3 runs, so one run slowed by parallel test load does not fail it. PERF_BUDGET_SCALE
-// (CI sets 2) scales it; CI_SLOW=1 skips it.
+// and this machine's speed (perfBudgetScale) scale it; CI_SLOW=1 skips it.
 test.skipIf(env.CI_SLOW)('flattenVisible handles 100k entries under 150ms', () => {
   const entries: Entry[] = [];
   const dirs = new Set<string>();
