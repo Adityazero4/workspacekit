@@ -2,7 +2,7 @@
 
 > A code renderer for the file workspace: an editable CodeMirror 6 editor with syntax highlighting for code, configuration and data files.
 
-- API reference: https://adityazero4.github.io/workspacekit/api/code
+- API reference: https://docs-ashy-alpha.vercel.app/api/code
 - Install: `npm install @workspacekit/code @workspacekit/react react react-dom`
 
 ## README sections

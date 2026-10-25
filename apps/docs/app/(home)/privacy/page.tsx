@@ -42,12 +42,9 @@ export default function PrivacyPage(): React.JSX.Element {
       </ul>
       <h2>Hosting</h2>
       <p>
-        The site is served by <a href="https://vercel.com/legal/privacy-policy">Vercel</a> and{' '}
-        <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">
-          GitHub Pages
-        </a>
-        . Like any web host, they keep standard request logs, such as IP addresses, the pages requested and
-        browser details, under their own privacy policies.
+        The site is served by <a href="https://vercel.com/legal/privacy-policy">Vercel</a>. Like any web host,
+        it keeps standard request logs, such as IP addresses, the pages requested and browser details, under
+        its own privacy policy.
       </p>
       <h2>The workspacekit library</h2>
       <p>

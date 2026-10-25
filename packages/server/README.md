@@ -67,4 +67,4 @@ None. This package ships no styles.
 
 A path that goes through a symlink inside the root is authorized as itself and as the link's target, and both must allow.
 
-Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/server).
+Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/server).

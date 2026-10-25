@@ -4,13 +4,13 @@ import { GitHubIcon, NpmIcon } from '../components/BrandIcons';
 import { Logo } from '../components/Logo';
 
 /**
- * Where the site is published, without a trailing slash: `NEXT_PUBLIC_SITE_URL` when the host sets it, such
- * as on Vercel, and the GitHub Pages address otherwise. Canonical links, the sitemap and social cards use it.
+ * Where the site is published, without a trailing slash: `NEXT_PUBLIC_SITE_URL` when the host sets it,
+ * and the Vercel address otherwise. Canonical links, the sitemap and social cards use it.
  *
  * @example
  * const home = `${SITE_URL}/`;
  */
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://adityazero4.github.io/workspacekit';
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://docs-ashy-alpha.vercel.app';
 
 /**
  * A page's Open Graph fields with the site name and social card filled in. Next replaces `openGraph` whole

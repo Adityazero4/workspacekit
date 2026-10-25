@@ -1,6 +1,6 @@
 # File workspace: notes for coding agents
 
-A React library that gives an app a file tree, search, tabs, upload and viewers over a directory on a server, with live updates when an agent changes files. Docs: https://adityazero4.github.io/workspacekit.
+A React library that gives an app a file tree, search, tabs, upload and viewers over a directory on a server, with live updates when an agent changes files. Docs: https://docs-ashy-alpha.vercel.app.
 
 ## Quick start
 
