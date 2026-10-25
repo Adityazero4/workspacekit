@@ -244,6 +244,15 @@ export function Closing(): React.JSX.Element {
             <Link href="/docs" className="hover:text-fd-foreground">
               Docs
             </Link>
+            <Link href="/about" className="hover:text-fd-foreground">
+              About
+            </Link>
+            <Link href="/contact" className="hover:text-fd-foreground">
+              Contact
+            </Link>
+            <Link href="/privacy" className="hover:text-fd-foreground">
+              Privacy
+            </Link>
             <a href={`${BASE_PATH}/llms.txt`} className="hover:text-fd-foreground">
               llms.txt
             </a>
