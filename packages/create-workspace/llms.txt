@@ -2,7 +2,7 @@
 
 > A one-command starter that copies a tested example (Next.js or Vite) into a new folder, with exact `@workspacekit/*` versions.
 
-- API reference: https://adityazero4.github.io/workspacekit/api/create-workspace
+- API reference: https://docs-ashy-alpha.vercel.app/api/create-workspace
 - Install: `npm create @workspacekit/workspace my-files -- --template vite`
 
 ## README sections

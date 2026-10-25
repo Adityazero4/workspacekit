@@ -63,4 +63,4 @@ Pass them to the factory, as in `markdownRenderer({ source: codeRenderer() })`. 
 
 No configuration is needed in a build or in the dev server.
 
-Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/markdown).
+Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/markdown).

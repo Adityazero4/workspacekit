@@ -2,7 +2,7 @@
 
 > A spreadsheet renderer for the file workspace: .xlsx, .csv and .tsv in a virtualized grid with sheet tabs, search, frozen panes and merged cells.
 
-- API reference: https://adityazero4.github.io/workspacekit/api/spreadsheet
+- API reference: https://docs-ashy-alpha.vercel.app/api/spreadsheet
 - Install: `npm install @workspacekit/spreadsheet @workspacekit/react react react-dom`
 
 ## README sections

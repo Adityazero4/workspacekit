@@ -126,4 +126,4 @@ export const renderers = allRenderers({
 });
 ```
 
-Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/workspace).
+Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/workspace).

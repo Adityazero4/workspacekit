@@ -7,7 +7,7 @@
  * const guide = `${DOCS_URL}/docs/getting-started/next`;
  * ```
  */
-export const DOCS_URL: string = 'https://adityazero4.github.io/workspacekit';
+export const DOCS_URL: string = 'https://docs-ashy-alpha.vercel.app';
 
 /**
  * The address of a documentation page, and of a heading on it, for error messages that point at the fix.

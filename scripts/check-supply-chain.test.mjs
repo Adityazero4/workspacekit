@@ -761,14 +761,6 @@ test('a job holding id-token: write must name an environment', () => {
   );
 });
 
-test('ci.yml and pages.yml keep the shapes the release checklist relies on', () => {
-  const read = (name) => readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
-  const pages = read('pages');
-  assert.match(pages, /NEXT_PUBLIC_BASE_PATH: \/workspacekit/);
-  assert.doesNotMatch(pages, /NEXT_PUBLIC_DOCS_TEST/);
-  assert.doesNotMatch(pages, /pull_request/);
-});
-
 test('ci.yml runs every part of check:full in parallel jobs, and its check job waits for all of them', () => {
   const ci = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
   const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));

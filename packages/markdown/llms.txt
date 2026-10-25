@@ -2,7 +2,7 @@
 
 > A Markdown renderer for the file workspace: an editable rendered view with a source mode, built on Lexical.
 
-- API reference: https://adityazero4.github.io/workspacekit/api/markdown
+- API reference: https://docs-ashy-alpha.vercel.app/api/markdown
 - Install: `npm install @workspacekit/markdown @workspacekit/code @workspacekit/react react react-dom`
 
 ## README sections
