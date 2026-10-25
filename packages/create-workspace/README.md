@@ -2,7 +2,7 @@
 
 A one-command starter that copies a tested example (Next.js or Vite) into a new folder, with exact `@workspacekit/*` versions.
 
-Until the `@workspacekit/*` packages are published, the command refuses to generate a project: it will not write a starter whose dependencies are private or still at `0.0.0`. That is the publish gate, and the error says which packages are the problem.
+The command refuses to generate a project whose `@workspacekit/*` dependencies are private or at `0.0.0`, which only happens when it runs from an unreleased checkout. The error says which packages are the problem.
 
 ## Install
 

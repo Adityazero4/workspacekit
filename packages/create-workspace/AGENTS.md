@@ -3,7 +3,7 @@
 Scaffolds a new project from a tested example. Use it for a new app; to add a workspace to an existing app, follow `@workspacekit/workspace` instead.
 
 - Run `npm create @workspacekit/workspace <directory> -- --template next|vite`. Do not copy files by hand.
-- It refuses to generate while a `@workspacekit/*` dependency is private or at `0.0.0`. That is expected before publication; do not work around it by editing the versions.
+- It refuses to generate while a `@workspacekit/*` dependency is private or at `0.0.0`. That only happens in an unreleased checkout; do not work around it by editing the versions.
 - It never runs `npm install`. Run it yourself in the new directory.
 - The target directory must not exist or must be empty.
 - `createWorkspace` is the programmatic form, and `versions` must contain an exact version for every `@workspacekit/*` dependency.

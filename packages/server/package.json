@@ -1,7 +1,7 @@
 {
   "name": "@workspacekit/server",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "private": false,
   "license": "Apache-2.0",
   "author": "Aditya Jain <adityajain042001@gmail.com>",
   "repository": {
@@ -42,5 +42,9 @@
   },
   "devDependencies": {
     "@types/node": "22.20.5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

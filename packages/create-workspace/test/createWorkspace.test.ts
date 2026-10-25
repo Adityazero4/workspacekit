@@ -259,13 +259,18 @@ describe('create-workspace command', () => {
     );
   });
 
-  it('refuses by default while the packages are private or at 0.0.0', async () => {
+  it('by default pins the versions of the packages in this repository', async () => {
     const directory = path.join(sandbox, 'cli-default');
-    await assert.rejects(runFile(process.execPath, [CLI, directory]), (error) => {
-      const { code, stderr } = error as { code: number; stderr: string };
-      return code === 1 && stderr.includes('not published yet');
-    });
-    await assert.rejects(readdir(directory), { code: 'ENOENT' });
+    await runFile(process.execPath, [CLI, directory]);
+    const created = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    const coreVersion = (
+      JSON.parse(readFileSync(path.join(REPOSITORY, 'packages/core/package.json'), 'utf8')) as {
+        version: string;
+      }
+    ).version;
+    assert.equal(created.dependencies['@workspacekit/core'], coreVersion);
   });
 
   it('creates the default template once the releases are published', async () => {
