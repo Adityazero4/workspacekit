@@ -62,4 +62,4 @@ Pass them to the factory, as in `codeRenderer({ nonce })`. `CodeViewer` takes `n
 
 No configuration is needed in a build or in the dev server.
 
-Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/code).
+Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/code).

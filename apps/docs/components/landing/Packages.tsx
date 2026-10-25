@@ -1,8 +1,8 @@
 import { CopyButton } from '../CopyButton';
+import { SITE_URL } from '../../lib/layoutOptions';
 import { Label, Title } from './Type';
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
-const SITE = 'https://adityazero4.github.io/workspacekit';
 
 const PACKAGES: readonly { name: string; what: string }[] = [
   { name: '@workspacekit/workspace', what: 'Everything in one component, with every viewer. Start here.' },
@@ -16,7 +16,7 @@ const PACKAGES: readonly { name: string; what: string }[] = [
   { name: '@workspacekit/create-workspace', what: 'A starter project for Next.js or Vite, in one command.' },
 ];
 
-const AGENT_PROMPT = `Add a file workspace to this app with workspacekit. Read ${SITE}/llms.txt first, then follow the quick start for this framework. The server must check the signed-in user in authorize.`;
+const AGENT_PROMPT = `Add a file workspace to this app with workspacekit. Read ${SITE_URL}/llms.txt first, then follow the quick start for this framework. The server must check the signed-in user in authorize.`;
 
 /**
  * The packages, so people can adopt as much or as little as they need.

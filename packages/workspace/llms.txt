@@ -2,7 +2,7 @@
 
 > The one-install preset: `Workspace` with every renderer, plus the whole `@workspacekit/react` API.
 
-- API reference: https://adityazero4.github.io/workspacekit/api/workspace
+- API reference: https://docs-ashy-alpha.vercel.app/api/workspace
 - Install: `npm install @workspacekit/workspace @workspacekit/core react react-dom`
 
 ## README sections

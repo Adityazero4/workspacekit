@@ -2,7 +2,7 @@
 
 > The React file workspace: a virtualized file tree, search, tabs, upload and viewers, in one `Workspace` component, plus every building block it is made of.
 
-- API reference: https://adityazero4.github.io/workspacekit/api/react
+- API reference: https://docs-ashy-alpha.vercel.app/api/react
 - Install: `npm install @workspacekit/react @workspacekit/core react react-dom`
 
 ## README sections

@@ -8,7 +8,7 @@ A security checklist for maintainers, to complete before the first publish and t
 - [ ] Publish only from CI, with npm trusted publishing (OIDC) and `--provenance`. Never use a long-lived `NPM_TOKEN`.
 - [ ] The npm organisation and every maintainer account have 2FA on, and the packages require 2FA to publish.
 - [ ] Every GitHub Action is pinned to a full commit SHA, with the tag in a trailing comment.
-- [ ] Workflows set `permissions: {}` at the top and grant each job only what it needs; only `release.yml`'s `publish` job and `pages.yml`'s `deploy` job get `id-token: write`, and each runs in an environment (`check:supply-chain` enforces both).
+- [ ] Workflows set `permissions: {}` at the top and grant each job only what it needs; only `release.yml`'s `publish` job gets `id-token: write`, and it runs in an environment (`check:supply-chain` enforces both).
 - [ ] `main` and release tags are protected (required reviews and checks, no force pushes, no tag deletion).
 - [ ] Branch protection on `main` requires code-owner review, so a pull request cannot approve changes to the security gate on its own.
 - [ ] When the packages stop being `private`, each `package.json` gets `publishConfig` with `access: public` and `provenance: true`.
@@ -65,7 +65,7 @@ npm configures a trusted publisher in a package's settings, so the package must 
 ## Once the repository is on GitHub
 
 - [ ] Add the private forbidden-strings list as the `FORBIDDEN_PATTERNS` secret for CI; `check:forbidden` fails in CI without it. `ci.yml` gives it only to the step that runs `check:forbidden`. GitHub withholds secrets from pull requests opened from forks, so that step is skipped for them and runs again on the push to `main`.
-- [ ] Enable GitHub Pages: Settings → Pages → Source: GitHub Actions. `pages.yml` then builds and deploys the docs to https://adityazero4.github.io/workspacekit on every push to `main`, or by hand from the Actions tab. It deploys independently of CI, so docs from a commit whose CI failed still reach the site.
+- [ ] The docs site deploys from Vercel: the project's root directory is `apps/docs`, whose `vercel.json` builds the packages and the site, and `NEXT_PUBLIC_SITE_URL` is set to https://docs-ashy-alpha.vercel.app. Vercel deploys every push to `main` independently of CI, so docs from a commit whose CI failed still reach the site.
 
 - [ ] Enable Dependabot alerts and Dependabot security updates.
 - [ ] Enable private vulnerability reporting (`SECURITY.md` points reporters at it).

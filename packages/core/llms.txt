@@ -2,7 +2,7 @@
 
 > The framework-free core of the file workspace: the adapter contract, the tree store, paths, naming rules, uploads, and an HTTP client and in-memory adapter.
 
-- API reference: https://adityazero4.github.io/workspacekit/api/core
+- API reference: https://docs-ashy-alpha.vercel.app/api/core
 - Install: `npm install @workspacekit/core`
 
 ## README sections
