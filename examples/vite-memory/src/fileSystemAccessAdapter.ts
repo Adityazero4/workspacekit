@@ -193,6 +193,23 @@ async function createEntry(root: FileSystemDirectoryHandle, path: string, kind: 
 }
 
 const temporaryNameFor = (name: string): string => `.${name}.moving-${crypto.randomUUID()}`;
+const UNLOCK_WAITS_MS = [25, 50, 100, 200, 400] as const;
+const wait = (milliseconds: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function removeOnceUnlocked(directory: FileSystemDirectoryHandle, name: string): Promise<void> {
+  for (const waitMs of UNLOCK_WAITS_MS) {
+    try {
+      await directory.removeEntry(name, { recursive: true });
+      return;
+    } catch (error) {
+      if (isDomError(error, 'NotFoundError')) return;
+      if (!isDomError(error, 'NoModificationAllowedError')) throw error;
+      await wait(waitMs);
+    }
+  }
+  await directory.removeEntry(name, { recursive: true });
+}
 
 async function copyOrCleanUp(
   directory: FileSystemDirectoryHandle,
@@ -202,7 +219,14 @@ async function copyOrCleanUp(
   try {
     return await copyInto(directory, name, source);
   } catch (error) {
-    await directory.removeEntry(name, { recursive: true }).catch(() => undefined);
+    await removeOnceUnlocked(directory, name).catch(() => {
+      const reported = asFsError(error, name);
+      throw new FsError(
+        reported instanceof FsError ? reported.kind : 'unknown',
+        `could not copy to ${name}, and the partial copy could not be removed; remove it by hand`,
+        { path: name, cause: error },
+      );
+    });
     throw error;
   }
 }

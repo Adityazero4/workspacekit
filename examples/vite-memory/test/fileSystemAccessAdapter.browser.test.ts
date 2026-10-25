@@ -154,6 +154,30 @@ test('a copy that fails leaves the source intact and no partial destination', as
   ]);
 });
 
+test('a copy that fails still removes its partial destination while the browser briefly holds a lock', async () => {
+  await adapter.write!('src/a.txt', 'A');
+  await adapter.write!('src/b.txt', 'B');
+  const failing = copyingAdapter({ writesAllowed: 1, removalsLocked: 2 });
+  await expect(failing.move!('src', 'lib')).rejects.toMatchObject({ kind: 'too_large' });
+  expect((await adapter.list('', { depth: 3 })).map((entry) => entry.path)).toEqual([
+    'src',
+    'src/a.txt',
+    'src/b.txt',
+  ]);
+});
+
+test('a copy whose partial destination stays locked says so and leaves the source intact', async () => {
+  await adapter.write!('src/a.txt', 'A');
+  await adapter.write!('src/b.txt', 'B');
+  const failing = copyingAdapter({ writesAllowed: 1, removalsLocked: Infinity });
+  await expect(failing.move!('src', 'lib')).rejects.toMatchObject({
+    kind: 'too_large',
+    message: expect.stringContaining('remove it by hand'),
+  });
+  expect(await adapter.read('src/a.txt', 'text')).toBe('A');
+  expect(await adapter.read('src/b.txt', 'text')).toBe('B');
+});
+
 test('an overwriting copy that fails leaves both the destination and the source intact', async () => {
   await adapter.write!('new.txt', 'new');
   await adapter.write!('old.txt', 'old');
