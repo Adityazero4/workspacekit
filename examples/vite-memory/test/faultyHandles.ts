@@ -3,6 +3,7 @@ export interface Faults {
   rejectNamesWith?: string;
   caseInsensitive?: boolean;
   keepMove?: boolean;
+  removalsLocked?: number;
 }
 
 const originals = new WeakMap<object, object>();
@@ -63,8 +64,16 @@ export function faulty<Handle extends FileSystemHandle>(handle: Handle, faults: 
         return async () => writableThatFails(faults, await (call() as Promise<FileSystemWritableFileStream>));
       }
       if (property === 'removeEntry') {
-        return async (name: string, options?: unknown) =>
-          call(await nameAsStored(target as unknown as FileSystemDirectoryHandle, name, faults), options);
+        return async (name: string, options?: unknown) => {
+          if ((faults.removalsLocked ?? 0) > 0) {
+            faults.removalsLocked! -= 1;
+            throw new DOMException('the entry is locked', 'NoModificationAllowedError');
+          }
+          return call(
+            await nameAsStored(target as unknown as FileSystemDirectoryHandle, name, faults),
+            options,
+          );
+        };
       }
       if (property === 'getFileHandle' || property === 'getDirectoryHandle') {
         return async (requested: string, options?: unknown) => {
