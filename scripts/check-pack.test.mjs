@@ -13,7 +13,7 @@ function goodPack() {
           url: 'git+https://github.com/Adityazero4/workspacekit.git',
           directory: 'packages/x',
         },
-        homepage: 'https://adityazero4.github.io/workspacekit',
+        homepage: 'https://docs-ashy-alpha.vercel.app',
         bugs: 'https://github.com/Adityazero4/workspacekit/issues',
         exports: { '.': { types: './dist/index.d.ts', default: './dist/index.js' } },
       }),

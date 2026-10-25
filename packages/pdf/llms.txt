@@ -2,7 +2,7 @@
 
 > A PDF renderer for the file workspace, drawn by pdf.js one page at a time, with selectable text, links, zoom and a password prompt.
 
-- API reference: https://adityazero4.github.io/workspacekit/api/pdf
+- API reference: https://docs-ashy-alpha.vercel.app/api/pdf
 - Install: `npm install @workspacekit/pdf @workspacekit/react react react-dom`
 
 ## README sections

@@ -55,7 +55,6 @@ const PNPMFILES = ['.pnpmfile.mjs', '.pnpmfile.cjs'];
 const CODEOWNER_PROTECTED_PATHS = [
   '.github/workflows/security.yml',
   '.github/workflows/ci.yml',
-  '.github/workflows/pages.yml',
   '.github/CODEOWNERS',
   '.github/dependabot.yml',
   'scripts/check-supply-chain.mjs',
@@ -434,7 +433,7 @@ const UNTRUSTED_TRIGGERS = ['pull_request', 'pull_request_target'];
 const DISPATCH_TRIGGERS = ['workflow_dispatch', 'repository_dispatch'];
 const MAIN_BRANCH_PIN = "github.ref == 'refs/heads/main'";
 const WORKFLOW_FILE = /\.ya?ml$/;
-const REQUIRED_WORKFLOWS = ['security.yml', 'ci.yml', 'pages.yml'];
+const REQUIRED_WORKFLOWS = ['security.yml', 'ci.yml'];
 const PINNED_ACTION = /^([\w.-]+\/[\w.-]+)@[0-9a-f]{40}$/;
 
 const envOf = (holder) => (isPlainObject(holder?.env) ? holder.env : {});
@@ -562,7 +561,7 @@ export function workflowProblems(text) {
 /**
  * `workflowProblems` for every `.yml` and `.yaml` file in `directory` (a URL ending in `/`), each problem
  * prefixed with its file name, so a new workflow is checked the moment it is added. Each of `required`
- * (by default `security.yml`, `ci.yml` and `pages.yml`) that is absent is a problem too, so deleting a
+ * (by default `security.yml` and `ci.yml`) that is absent is a problem too, so deleting a
  * workflow cannot make the check pass.
  *
  * @example

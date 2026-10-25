@@ -55,4 +55,4 @@ None. This package ships no styles.
 
 `DOCS_URL` is the address of the documentation site, shared by the examples and the generated files.
 
-Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/demo-kit).
+Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/demo-kit).
