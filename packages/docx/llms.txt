@@ -2,7 +2,7 @@
 
 > A Word renderer for the file workspace: .docx files laid out in pages by docx-preview and sanitized before they are shown.
 
-- API reference: https://docs-ashy-alpha.vercel.app/api/docx
+- API reference: https://adityazero4.github.io/workspacekit/api/docx
 - Install: `npm install @workspacekit/docx @workspacekit/react react react-dom`
 
 ## README sections

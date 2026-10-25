@@ -82,7 +82,7 @@ The packages are not published yet. Each one has a README, an `AGENTS.md` and an
 
 ## Documentation
 
-- Guides and API reference: https://docs-ashy-alpha.vercel.app
+- Guides and API reference: https://adityazero4.github.io/workspacekit
 - Runnable examples: [`examples/`](examples) (a Next.js app with an agent-written directory, a Vite app on the in-memory adapter, and recipes)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Reporting a vulnerability: [SECURITY.md](SECURITY.md)

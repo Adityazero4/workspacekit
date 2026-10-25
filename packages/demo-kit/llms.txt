@@ -2,7 +2,7 @@
 
 > Sample files and a simulated agent for demos and tests of the file workspace.
 
-- API reference: https://docs-ashy-alpha.vercel.app/api/demo-kit
+- API reference: https://adityazero4.github.io/workspacekit/api/demo-kit
 - Install: `npm install --save-dev @workspacekit/demo-kit`
 
 ## README sections

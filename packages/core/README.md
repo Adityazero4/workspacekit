@@ -58,4 +58,4 @@ None. This package ships no styles.
 - `httpAdapter(baseUrl, { fetch, headers, credentials, reconnectDelaysMs, ... })`: a custom `fetch`, request headers (or a function that returns them), and the live-update reconnect backoff.
 - `createMemoryAdapter({ files, latencyMs, chunkSize })`: the starting files, an artificial delay, and the upload chunk size.
 
-Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/core).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/core).

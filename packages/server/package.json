@@ -9,7 +9,7 @@
     "url": "git+https://github.com/Adityazero4/workspacekit.git",
     "directory": "packages/server"
   },
-  "homepage": "https://docs-ashy-alpha.vercel.app",
+  "homepage": "https://adityazero4.github.io/workspacekit",
   "bugs": "https://github.com/Adityazero4/workspacekit/issues",
   "type": "module",
   "sideEffects": false,

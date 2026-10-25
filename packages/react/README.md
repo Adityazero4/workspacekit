@@ -105,4 +105,4 @@ Import `@workspacekit/react/styles.css` once. It lives in `@layer fs`, so your o
 - `actions`, `canPerform`, `components`: extra tree actions, a per-entry policy, and replacement menus and dialogs.
 - `onError`, `onNotify`, `onUploadConflict`: hooks for failures, notices and upload conflicts.
 
-Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/react).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/react).

@@ -51,4 +51,4 @@ None. The generated project imports `@workspacekit/workspace/styles.css` for you
 - `--template next|vite`: which example to copy. The Next.js one serves a directory through a route handler; the Vite one runs entirely in the browser on sample files.
 - `directory`: the folder to create. It must not exist or must be empty.
 
-Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/create-workspace).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/create-workspace).

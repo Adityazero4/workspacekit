@@ -29,7 +29,7 @@ test('accepts the final names', () => {
     nameProblems([
       {
         path: 'README.md',
-        text: 'npm install @workspacekit/core https://docs-ashy-alpha.vercel.app',
+        text: 'npm install @workspacekit/core https://adityazero4.github.io/workspacekit',
       },
     ]),
     [],

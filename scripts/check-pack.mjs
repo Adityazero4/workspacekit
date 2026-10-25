@@ -22,7 +22,7 @@ const SOURCE_MAP_REFERENCE = /sourceMappingURL=(\S+)/g;
 const MACHINE_HOME = /\/Users\/|\/home\/|[A-Za-z]:\\{1,2}Users\\{1,2}/;
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPOSITORY_URL = 'git+https://github.com/Adityazero4/workspacekit.git';
-const HOMEPAGE = 'https://docs-ashy-alpha.vercel.app';
+const HOMEPAGE = 'https://adityazero4.github.io/workspacekit';
 const BUGS = 'https://github.com/Adityazero4/workspacekit/issues';
 
 function exportTargets(value) {

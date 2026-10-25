@@ -82,4 +82,4 @@ export default defineConfig({
 
 The `include` entries are required whenever you exclude the package.
 
-Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/spreadsheet).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/spreadsheet).

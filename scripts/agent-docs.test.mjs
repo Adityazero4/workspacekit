@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { checkAgentDocs, extractFences, generateAgentDocs } from './agent-docs.mjs';
 
 const REACT_PACKAGE = fileURLToPath(new URL('../packages/react', import.meta.url));
-const DOCS_URL = 'https://docs-ashy-alpha.vercel.app';
+const DOCS_URL = 'https://adityazero4.github.io/workspacekit';
 const MISTAKES = 'Never ship without `authorize`.\n';
 const START = '<!-- common-mistakes:start -->';
 const END = '<!-- common-mistakes:end -->';

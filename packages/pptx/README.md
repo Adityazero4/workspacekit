@@ -62,4 +62,4 @@ Pass them to the factory, as in `pptxRenderer({ externalMedia: 'block' })`. `Ppt
 
 No configuration is needed in a build or in the dev server.
 
-Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/pptx).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/pptx).

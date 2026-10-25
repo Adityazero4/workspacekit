@@ -77,4 +77,4 @@ export default defineConfig({
 
 The data files in `assets` are not bundled. Serve pdf.js's `cmaps/`, `standard_fonts/` and `wasm/` directories (from `pdfjs-dist` 6.4.299) from your own origin, for instance from Vite's `public/pdfjs/`.
 
-Every export is documented with an example in the [API reference](https://docs-ashy-alpha.vercel.app/api/pdf).
+Every export is documented with an example in the [API reference](https://adityazero4.github.io/workspacekit/api/pdf).
