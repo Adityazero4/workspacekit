@@ -44,7 +44,7 @@
     "@tanstack/react-virtual": "3.14.21",
     "fast-formula-parser": "1.0.19",
     "fflate": "0.8.3",
-    "numfmt": "4.1.0",
+    "numfmt": "4.1.1",
     "papaparse": "5.7.0",
     "saxes": "6.0.0"
   },

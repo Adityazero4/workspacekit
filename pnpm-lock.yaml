@@ -746,8 +746,8 @@ importers:
         specifier: 0.8.3
         version: 0.8.3
       numfmt:
-        specifier: 4.1.0
-        version: 4.1.0
+        specifier: 4.1.1
+        version: 4.1.1
       papaparse:
         specifier: 5.7.0
         version: 5.7.0
@@ -4387,8 +4387,8 @@ packages:
     resolution: {integrity: sha512-K1HmQeZT2HrjpsR6KgqbN2FAXL2NrJJmNUSD9ck7HGTVu1JKXox8n9SB+tjbU8m8JGLF4OscrroPepew/L7/Xw==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
-  numfmt@4.1.0:
-    resolution: {integrity: sha512-KgmuD7miM07gxG9dFFm9DpAV1xMWtMPNu2YBcnUnQg4yMM5ynWAasxa4Y6H9diSVa2mNDfzOwTjHLaXxnY250w==}
+  numfmt@4.1.1:
+    resolution: {integrity: sha512-12MJtolvN20WANpEm1LjEZrUgnjnBxg9Rp5FpXZZO06NInd7zc5cu8DOjVkrYfeWswNBOmDeD0MuJEYkVf5kzQ==}
 
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
@@ -9389,7 +9389,7 @@ snapshots:
 
   npm-to-yarn@3.2.0: {}
 
-  numfmt@4.1.0: {}
+  numfmt@4.1.1: {}
 
   object-assign@4.1.1: {}
 
