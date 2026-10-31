@@ -17,7 +17,7 @@
     "@workspacekit/react": "workspace:*",
     "@workspacekit/workspace": "workspace:*",
     "fumadocs-core": "16.17.5",
-    "fumadocs-mdx": "15.4.7",
+    "fumadocs-mdx": "15.4.10",
     "fumadocs-ui": "16.17.5",
     "next": "16.4.2",
     "react": "19.3.1",
